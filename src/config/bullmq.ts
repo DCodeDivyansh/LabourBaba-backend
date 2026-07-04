@@ -19,22 +19,17 @@ import 'dotenv/config';
 //   keepAlive: 30_000,
 //   lazyConnect: false,
 // };
-console.log('[bullmq] Redis config:', {
-  host: process.env.AIVEN_REDIS_HOST ?? 'MISSING',
-  port: process.env.AIVEN_REDIS_PORT ?? 'MISSING',
-  password: process.env.AIVEN_REDIS_PASSWORD ? 'SET' : 'MISSING',
-  username: process.env.AIVEN_REDIS_USERNAME ?? 'MISSING',
-});
+
+
 
 export const redisConnectionOptions: ConnectionOptions = {
-  host: process.env.AIVEN_REDIS_HOST,
-  port: Number(process.env.AIVEN_REDIS_PORT) || 6379,
-  password: process.env.AIVEN_REDIS_PASSWORD,
-  username: process.env.AIVEN_REDIS_USERNAME ?? 'default',
-  tls: { rejectUnauthorized: false },
+  username: String(process.env.REDIS_USERNAME),
+  password: String(process.env.REDIS_PASSWORD),
+  host: String(process.env.REDIS_HOST),
+  port: Number(process.env.REDIS_PORT),
   maxRetriesPerRequest: null,
-  enableOfflineQueue: false,  // ← add this
-  connectTimeout: 10000,  // ← add this
+  enableOfflineQueue: false,
+  connectTimeout: 10000,
 };
 
 
