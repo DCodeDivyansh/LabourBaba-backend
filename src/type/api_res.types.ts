@@ -8,7 +8,8 @@ import {
   PaymentSchema,
   ReviewSchema,
   JobRequirementSchema,
-  JobDispatchSchema
+  JobDispatchSchema,
+  DispatchWaveSchema
 } from "../schemas";
 
 export type Customer = z.infer<typeof CustomerSchema>;
@@ -17,9 +18,15 @@ export type SkillCategory = z.infer<typeof SkillCategorySchema>;
 export type Job = z.infer<typeof JobSchema>;
 export type JobRequirement = z.infer<typeof JobRequirementSchema>;
 export type JobDispatch = z.infer<typeof JobDispatchSchema>;
+export type DispatchWave = z.infer<typeof DispatchWaveSchema>;
 export type Booking = z.infer<typeof BookingSchema>;
 export type Payment = z.infer<typeof PaymentSchema>;
 export type Review = z.infer<typeof ReviewSchema>;
+
+export interface DispatchWavesResponse {
+  waves: DispatchWave[];
+  dispatches: JobDispatch[];
+}
 
 export interface Conversation {
   id: string;

@@ -49,21 +49,23 @@ export const jobService = {
       where: { job_id: job.id },
       select: { id: true },
     });
+    console.log("requirements", requirements)
 
-    await Promise.all(
-      requirements.map((r) =>
-        dispatchQueue.add('dispatch-requirement', {
+    // Queue dispatch for each requirement — individual try/catch so one failure
+    // doesn't prevent other requirements from being queued
+    for (const r of requirements) {
+      try {
+        const bullJob = await dispatchQueue.add('dispatch-requirement', {
           requirementId: r.id,
           jobId: job.id,
           waveNumber: 1,
           offset: 0,
-        }),
-      ),
-    );
-
-    console.log(
-      `[jobService] Dispatched ${requirements.length} BullMQ job(s) for job ${job.id}`,
-    );
+        });
+        console.log(`[jobService] ✅ Queued dispatch for requirement ${r.id} → BullMQ job ${bullJob.id}`);
+      } catch (err: any) {
+        console.error(`[jobService] ❌ FAILED to queue dispatch for requirement ${r.id}:`, err.message);
+      }
+    }
 
     return job;
   },

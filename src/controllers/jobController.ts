@@ -37,6 +37,7 @@ export const createJob = async (req: Request, res: Response): Promise<void> => {
     const job = await jobService.createJob(payload);
     res.status(201).json({ success: true, data: job });
   } catch (error: any) {
+    console.log(error.message)
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -44,9 +45,9 @@ export const createJob = async (req: Request, res: Response): Promise<void> => {
 export const getMyJobs = async (req: Request, res: Response): Promise<void> => {
   try {
     const customerId = (req as any).user?.id || String(req.query.customer_id);
-    if (!customerId || customerId === "undefined" || customerId === "null") { 
-      res.status(401).json({ success: false, message: "Unauthorized" }); 
-      return; 
+    if (!customerId || customerId === "undefined" || customerId === "null") {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
     }
     const jobs = await jobService.getJobsByCustomer(customerId);
     res.status(200).json({ success: true, data: jobs });
@@ -104,6 +105,7 @@ export const createJobRequirement = async (req: Request, res: Response): Promise
     const requirement = await jobReqService.createJobReq(jobId, payload);
     res.status(201).json({ success: true, data: requirement });
   } catch (error: any) {
+    console.log(error.message)
     res.status(500).json({ success: false, message: error.message });
   }
 };

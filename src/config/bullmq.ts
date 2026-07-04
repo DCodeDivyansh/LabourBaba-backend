@@ -6,14 +6,37 @@ import { Queue } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import 'dotenv/config';
 
+// const redis = new Redis({
+//   host: "127.0.0.1",
+//   port: 6379,
+// });
+// Using local Redis instead of Aiven
+// export const redisConnectionOptions: ConnectionOptions = {
+//   host: '127.0.0.1',
+//   port: 6379,
+//   // Note: Local redis usually doesn't need tls, password, or username.
+//   maxRetriesPerRequest: null, // required by BullMQ — must NOT be a positive number
+//   keepAlive: 30_000,
+//   lazyConnect: false,
+// };
+console.log('[bullmq] Redis config:', {
+  host: process.env.AIVEN_REDIS_HOST ?? 'MISSING',
+  port: process.env.AIVEN_REDIS_PORT ?? 'MISSING',
+  password: process.env.AIVEN_REDIS_PASSWORD ? 'SET' : 'MISSING',
+  username: process.env.AIVEN_REDIS_USERNAME ?? 'MISSING',
+});
+
 export const redisConnectionOptions: ConnectionOptions = {
   host: process.env.AIVEN_REDIS_HOST,
   port: Number(process.env.AIVEN_REDIS_PORT) || 6379,
   password: process.env.AIVEN_REDIS_PASSWORD,
   username: process.env.AIVEN_REDIS_USERNAME ?? 'default',
-  tls: {},              // required for Aiven — they enforce TLS
-  maxRetriesPerRequest: null, // required by BullMQ
+  tls: { rejectUnauthorized: false },
+  maxRetriesPerRequest: null,
+  enableOfflineQueue: false,  // ← add this
+  connectTimeout: 10000,  // ← add this
 };
+
 
 const defaultJobOptions = {
   attempts: 3,

@@ -75,12 +75,19 @@ const timeoutWorker = new Worker<TimeoutJobData>(
       `[timeoutWorker] Firing wave ${nextWave} for requirement ${requirementId} at offset ${nextOffset}`,
     );
 
-    await dispatchQueue.add('dispatch-wave', {
-      requirementId,
-      jobId,
-      waveNumber: nextWave,
-      offset: nextOffset,
-    });
+    await dispatchQueue.add(
+      'dispatch-wave',
+      {
+        requirementId,
+        jobId,
+        waveNumber: nextWave,
+        offset: nextOffset,
+      },
+      {
+        // Unique jobId so waves are never deduplicated across retries
+        jobId: `dispatch-${requirementId}-wave-${nextWave}`,
+      },
+    );
   },
   {
     connection: redisConnectionOptions,
@@ -100,6 +107,14 @@ timeoutWorker.on('stalled', (jobId) => {
 
 timeoutWorker.on('error', (err) => {
   console.error('[timeoutWorker] Worker error:', err.message);
+});
+
+timeoutWorker.on('ready', () => {
+  console.log('[timeoutWorker] ✅ Worker connected to Redis and ready to process jobs');
+});
+
+timeoutWorker.on('completed', (job) => {
+  console.log(`[timeoutWorker] ✅ Job ${job?.id} completed for requirement ${job?.data?.requirementId}`);
 });
 
 // ── Graceful Shutdown ────────────────────────────────────────────────────────

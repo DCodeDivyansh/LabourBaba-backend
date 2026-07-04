@@ -33,7 +33,7 @@ const port = process.env.PORT || 5000;
 
 export const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONT_END_URL || '*',
+    origin: process.env.FRONT_END_URL || process.env.APP_URL,
     methods: ['GET', 'POST'],
   },
 });
@@ -121,6 +121,7 @@ app.get('/health', (req: Request, res: Response) => {
 
 async function startServer() {
   try {
+    // console.log("Socket.IO server version:", require("socket.io/package.json").version);
     console.log('Connecting to Supabase PostgreSQL database...');
     try {
       await prisma.$connect();

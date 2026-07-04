@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
-import { generateToken } from "../utils/authUtils";
+import { generateToken, hashPassword, comparePassword } from "../utils/authUtils";
 import { SignupCustomerReq, LoginCustomerReq } from "../type/api_req.type";
 
 /**
@@ -8,7 +8,7 @@ import { SignupCustomerReq, LoginCustomerReq } from "../type/api_req.type";
  */
 export const signupCustomer = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, phone }: SignupCustomerReq = req.body;
+    const { name, phone, password }: SignupCustomerReq = req.body;
 
     // Check if phone number is already registered
     const existingCustomer = await prisma.customer.findUnique({
@@ -23,11 +23,15 @@ export const signupCustomer = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Create the customer in the database (only name and phone exist)
+    // Hash password
+    const hashedPassword = await hashPassword(password);
+
+    // Create the customer in the database
     const customer = await prisma.customer.create({
       data: {
         name,
         phone,
+        password: hashedPassword,
       },
     });
 
@@ -58,7 +62,7 @@ export const signupCustomer = async (req: Request, res: Response): Promise<void>
  */
 export const loginCustomer = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { phone }: LoginCustomerReq = req.body;
+    const { phone, password }: LoginCustomerReq = req.body;
 
     // Find the customer by phone number
     const customer = await prisma.customer.findUnique({
@@ -66,6 +70,16 @@ export const loginCustomer = async (req: Request, res: Response): Promise<void> 
     });
 
     if (!customer) {
+      res.status(401).json({
+        success: false,
+        message: "Invalid phone number or password",
+      });
+      return;
+    }
+
+    // Verify password
+    const isPasswordValid = await comparePassword(password, customer.password);
+    if (!isPasswordValid) {
       res.status(401).json({
         success: false,
         message: "Invalid phone number or password",

@@ -48,6 +48,8 @@ model booking {
   status          String?         @db.VarChar(30)
   otp_hash        String?
   otp_verified    Boolean?        @default(false)
+  created_at      DateTime        @default(now()) @db.Timestamp(6)
+  updated_at      DateTime        @default(now()) @db.Timestamp(6)
   customer        customer        @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_customer")
   job             job             @relation(fields: [job_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_job")
   job_requirement job_requirement @relation(fields: [requirement_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_requirement")
@@ -121,6 +123,7 @@ model customer {
   name         String         @db.VarChar(150)
   created_at   DateTime?      @default(now()) @db.Timestamptz(6)
   deleted_at   DateTime?      @db.Timestamptz(6)
+  password     String         @db.VarChar(255)
   booking      booking[]
   conversation conversation[]
   job          job[]
@@ -138,6 +141,8 @@ model job_dispatch {
   notified_at     DateTime?       @db.Timestamptz(6)
   expires_at      DateTime?       @db.Timestamptz(6)
   responded_at    DateTime?       @db.Timestamptz(6)
+  created_at      DateTime        @default(now()) @db.Timestamp(6)
+  updated_at      DateTime        @default(now()) @db.Timestamp(6)
   job_requirement job_requirement @relation(fields: [requirement_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_dispatch_requirement")
   worker          Worker          @relation(fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_dispatch_worker")
 
@@ -226,6 +231,8 @@ model dispatch_wave {
   resolved_at      DateTime?       @db.Timestamptz(6)
   workers_notified Int?            @default(0)
   slots_filled     Int?            @default(0)
+  created_at       DateTime        @default(now()) @db.Timestamp(6)
+  updated_at       DateTime        @default(now()) @db.Timestamp(6)
   job_requirement  job_requirement @relation(fields: [requirement_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wave_requirement")
 }
 
@@ -239,6 +246,8 @@ model job_requirement {
   status              String?         @db.VarChar(30)
   current_wave        Int?            @default(1)
   wave_size           Int?            @default(10)
+  created_at          DateTime        @default(now()) @db.Timestamp(6)
+  updated_at          DateTime        @default(now()) @db.Timestamp(6)
   booking             booking[]
   dispatch_wave       dispatch_wave[]
   job_dispatch        job_dispatch[]
