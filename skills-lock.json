@@ -19,6 +19,12 @@
       "skillPath": "plugins/javascript-typescript/skills/nodejs-backend-patterns/SKILL.md",
       "computedHash": "48294eab8cded4902690197f684e2053c6fa02af303a1397ab53ea41e7d7a6bd"
     },
+    "socket-io": {
+      "source": "claude-dev-suite/claude-dev-suite",
+      "sourceType": "github",
+      "skillPath": "skills/real-time/socket-io/SKILL.md",
+      "computedHash": "db530d917a8ad12522e3eaf040db5101bf7ac6cef066814577b8fb909a5b429b"
+    },
     "supabase-server": {
       "source": "supabase/server",
       "sourceType": "github",

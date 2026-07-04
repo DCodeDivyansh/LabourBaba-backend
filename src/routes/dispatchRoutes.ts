@@ -2,7 +2,7 @@ import express from "express";
 import { getIncoming, acceptJob, declineJob, getWaves } from "../controllers/dispatchController";
 import { registry } from "../config/swagger";
 import { z } from "zod";
-import { JobDispatchSchema, BookingSchema } from "../schemas";
+import { JobDispatchSchema, BookingSchema, DispatchWavesResponseSchema } from "../schemas";
 import { authenticateJWT } from "../middlewares/authMiddleware";
 
 const router = express.Router();
@@ -39,7 +39,7 @@ registry.registerPath({
   summary: "View wave history",
   tags: ["Dispatch"],
   parameters: [{ in: "path", name: "requirementId", required: true, schema: { type: "string", format: "uuid" } }],
-  responses: { 200: { description: "Success" } }
+  responses: { 200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: DispatchWavesResponseSchema }) } } } }
 });
 
 router.get("/incoming", authenticateJWT, getIncoming);

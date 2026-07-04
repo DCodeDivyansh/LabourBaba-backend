@@ -83,6 +83,8 @@ export const JobRequirementSchema = z.object({
   status: z.string().nullable().optional(),
   current_wave: z.number().int().nullable().optional(),
   wave_size: z.number().int().nullable().optional(),
+  created_at: z.date().nullable().optional(),
+  updated_at: z.date().nullable().optional(),
 }).openapi("JobRequirement");
 
 export const JobDispatchSchema = z.object({
@@ -95,7 +97,27 @@ export const JobDispatchSchema = z.object({
   notified_at: z.date().nullable().optional(),
   expires_at: z.date().nullable().optional(),
   responded_at: z.date().nullable().optional(),
+  created_at: z.date().nullable().optional(),
+  updated_at: z.date().nullable().optional(),
 }).openapi("JobDispatch");
+
+export const DispatchWaveSchema = z.object({
+  id: z.string().uuid(),
+  requirement_id: z.string().uuid(),
+  wave_number: z.number().int(),
+  status: z.string().nullable().optional(),
+  notified_at: z.date().nullable().optional(),
+  resolved_at: z.date().nullable().optional(),
+  workers_notified: z.number().int().nullable().optional(),
+  slots_filled: z.number().int().nullable().optional(),
+  created_at: z.date().nullable().optional(),
+  updated_at: z.date().nullable().optional(),
+}).openapi("DispatchWave");
+
+export const DispatchWavesResponseSchema = z.object({
+  waves: z.array(DispatchWaveSchema),
+  dispatches: z.array(JobDispatchSchema),
+}).openapi("DispatchWavesResponse");
 
 export const BookingSchema = z.object({
   id: z.string().uuid(),
@@ -106,6 +128,8 @@ export const BookingSchema = z.object({
   status: z.string().nullable().optional(),
   otp_hash: z.string().nullable().optional(),
   otp_verified: z.boolean().nullable().optional(),
+  created_at: z.date().nullable().optional(),
+  updated_at: z.date().nullable().optional(),
 }).openapi("Booking");
 
 export const PaymentSchema = z.object({
