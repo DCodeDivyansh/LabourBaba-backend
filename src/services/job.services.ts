@@ -1,6 +1,8 @@
 import prisma from '../config/prisma';
 import { CreateJobReq } from '../type/api_req.type';
-import { dispatchQueue } from '../config/bullmq'
+import { dispatchJobSimple } from './simpleDispatch';
+// BullMQ import kept for reference — uncomment to switch back:
+// import { dispatchQueue } from '../config/bullmq'
 
 export const jobService = {
   async createJob(payload: CreateJobReq) {
@@ -44,28 +46,18 @@ export const jobService = {
       return job;
     });
 
-    // Fire one BullMQ dispatch job per requirement in parallel (fire-and-forget)
-    const requirements = await prisma.job_requirement.findMany({
+    // Fetch created requirements with fields needed for dispatch
+    const createdRequirements = await prisma.job_requirement.findMany({
       where: { job_id: job.id },
-      select: { id: true },
+      select: { id: true, skill_type: true, rate_per_day: true },
     });
-    console.log("requirements", requirements)
+    console.log("[jobService] requirements", createdRequirements);
 
-    // Queue dispatch for each requirement — individual try/catch so one failure
-    // doesn't prevent other requirements from being queued
-    for (const r of requirements) {
-      try {
-        const bullJob = await dispatchQueue.add('dispatch-requirement', {
-          requirementId: r.id,
-          jobId: job.id,
-          waveNumber: 1,
-          offset: 0,
-        });
-        console.log(`[jobService] ✅ Queued dispatch for requirement ${r.id} → BullMQ job ${bullJob.id}`);
-      } catch (err: any) {
-        console.error(`[jobService] ❌ FAILED to queue dispatch for requirement ${r.id}:`, err.message);
-      }
-    }
+    // Fire dispatch for all requirements in parallel — no await needed
+    // Runs in background, doesn't slow down API response
+    // Problem 4: pass job object directly — no extra DB query inside dispatch
+    dispatchJobSimple(job, createdRequirements)
+      .catch((err) => console.error('[dispatch] error:', err));
 
     return job;
   },

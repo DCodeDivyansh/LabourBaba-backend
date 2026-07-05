@@ -118,6 +118,28 @@ const dispatchWorker = new Worker<DispatchJobData>(
       `[dispatchWorker] Wave ${waveNumber}: notifying ${waveSize} workers for requirement ${requirementId}`,
     );
 
+    await Promise.all(
+      waveWorkers.map(async (w) => {
+        // FCM push notification
+        if (w.device_token) {
+          await sendFCMNotification(w.device_token, {
+            title: 'New job nearby',
+            body: `${req.skill_type} needed — ₹${req.rate_per_day}/day`,
+          });
+        }
+
+        // Real-time socket event
+        io.to(`worker:${w.id}`).emit('job:incoming', {
+          requirementId,
+          jobId,
+          skillType: req.skill_type,
+          ratePerDay: req.rate_per_day,
+          expiresAt,
+        });
+      }),
+    );
+
+
     // 4. Write dispatch_wave row
     await prisma.dispatch_wave.create({
       data: {
@@ -143,26 +165,7 @@ const dispatchWorker = new Worker<DispatchJobData>(
     });
 
     // // 6. Notify all wave workers concurrently (FCM + Socket.IO)
-    await Promise.all(
-      waveWorkers.map(async (w) => {
-        // FCM push notification
-        if (w.device_token) {
-          await sendFCMNotification(w.device_token, {
-            title: 'New job nearby',
-            body: `${req.skill_type} needed — ₹${req.rate_per_day}/day`,
-          });
-        }
 
-        // Real-time socket event
-        io.to(`worker:${w.id}`).emit('job:incoming', {
-          requirementId,
-          jobId,
-          skillType: req.skill_type,
-          ratePerDay: req.rate_per_day,
-          expiresAt,
-        });
-      }),
-    );
 
     // // 7. Queue wave timeout — fires in 30s
     await timeoutQueue.add(

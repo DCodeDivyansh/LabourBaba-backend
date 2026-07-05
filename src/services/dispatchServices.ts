@@ -1,7 +1,9 @@
 import prisma from '../config/prisma';
-import { dispatchQueue } from '../config/bullmq';
+// BullMQ import — commented out for simple dispatch mode:
+// import { dispatchQueue } from '../config/bullmq';
 import { generateOTP, hashOTP } from '../utils/authUtils';
 import { Prisma } from '@prisma/client';
+import { io } from '../server';
 
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
@@ -28,7 +30,8 @@ async function checkJobComplete(
 // ── Accept ───────────────────────────────────────────────────────────────────
 
 export const acceptDispatch = async (requirementId: string, workerId: string) => {
-  return await prisma.$transaction(async (tx) => {
+  // Problem 1: atomic transaction with row-lock — only one worker wins
+  const result = await prisma.$transaction(async (tx) => {
     // Row-lock to prevent race conditions when multiple workers accept simultaneously
     await tx.$queryRaw`
       SELECT id FROM job_requirement
@@ -77,8 +80,29 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       },
     });
 
-    // Check if ALL requirements for this job are now filled → mark job fully_booked
+    // Problem 1: when filled, expire ALL remaining pending dispatches atomically
+    let expiredWorkerIds: string[] = [];
     if (nowFilled) {
+      // Collect worker IDs of remaining pending dispatches BEFORE expiring them
+      const pendingDispatches = await tx.job_dispatch.findMany({
+        where: {
+          requirement_id: requirementId,
+          status: 'pending',
+        },
+        select: { worker_id: true },
+      });
+      expiredWorkerIds = pendingDispatches.map((d) => d.worker_id);
+
+      // Expire all remaining pending dispatches
+      await tx.job_dispatch.updateMany({
+        where: {
+          requirement_id: requirementId,
+          status: 'pending',
+        },
+        data: { status: 'expired', responded_at: new Date() },
+      });
+
+      // Check if ALL requirements for this job are now filled → mark job fully_booked
       await checkJobComplete(req.job_id, tx);
     }
 
@@ -87,8 +111,27 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       nowFilled,
       newFilled,
       needed: req.worker_count_needed,
+      jobId: req.job_id,
+      expiredWorkerIds,
     };
   });
+
+  // Problem 2: AFTER transaction commits, notify remaining workers via Socket.IO
+  // This runs outside the transaction so it doesn't block or rollback on socket errors
+  if (result.nowFilled && result.expiredWorkerIds.length > 0) {
+    for (const losingWorkerId of result.expiredWorkerIds) {
+      io.to(`worker:${losingWorkerId}`).emit('job:closed', {
+        requirementId,
+        jobId: result.jobId,
+        reason: 'filled',
+      });
+    }
+    console.log(
+      `[dispatchServices] Notified ${result.expiredWorkerIds.length} workers that requirement ${requirementId} is filled`,
+    );
+  }
+
+  return result;
 };
 
 // ── Decline ──────────────────────────────────────────────────────────────────
@@ -155,15 +198,20 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
       });
 
       // Re-queue with next offset
+      // NOTE: Commented out for simple dispatch mode — single wave only.
+      // Uncomment to re-enable BullMQ multi-wave dispatch:
       const nextWaveNumber = currentWave + 1;
       const nextOffset = currentWave * (req.worker_count_needed * 2);
 
-      await dispatchQueue.add('dispatch-wave', {
-        requirementId,
-        jobId: req.job_id,
-        waveNumber: nextWaveNumber,
-        offset: nextOffset,
-      });
+      console.log(
+        `[dispatchServices] Would fire wave ${nextWaveNumber} at offset ${nextOffset} — skipped (simple dispatch mode)`,
+      );
+      // await dispatchQueue.add('dispatch-wave', {
+      //   requirementId,
+      //   jobId: req.job_id,
+      //   waveNumber: nextWaveNumber,
+      //   offset: nextOffset,
+      // });
     }
   }
 
@@ -177,7 +225,7 @@ export const getIncomingDispatches = async (workerId: string) => {
     where: { worker_id: workerId, status: 'pending' },
     include: {
       job_requirement: {
-        include: { job: true },
+        include: { job: true, customer: true },
       },
     },
     orderBy: { notified_at: 'desc' },
