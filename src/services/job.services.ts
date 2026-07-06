@@ -117,9 +117,22 @@ export const jobService = {
   },
 
   async getJobBookings(jobId: string) {
+    // Only select safe, displayable worker fields — never the password
+    // hash or other sensitive data — since this is what the customer's
+    // website renders directly as "worker details" once a booking exists.
     return await prisma.booking.findMany({
       where: { job_id: jobId },
-      include: { worker: true }
+      include: {
+        worker: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            skill_type: true,
+            worker_score: true,
+          },
+        },
+      },
     });
   }
 };

@@ -10,7 +10,7 @@ import { io } from '../server';
 async function checkJobComplete(
   jobId: string,
   tx: Prisma.TransactionClient,
-): Promise<void> {
+): Promise<boolean> {
   const unfilledCount = await tx.job_requirement.count({
     where: {
       job_id: jobId,
@@ -24,7 +24,9 @@ async function checkJobComplete(
       data: { dispatch_status: 'fully_booked' },
     });
     console.log(`[dispatchServices] Job ${jobId} is fully booked.`);
+    return true;
   }
+  return false;
 }
 
 // ── Accept ───────────────────────────────────────────────────────────────────
@@ -82,6 +84,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
 
     // Problem 1: when filled, expire ALL remaining pending dispatches atomically
     let expiredWorkerIds: string[] = [];
+    let jobFullyBooked = false;
     if (nowFilled) {
       // Collect worker IDs of remaining pending dispatches BEFORE expiring them
       const pendingDispatches = await tx.job_dispatch.findMany({
@@ -103,7 +106,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       });
 
       // Check if ALL requirements for this job are now filled → mark job fully_booked
-      await checkJobComplete(req.job_id, tx);
+      jobFullyBooked = await checkJobComplete(req.job_id, tx);
     }
 
     return {
@@ -112,7 +115,10 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       newFilled,
       needed: req.worker_count_needed,
       jobId: req.job_id,
+      customerId: req.job.customer_id,
+      skillType: req.skill_type,
       expiredWorkerIds,
+      jobFullyBooked,
     };
   });
 
@@ -129,6 +135,41 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
     console.log(
       `[dispatchServices] Notified ${result.expiredWorkerIds.length} workers that requirement ${requirementId} is filled`,
     );
+  }
+
+  // Notify the customer's website in real-time that a worker accepted the
+  // job, with enough worker detail to render a card (name/phone/rating).
+  // Only whitelisted fields are sent - never the password hash or other
+  // sensitive worker data. This also supports the multi-worker case: the
+  // frontend should append this worker to its list rather than replace it,
+  // since more worker:accepted events may follow for other requirements.
+  try {
+    const worker = await prisma.worker.findUnique({
+      where: { id: workerId },
+      select: { id: true, name: true, phone: true, skill_type: true, worker_score: true },
+    });
+
+    io.to(`customer:${result.customerId}`).emit('worker:accepted', {
+      jobId: result.jobId,
+      requirementId,
+      bookingId: result.booking.id,
+      worker,
+      requirement: {
+        id: requirementId,
+        skill_type: result.skillType,
+        worker_count_needed: result.needed,
+        worker_count_filled: result.newFilled,
+        status: result.nowFilled ? 'filled' : 'dispatching',
+      },
+    });
+
+    if (result.jobFullyBooked) {
+      io.to(`customer:${result.customerId}`).emit('job:fully_booked', {
+        jobId: result.jobId,
+      });
+    }
+  } catch (err) {
+    console.error('[dispatchServices] Failed to emit worker:accepted:', err);
   }
 
   return result;
@@ -221,11 +262,16 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
 // ── Get Incoming (worker polling) ────────────────────────────────────────────
 
 export const getIncomingDispatches = async (workerId: string) => {
+  // NOTE: `customer` lives on `job`, not on `job_requirement` — the old
+  // include (`job_requirement: { include: { job: true, customer: true } }`)
+  // referenced a field that doesn't exist on job_requirement, which made
+  // Prisma throw on every call. That's why the worker app's "incoming job"
+  // screen was never able to load the customer's name/phone.
   return await prisma.job_dispatch.findMany({
     where: { worker_id: workerId, status: 'pending' },
     include: {
       job_requirement: {
-        include: { job: true, customer: true },
+        include: { job: { include: { customer: true } } },
       },
     },
     orderBy: { notified_at: 'desc' },
