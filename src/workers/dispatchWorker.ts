@@ -192,7 +192,7 @@ const dispatchWorker = new Worker<DispatchJobData>(
       stalledInterval: 10_000,
       maxStalledCount: 1,
     },
-  },
+  } as any,
 );
 
 // ── Event Handlers ──────────────────────────────────────────────────────────
