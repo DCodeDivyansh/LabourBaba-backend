@@ -120,7 +120,7 @@ export const jobService = {
     // Only select safe, displayable worker fields — never the password
     // hash or other sensitive data — since this is what the customer's
     // website renders directly as "worker details" once a booking exists.
-    return await prisma.booking.findMany({
+    const bookings = await prisma.booking.findMany({
       where: { job_id: jobId },
       include: {
         worker: {
@@ -134,5 +134,33 @@ export const jobService = {
         },
       },
     });
+
+    const populated = await Promise.all(
+      bookings.map(async (b) => {
+        if (!b.worker) return b;
+        try {
+          const coords = await prisma.$queryRaw<any[]>`
+            SELECT 
+              ST_X(location_geo::geometry) AS longitude,
+              ST_Y(location_geo::geometry) AS latitude
+            FROM worker
+            WHERE id = ${b.worker_id}::uuid;
+          `;
+          return {
+            ...b,
+            worker: {
+              ...b.worker,
+              latitude: coords[0]?.latitude || null,
+              longitude: coords[0]?.longitude || null,
+            },
+          };
+        } catch (err) {
+          console.error(`Failed to get worker coordinates for ${b.worker_id}:`, err);
+          return b;
+        }
+      })
+    );
+
+    return populated;
   }
 };

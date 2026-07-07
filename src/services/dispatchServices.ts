@@ -144,16 +144,30 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
   // frontend should append this worker to its list rather than replace it,
   // since more worker:accepted events may follow for other requirements.
   try {
+    const coords = await prisma.$queryRaw<any[]>`
+      SELECT 
+        ST_X(location_geo::geometry) AS longitude,
+        ST_Y(location_geo::geometry) AS latitude
+      FROM worker
+      WHERE id = ${workerId}::uuid;
+    `;
+
     const worker = await prisma.worker.findUnique({
       where: { id: workerId },
       select: { id: true, name: true, phone: true, skill_type: true, worker_score: true },
     });
 
+    const workerWithLoc = worker ? {
+      ...worker,
+      latitude: coords[0]?.latitude || null,
+      longitude: coords[0]?.longitude || null,
+    } : null;
+
     io.to(`customer:${result.customerId}`).emit('worker:accepted', {
       jobId: result.jobId,
       requirementId,
       bookingId: result.booking.id,
-      worker,
+      worker: workerWithLoc,
       requirement: {
         id: requirementId,
         skill_type: result.skillType,

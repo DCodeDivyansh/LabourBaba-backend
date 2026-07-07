@@ -5,7 +5,7 @@ export const bookingService = {
   async getBookingDetail(bookingId: string) {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { job: true, worker: true, customer: true, review: true, payment: true }
+      include: { job: true, worker: true, customer: true, review: true, payment: true, job_requirement: true }
     });
     if (!booking) throw new Error("Booking not found");
     return booking;

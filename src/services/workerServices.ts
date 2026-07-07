@@ -86,7 +86,7 @@ export const workerService = {
   async getBookings(workerId: string) {
     return await prisma.booking.findMany({
       where: { worker_id: workerId },
-      include: { job: true, customer: true }
+      include: { job: true, customer: true, job_requirement: true }
     });
   },
 
