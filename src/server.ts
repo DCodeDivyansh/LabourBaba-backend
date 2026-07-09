@@ -1,155 +1,175 @@
-import express, { Request, Response } from 'express';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import cors from 'cors';
-import morgan from 'morgan';
-import dotenv from 'dotenv';
-import prisma from './config/prisma';
-import workerRoutes from './routes/workerRoutes';
-import clientRoute from './routes/customerRoutes';
-import skillRoute from './routes/skillRouter';
-import jobRoutes from './routes/jobRoutes';
-import authRoutes from './routes/authRoutes';
-import dispatchRoutes from './routes/dispatchRoutes';
-import bookingRoutes from './routes/bookingRoutes';
-import paymentRoutes from './routes/paymentRoutes';
-import reviewRoutes from './routes/reviewRoutes';
-import chatRoutes from './routes/chatRoutes';
-import adminRoutes from './routes/adminRoutes';
-import { setupSwagger } from './config/swagger';
-import workerLocationRoute from './routes/worker_location.routes';
-// ── BullMQ / Bull Board — commented out for simple dispatch mode ──────────
-// Uncomment these + the Bull Board block below to switch back to BullMQ:
-// import { createBullBoard } from '@bull-board/api';
-// import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
-// import { ExpressAdapter } from '@bull-board/express';
-// import { dispatchQueue, timeoutQueue } from './config/bullmq';
+import express, { Request, Response } from "express";
+import { createServer } from "http";
+import { Server } from "socket.io";
+import cors from "cors";
+import morgan from "morgan";
+import dotenv from "dotenv";
+
+import prisma from "./config/prisma";
+
+import workerRoutes from "./routes/workerRoutes";
+import clientRoute from "./routes/customerRoutes";
+import skillRoute from "./routes/skillRouter";
+import jobRoutes from "./routes/jobRoutes";
+import authRoutes from "./routes/authRoutes";
+import dispatchRoutes from "./routes/dispatchRoutes";
+import bookingRoutes from "./routes/bookingRoutes";
+import paymentRoutes from "./routes/paymentRoutes";
+import reviewRoutes from "./routes/reviewRoutes";
+import chatRoutes from "./routes/chatRoutes";
+import adminRoutes from "./routes/adminRoutes";
+import workerLocationRoute from "./routes/worker_location.routes";
+
+import { setupSwagger } from "./config/swagger";
 
 dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
+
 const port = process.env.PORT || 5000;
 
-// ── Socket.IO ────────────────────────────────────────────────────────────────
+/**
+ * Allowed Origins
+ */
+const allowedOrigins = [
+  process.env.FRONT_END_URL,
+  process.env.APP_URL,
+  "https://www.labourbaba.in",
+  "https://www.labourbaba.com",
+  "https://labour-baba-website.vercel.app",
+].filter(Boolean);
 
+/**
+ * Express CORS
+ */
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Allow server-to-server and Postman requests
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+app.options("*", cors());
+
+app.use(express.json());
+app.use(morgan("dev"));
+
+/**
+ * Socket.IO
+ */
 export const io = new Server(httpServer, {
   cors: {
-    origin: process.env.FRONT_END_URL || process.env.APP_URL,
-    methods: ['GET', 'POST'],
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`Socket Origin ${origin} not allowed`));
+    },
+    credentials: true,
+    methods: ["GET", "POST"],
   },
+
+  transports: ["websocket", "polling"],
 });
 
-io.on('connection', (socket) => {
-  console.log(`[socket.io] Client connected: ${socket.id}`);
+io.on("connection", (socket) => {
+  console.log(`Socket Connected: ${socket.id}`);
 
-  // Workers join their personal room so dispatch events reach them
-  socket.on('join:worker', (workerId: string) => {
+  socket.on("join:worker", (workerId: string) => {
     socket.join(`worker:${workerId}`);
-    console.log(`[socket.io] Worker ${workerId} joined room worker:${workerId}`);
+    console.log(`Worker ${workerId} joined room`);
   });
 
-  // Customers join their personal room for booking updates
-  socket.on('join:customer', (customerId: string) => {
+  socket.on("join:customer", (customerId: string) => {
     socket.join(`customer:${customerId}`);
-    console.log(`[socket.io] Customer ${customerId} joined room customer:${customerId}`);
+    console.log(`Customer ${customerId} joined room`);
   });
 
-  socket.on('worker:location_update', async ({ workerId, lat, lng }) => {
-    // Write to Redis (fast cache)
-    // Then find active booking for this worker
-    // Emit to customer watching that booking
-    io.to(`customer:CUSTOMER_ID`).emit('worker:location', { lat, lng });
-  });
+  socket.on(
+    "worker:location_update",
+    async ({
+      workerId,
+      lat,
+      lng,
+    }: {
+      workerId: string;
+      lat: number;
+      lng: number;
+    }) => {
+      io.to(`customer:CUSTOMER_ID`).emit("worker:location", {
+        workerId,
+        lat,
+        lng,
+      });
+    }
+  );
 
-  // ── Chat messages ───────────────────────────────────
-  // socket.on('chat:message', async ({ bookingId, content, senderId, role }) => {
-  //   // Save to DB
-  //   // Emit to other party
-  //   const target = role === 'worker'
-  //     ? `customer:${CUSTOMER_ID}`
-  //     : `worker:${WORKER_ID}`;
-  //   io.to(target).emit('chat:message', { content, senderId, sentAt: new Date() });
-  // });
-
-  socket.on('disconnect', () => {
-    console.log(`[socket.io] Client disconnected: ${socket.id}`);
+  socket.on("disconnect", () => {
+    console.log(`Socket Disconnected: ${socket.id}`);
   });
 });
 
-// ── Middlewares ───────────────────────────────────────────────────────────────
+/**
+ * Routes
+ */
 
-app.use(cors({ origin: [String(process.env.FRONT_END_URL), String(process.env.APP_URL)] }));
-app.use(cors());
-app.use(express.json());
-app.use(morgan('dev'));
+app.use("/api/clients", clientRoute);
+app.use("/api/workers", workerRoutes);
+app.use("/api/skill", skillRoute);
+app.use("/api/worker_location", workerLocationRoute);
+app.use("/api/jobs", jobRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/dispatch", dispatchRoutes);
+app.use("/api/bookings", bookingRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/chat", chatRoutes);
+app.use("/api/admin", adminRoutes);
 
-// ── Routes ────────────────────────────────────────────────────────────────────
-
-app.use('/api/clients', clientRoute);
-app.use('/api/workers', workerRoutes);
-app.use('/api/skill', skillRoute);
-app.use('/api/worker_location', workerLocationRoute);
-app.use('/api/jobs', jobRoutes);
-app.use('/api/auth', authRoutes);
-app.use('/api/dispatch', dispatchRoutes);
-app.use('/api/bookings', bookingRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/reviews', reviewRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/admin', adminRoutes);
-
-// Setup Swagger UI
 setupSwagger(app);
 
-// ── Bull Board Dashboard — commented out for simple dispatch mode ─────────
-// Uncomment to re-enable BullMQ queue dashboard:
-// const serverAdapter = new ExpressAdapter();
-// serverAdapter.setBasePath('/admin/queues');
-// createBullBoard({
-//   queues: [
-//     new BullMQAdapter(dispatchQueue),
-//     new BullMQAdapter(timeoutQueue),
-//   ],
-//   serverAdapter,
-// });
-// app.use('/admin/queues', serverAdapter.getRouter());
-
-// Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date() });
+app.get("/health", (req: Request, res: Response) => {
+  res.json({
+    status: "OK",
+    timestamp: new Date(),
+  });
 });
-
-// ── Database connection test and startup ─────────────────────────────────────
 
 async function startServer() {
   try {
-    // console.log("Socket.IO server version:", require("socket.io/package.json").version);
-    console.log('Connecting to Supabase PostgreSQL database...');
-    try {
-      await prisma.$connect();
-      console.log('Database connection established successfully via Prisma Client.');
-    } catch (e) {
-      console.log('there is error in the connecting the db', e);
-    }
-    // start the sockert server
+    await prisma.$connect();
+
+    console.log("Database Connected");
+
     httpServer.listen(port, () => {
-      console.log(`Server running on http://localhost:${port}`);
+      console.log(`Server running on port ${port}`);
+      console.log("Allowed Origins:");
+      console.table(allowedOrigins);
     });
-  } catch (error) {
-    console.error('Failed to connect to the database:', error);
+  } catch (err) {
+    console.error(err);
     await prisma.$disconnect();
     process.exit(1);
   }
 }
 
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== "test") {
   startServer();
 }
-
-// ── BullMQ Workers — commented out for simple dispatch mode ──────────────────
-// Uncomment to re-enable BullMQ workers:
-// import './workers/dispatchWorker';
-// import './workers/timeoutWorker';
 
 export { app };
