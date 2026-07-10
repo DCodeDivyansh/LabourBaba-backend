@@ -38,6 +38,7 @@ const allowedOrigins = [
   "https://www.labourbaba.in",
   "https://www.labourbaba.com",
   "https://labour-baba-website.vercel.app",
+  "https://labourbaba-website-production.up.railway.app",
 ].filter(Boolean);
 
 /**
