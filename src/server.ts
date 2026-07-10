@@ -88,6 +88,13 @@ export const io = new Server(httpServer, {
   transports: ["websocket", "polling"],
 });
 
+io.engine.on("connection_error", (err) => {
+  console.log("========== ENGINE ERROR ==========");
+  console.log(err.code);
+  console.log(err.message);
+  console.log(err.context);
+});
+
 io.on("connection", (socket) => {
   console.log(`Socket Connected: ${socket.id}`);
 
