@@ -63,7 +63,7 @@ app.use(
   })
 );
 
-app.options("*", cors());
+app.options("/{*any}", cors());
 
 app.use(express.json());
 app.use(morgan("dev"));
