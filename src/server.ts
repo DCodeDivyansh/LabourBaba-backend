@@ -38,6 +38,8 @@ const allowedOrigins = [
   "https://www.labourbaba.in",
   "https://www.labourbaba.com",
   "https://labour-baba-website.vercel.app",
+  "https://labourbaba-website-production.up.railway.app",
+  "https://labour-baba-website-divyanshyadav87s-projects.vercel.app",
 ].filter(Boolean);
 
 /**
@@ -61,7 +63,7 @@ app.use(
   })
 );
 
-app.options("*", cors());
+app.options("/{*any}", cors());
 
 app.use(express.json());
 app.use(morgan("dev"));
@@ -85,6 +87,13 @@ export const io = new Server(httpServer, {
   },
 
   transports: ["websocket", "polling"],
+});
+
+io.engine.on("connection_error", (err) => {
+  console.log("========== ENGINE ERROR ==========");
+  console.log(err.code);
+  console.log(err.message);
+  console.log(err.context);
 });
 
 io.on("connection", (socket) => {

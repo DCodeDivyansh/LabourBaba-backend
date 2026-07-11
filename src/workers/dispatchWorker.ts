@@ -120,22 +120,27 @@ const dispatchWorker = new Worker<DispatchJobData>(
 
     await Promise.all(
       waveWorkers.map(async (w) => {
-        // FCM push notification
-        if (w.device_token) {
-          await sendFCMNotification(w.device_token, {
-            title: 'New job nearby',
-            body: `${req.skill_type} needed — ₹${req.rate_per_day}/day`,
-          });
+        try {
+          if (w.device_token) {
+            await sendFCMNotification(w.device_token, {
+              title: 'New job nearby',
+              body: `${req.skill_type} needed — ₹${req.rate_per_day}/day`,
+            });
+          }
+        } catch (err) {
+          console.error(`Failed to send FCM to worker ${w.id}:`, err);
         }
-
-        // Real-time socket event
-        io.to(`worker:${w.id}`).emit('job:incoming', {
-          requirementId,
-          jobId,
-          skillType: req.skill_type,
-          ratePerDay: req.rate_per_day,
-          expiresAt,
-        });
+        try {
+          io.to(`worker:${w.id}`).emit('job:incoming', {
+            requirementId,
+            jobId,
+            skillType: req.skill_type,
+            ratePerDay: req.rate_per_day,
+            expiresAt,
+          });
+        } catch (err) {
+          console.error(`Failed to send socket event to worker ${w.id}:`, err);
+        }
       }),
     );
 
