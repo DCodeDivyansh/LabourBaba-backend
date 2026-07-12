@@ -35,11 +35,10 @@ const port = process.env.PORT || 5000;
 const allowedOrigins = [
   process.env.FRONT_END_URL,
   process.env.APP_URL,
+  "https://labourbaba.in",
+  "https://labourbaba.com",
   "https://www.labourbaba.in",
-  "https://www.labourbaba.com",
-  "https://labour-baba-website.vercel.app",
-  "https://labourbaba-website-production.up.railway.app",
-  "https://labour-baba-website-divyanshyadav87s-projects.vercel.app",
+  "https://www.labourbaba.com"
 ].filter(Boolean);
 
 /**
