@@ -62,30 +62,33 @@ app.use(
   })
 );
 
-app.options("/{*any}", cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
 
 app.use(express.json());
 app.use(morgan("dev"));
 
+app.use((req, res, next) => {
+  if (req.url.startsWith("/socket.io")) {
+    console.log("==== SOCKET REQUEST ====");
+    console.log(req.method);
+    console.log(req.url);
+    console.log(req.headers.origin);
+  }
+  next();
+});
+
 /**
  * Socket.IO
  */
-export const io = new Server(httpServer, {
+const io = new Server(httpServer, {
   cors: {
-    origin(origin, callback) {
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(new Error(`Socket Origin ${origin} not allowed`));
-    },
+    origin: true,
     credentials: true,
     methods: ["GET", "POST"],
   },
-
-  transports: ["websocket", "polling"],
 });
 
 io.engine.on("connection_error", (err) => {
