@@ -326,10 +326,16 @@ async function dispatchRequirementSimple(
  * already dispatched for this requirement in an earlier wave, ordered by
  * distance (nearest first).
  *
- * Skill matching and the active-booking exclusion are restored below using
- * the column/table names from your own original (commented-out) query —
- * I didn't invent new ones. Two things worth confirming against your actual
- * schema:
+ * NOTE: this no longer excludes workers who already have a `confirmed` or
+ * `in_progress` booking — per request, a worker who has accepted a job can
+ * still be dispatched (and notified) for other jobs. If you want to avoid
+ * double-booking, that now needs to be enforced elsewhere (e.g. in the
+ * accept endpoint, or by having the worker decline/it not surfacing as
+ * an option in the app).
+ *
+ * Skill matching is restored below using the column/table names from your
+ * own original (commented-out) query — I didn't invent new ones. Two
+ * things worth confirming against your actual schema:
  *   1. Skill matching now normalizes with LOWER(TRIM(...)) on both sides,
  *      since your top-of-mind note mentions a `skill_category` name mismatch
  *      breaking dispatch before — this should make it whitespace/case safe.
@@ -370,11 +376,6 @@ async function findAvailableWorkers(
             SELECT 1 FROM job_dispatch jd
             WHERE jd.requirement_id = ${req.id}
               AND jd.worker_id = w.id
-          )
-      AND NOT EXISTS (
-            SELECT 1 FROM booking b
-            WHERE b.worker_id = w.id
-              AND b.status IN ('confirmed', 'in_progress')
           )
     ORDER BY dist_m ASC
     LIMIT ${DISPATCH_CONFIG.workersPerWave}
