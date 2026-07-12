@@ -86,7 +86,19 @@ app.use((req, res, next) => {
  */
 const io = new Server(httpServer, {
   cors: {
-    origin: true,
+    origin(origin, callback) {
+      // Same allow-list as the Express CORS config above, so sockets get
+      // the same protection as regular HTTP requests. `!origin` covers
+      // native mobile clients (React Native worker app) which typically
+      // don't send an Origin header at all.
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
     credentials: true,
     methods: ["GET", "POST"],
   },
@@ -232,4 +244,4 @@ process.on("SIGTERM", async () => {
   httpServer.close(() => process.exit(0));
 });
 
-export { app };
+export { app, io };

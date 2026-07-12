@@ -16,7 +16,7 @@
 
 import prisma from '../config/prisma';
 import { sendFCMNotification } from './fcm';
-import { io } from '../server';
+import { io }  from '../server';
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -200,7 +200,33 @@ async function getResumeState(requirementId: string): Promise<ResumeState> {
   }
 
   // The latest wave is done (resolved normally, or its timer died with the
-  // process) — resume at the next radius up.
+  // process). If any rows in that wave are still sitting as "pending" with
+  // an expiry in the past, their in-memory setTimeout died with the old
+  // process before it could flip them to "timeout" — clean those up now so
+  // dispatch history/analytics doesn't show stale pending rows forever.
+  const stalePendingCount = latestWaveRows.filter(
+    (d) => d.status === 'pending' && d.expires_at !== null && d.expires_at <= new Date(),
+  ).length;
+
+  if (stalePendingCount > 0) {
+    await prisma.job_dispatch.updateMany({
+      where: {
+        requirement_id: requirementId,
+        wave_number: maxWave,
+        status: 'pending',
+        expires_at: { lte: new Date() },
+      },
+      data: { status: 'timeout', responded_at: new Date() },
+    });
+
+    log('dispatch.stale_pending_cleaned', {
+      requirementId,
+      waveNumber: maxWave,
+      staleCount: stalePendingCount,
+    });
+  }
+
+  // Resume at the next radius up.
   return { alreadyResolved: false, inFlight: false, nextWaveIndex: maxWave };
 
 }
