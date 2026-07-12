@@ -1,4 +1,5 @@
 import prisma from "../config/prisma";
+import { comparePassword } from "../utils/authUtils";
 import { CancelBookingReq, ConfirmBookingCompleteReq } from "../type/api_req.type";
 
 export const bookingService = {
@@ -17,7 +18,9 @@ export const bookingService = {
         where: { id: bookingId, worker_id: workerId }
       });
       if (!booking) throw new Error("Booking not found for this worker");
-      if (booking.otp_hash !== otp) throw new Error("Invalid OTP"); // Mock logic: in reality hash compare
+      if (!booking.otp_hash || !(await comparePassword(otp, booking.otp_hash))) {
+        throw new Error("Invalid OTP");
+      }
 
       await tx.booking.update({
         where: { id: bookingId },
