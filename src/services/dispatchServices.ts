@@ -111,6 +111,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
 
     return {
       booking,
+      otp,
       nowFilled,
       newFilled,
       needed: req.worker_count_needed,
@@ -167,6 +168,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       jobId: result.jobId,
       requirementId,
       bookingId: result.booking.id,
+      otp: result.otp,
       worker: workerWithLoc,
       requirement: {
         id: requirementId,
