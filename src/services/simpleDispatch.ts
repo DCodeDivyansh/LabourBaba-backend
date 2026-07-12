@@ -67,6 +67,10 @@ interface RequirementForDispatch {
   id: string;
   skill_type?: string | null;
   rate_per_day?: number | null;
+  // NOTE: assuming this is the column name for "how many workers this
+  // requirement needs" — correct me if the real column is named
+  // differently (e.g. `quantity`, `count`, `num_workers`).
+  workers_needed?: number | null;
 }
 
 // ── Structured logging ───────────────────────────────────────────────────────
@@ -145,6 +149,7 @@ export async function recoverStaleDispatchesOnStartup(): Promise<void> {
       id: req.id,
       skill_type: (req as unknown as RequirementForDispatch).skill_type,
       rate_per_day: (req as unknown as RequirementForDispatch).rate_per_day,
+      workers_needed: (req as unknown as RequirementForDispatch).workers_needed,
     }).catch((err) => logError('dispatch.startup_recovery_failed', { requirementId: req.id }, err));
   }
 }
@@ -377,12 +382,25 @@ async function dispatchRequirementSimple(
  *      entirely (dispatches to any online worker) rather than matching
  *      nothing. If that's not the behavior you want for skill-less
  *      requirements, tell me and I'll make it strict instead.
+ *
+ * Pool size per wave is now `workers_needed * 4` (so a requirement needing
+ * 3 workers pulls up to 12 candidates per wave) rather than the flat
+ * `DISPATCH_CONFIG.workersPerWave`. If `workers_needed` is missing or not a
+ * positive number, it falls back to `DISPATCH_CONFIG.workersPerWave` so a
+ * bad/missing value doesn't quietly starve dispatch down to 4 candidates.
+ * The SQL `LIMIT` naturally caps this at whatever's actually available —
+ * if only 2 online workers match, you get 2, never more than exist.
  */
 async function findAvailableWorkers(
   job: JobForDispatch,
   req: RequirementForDispatch,
   radiusMeters: number,
 ): Promise<NearbyWorker[]> {
+  const poolLimit =
+    req.workers_needed && req.workers_needed > 0
+      ? req.workers_needed * 2
+      : DISPATCH_CONFIG.workersPerWave;
+
   return prisma.$queryRaw<NearbyWorker[]>`
     SELECT w.id,
            w.device_token,
@@ -407,8 +425,11 @@ async function findAvailableWorkers(
               AND jd.worker_id = w.id
           )
     ORDER BY dist_m ASC NULLS LAST
-    LIMIT ${DISPATCH_CONFIG.workersPerWave}
-  `;
+    LIMIT ${poolLimit}
+  `.then((workers) => {
+    log('dispatch.pool_limit_used', { requirementId: req.id, workersNeeded: req.workers_needed ?? null, poolLimit });
+    return workers;
+  });
 
   // AND w.deleted_at IS NULL
   // Left out: unconfirmed whether `worker` has a soft-delete column.
