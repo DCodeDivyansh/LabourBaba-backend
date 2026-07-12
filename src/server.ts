@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import cors from "cors";
@@ -43,6 +43,12 @@ const allowedOrigins = [
 
 /**
  * Express CORS
+ *
+ * NOTE: previously there was a second `app.use(cors({ origin: true, credentials: true }))`
+ * registered right after this one. That second call reflected ANY origin back with
+ * credentials allowed, which completely defeated the allow-list below (any site could
+ * make credentialed requests to the API). It has been removed - this is the only
+ * CORS middleware now, and it enforces allowedOrigins.
  */
 app.use(
   cors({
@@ -61,11 +67,6 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
 
 app.use(express.json());
 app.use(morgan("dev"));
@@ -115,14 +116,29 @@ io.on("connection", (socket) => {
     "worker:location_update",
     async ({
       workerId,
+      customerId,
       lat,
       lng,
     }: {
       workerId: string;
+      customerId: string;
       lat: number;
       lng: number;
     }) => {
-      io.to(`customer:CUSTOMER_ID`).emit("worker:location", {
+      // BUG FIX: this previously emitted to the literal room name
+      // "customer:CUSTOMER_ID" (a hardcoded string, not a variable),
+      // so the location update never reached any real customer.
+      // The worker app now needs to send `customerId` in this event's
+      // payload (the active job's customer) so we can target the
+      // correct room.
+      if (!customerId) {
+        console.warn(
+          `worker:location_update from worker ${workerId} missing customerId; dropping event`
+        );
+        return;
+      }
+
+      io.to(`customer:${customerId}`).emit("worker:location", {
         workerId,
         lat,
         lng,
@@ -161,6 +177,33 @@ app.get("/health", (req: Request, res: Response) => {
   });
 });
 
+/**
+ * 404 handler - must come after all routes
+ */
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ error: "Not found" });
+});
+
+/**
+ * Global error handler - must be registered last, with 4 args,
+ * so Express recognizes it as an error-handling middleware.
+ * Previously there was no error handler at all, so any thrown/rejected
+ * error in a route fell through to Express's default handler
+ * (inconsistent responses, possible stack trace leakage).
+ */
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error(err);
+
+  if (err.message?.startsWith("Origin ") && err.message?.endsWith("not allowed by CORS")) {
+    return res.status(403).json({ error: "Origin not allowed" });
+  }
+
+  res.status(500).json({
+    error: "Internal server error",
+    ...(process.env.NODE_ENV !== "production" && { detail: err.message }),
+  });
+});
+
 async function startServer() {
   try {
     await prisma.$connect();
@@ -182,5 +225,11 @@ async function startServer() {
 if (process.env.NODE_ENV !== "test") {
   startServer();
 }
+
+process.on("SIGTERM", async () => {
+  console.log("SIGTERM received, shutting down gracefully");
+  await prisma.$disconnect();
+  httpServer.close(() => process.exit(0));
+});
 
 export { app };
