@@ -16,7 +16,7 @@
 
 import prisma from '../config/prisma';
 import { sendFCMNotification } from './fcm';
-import { io }  from '../server';
+import { io } from '../server';
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -348,16 +348,24 @@ async function dispatchRequirementSimple(
 // ── Find available workers via PostGIS ───────────────────────────────────────
 
 /**
- * Returns online workers within `radiusMeters` of the job, excluding anyone
+ * Returns online workers matching the requirement's skill, excluding anyone
  * already dispatched for this requirement in an earlier wave, ordered by
- * distance (nearest first).
+ * distance (nearest first) where distance is available.
  *
- * NOTE: this no longer excludes workers who already have a `confirmed` or
- * `in_progress` booking — per request, a worker who has accepted a job can
- * still be dispatched (and notified) for other jobs. If you want to avoid
- * double-booking, that now needs to be enforced elsewhere (e.g. in the
- * accept endpoint, or by having the worker decline/it not surfacing as
- * an option in the app).
+ * TEMPORARY: the ST_DWithin radius filter has been removed for now (per
+ * request) so dispatch isn't blocked while the `location_geo` write bug is
+ * being tracked down. This means `radiusMeters` is currently unused here —
+ * every wave will just match against all online, skill-matching workers,
+ * up to `workersPerWave`, since it's no longer radius-limited. Waves will
+ * still escalate through the same worker pool (each wave excludes workers
+ * already dispatched via the NOT EXISTS check below), but the distinction
+ * between "3km wave" and "15km wave" no longer means anything until this
+ * is put back. Re-add the ST_DWithin clause once `location_geo` is
+ * confirmed to be populated correctly for real workers.
+ *
+ * NOTE: this also still does not exclude workers who already have a
+ * `confirmed` or `in_progress` booking — per earlier request, a worker who
+ * has accepted a job can still be dispatched (and notified) for other jobs.
  *
  * Skill matching is restored below using the column/table names from your
  * own original (commented-out) query — I didn't invent new ones. Two
@@ -366,9 +374,9 @@ async function dispatchRequirementSimple(
  *      since your top-of-mind note mentions a `skill_category` name mismatch
  *      breaking dispatch before — this should make it whitespace/case safe.
  *   2. If a requirement has no `skill_type` set, the filter is skipped
- *      entirely (dispatches to any online worker in range) rather than
- *      matching nothing. If that's not the behavior you want for
- *      skill-less requirements, tell me and I'll make it strict instead.
+ *      entirely (dispatches to any online worker) rather than matching
+ *      nothing. If that's not the behavior you want for skill-less
+ *      requirements, tell me and I'll make it strict instead.
  */
 async function findAvailableWorkers(
   job: JobForDispatch,
@@ -384,11 +392,6 @@ async function findAvailableWorkers(
            ) AS dist_m
     FROM worker w
     WHERE w.is_online = true
-      AND ST_DWithin(
-            w.location_geo,
-            ST_MakePoint(${job.longitude}, ${job.latitude})::geography,
-            ${radiusMeters}
-          )
       AND (
             ${req.skill_type ?? null}::text IS NULL
             OR LOWER(TRIM(w.skill_type)) = LOWER(TRIM(${req.skill_type ?? ''}))
@@ -403,7 +406,7 @@ async function findAvailableWorkers(
             WHERE jd.requirement_id = ${req.id}
               AND jd.worker_id = w.id
           )
-    ORDER BY dist_m ASC
+    ORDER BY dist_m ASC NULLS LAST
     LIMIT ${DISPATCH_CONFIG.workersPerWave}
   `;
 
