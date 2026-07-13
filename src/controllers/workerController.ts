@@ -161,3 +161,15 @@ export const getEarnings = async (req: Request, res: Response): Promise<void> =>
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const updateDeviceToken = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const workerId = (req as any).user?.id;
+    if (!workerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+    const { device_token } = req.body;
+    await workerService.updateDeviceToken(workerId, device_token);
+    res.status(200).json({ success: true, message: "Device token updated" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
