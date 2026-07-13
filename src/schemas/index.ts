@@ -362,3 +362,6 @@ export const CreateJobRequirementReqSchema = z.object({
   wave_size: z.number().int().positive().optional().openapi({ example: 10 }),
 }).openapi("CreateJobRequirementReq");
 
+export const UpdateDeviceTokenReqSchema = z.object({
+  device_token: z.string().min(1),
+});

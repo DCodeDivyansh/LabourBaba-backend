@@ -53,6 +53,13 @@ export const workerService = {
     return worker_location;
   },
 
+  async updateDeviceToken(workerId: string, deviceToken: string) {
+    return prisma.worker.update({
+      where: { id: workerId },
+      data: { device_token: deviceToken },
+    });
+  },
+
   async updateOnlineStatus(workerId: string, payload: UpdateWorkerOnlineStatusReq) {
     return await prisma.worker.update({
       where: { id: workerId },

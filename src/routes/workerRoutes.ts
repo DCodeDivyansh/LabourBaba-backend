@@ -5,6 +5,8 @@ import { authenticateJWT } from "../middlewares/authMiddleware";
 import { CreateWorkerReqSchema, LoginWorkerReqSchema, UpdateWorkerProfileReqSchema, UpdateWorkerLocationReqSchema, UpdateWorkerOnlineStatusReqSchema, UploadWorkerDocumentReqSchema, WorkerSchema, WorkerLocationSchema, WorkerDocumentSchema, WorkerAnalyticsSchema, BookingSchema } from "../schemas";
 import { registry } from "../config/swagger";
 import { z } from "zod";
+import { /* ...existing, */ updateDeviceToken } from "../controllers/workerController";
+import { /* ...existing, */ UpdateDeviceTokenReqSchema } from "../schemas";
 
 const router = express.Router();
 
@@ -15,6 +17,15 @@ registry.registerPath({
   tags: ["Workers"],
   request: { body: { content: { "application/json": { schema: CreateWorkerReqSchema } } } },
   responses: { 201: { description: "Created", content: { "application/json": { schema: z.object({ success: z.boolean(), data: WorkerSchema }) } } } }
+});
+
+registry.registerPath({
+  method: "patch",
+  path: "/api/workers/me/device-token",
+  summary: "Save/update FCM device token for push notifications",
+  tags: ["Workers"],
+  request: { body: { content: { "application/json": { schema: UpdateDeviceTokenReqSchema } } } },
+  responses: { 200: { description: "Success" } }
 });
 
 registry.registerPath({
@@ -133,5 +144,6 @@ router.get("/me/documents", authenticateJWT, getDocuments);
 router.get("/me/analytics", authenticateJWT, getAnalytics);
 router.get("/me/bookings", authenticateJWT, getBookings);
 router.get("/me/earnings", authenticateJWT, getEarnings);
+router.patch("/me/device-token", authenticateJWT, validateBody(UpdateDeviceTokenReqSchema), updateDeviceToken);
 
 export default router;

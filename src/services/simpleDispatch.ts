@@ -495,6 +495,16 @@ async function notifyWorkers(
       sendFCMNotification(w.device_token as string, {
         title: 'New job nearby',
         body: `${req.skill_type ?? 'A job'} needed — \u20b9${req.rate_per_day ?? '—'}/day`,
+        // ⬅ NEW: without this, a tapped notification has nothing to act on —
+        // matches the job:incoming socket payload shape so both paths converge
+        // on the same IncomingJobScreen params.
+        data: {
+          requirementId: String(req.id),
+          jobId: String(job.id ?? ''),
+          skillType: String(req.skill_type ?? ''),
+          ratePerDay: String(req.rate_per_day ?? ''),
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : '', // ⬅ use whatever variable holds this wave's expiry in scope here
+        },
       }),
     ),
   );
