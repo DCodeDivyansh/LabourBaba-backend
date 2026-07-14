@@ -50,3 +50,16 @@ export const getWaves = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
+export const getDispatchDetail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { requirementId } = req.params as any;
+    const workerId = getWorkerId(req);
+    if (!workerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+    const dispatch = await dispatchService.getDispatchDetail(requirementId, workerId);
+    res.status(200).json({ success: true, data: dispatch });
+  } catch (error: any) {
+    res.status(404).json({ success: false, message: error.message });
+  }
+};
