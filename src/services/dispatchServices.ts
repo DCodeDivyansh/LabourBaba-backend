@@ -294,6 +294,25 @@ export const getIncomingDispatches = async (workerId: string) => {
   });
 };
 
+
+// ── Get Single Dispatch Detail (for expired/tapped-notification checks) ─────
+// Unlike getIncomingDispatches (which only returns still-pending dispatches),
+// this looks up one specific dispatch regardless of status — needed so a
+// tapped notification for an already-expired/filled job can be told "this
+// job is no longer available" instead of just silently not appearing.
+export const getDispatchDetail = async (requirementId: string, workerId: string) => {
+  const dispatch = await prisma.job_dispatch.findFirst({
+    where: { requirement_id: requirementId, worker_id: workerId },
+    include: {
+      job_requirement: {
+        include: { job: { include: { customer: true } } },
+      },
+    },
+  });
+  if (!dispatch) throw new Error("Dispatch not found");
+  return dispatch;
+};
+
 // ── Get Waves (for a requirement) ────────────────────────────────────────────
 
 export const getWaves = async (requirementId: string) => {
@@ -317,4 +336,6 @@ export const dispatchService = {
   declineJob: (requirementId: string, workerId: string) =>
     declineDispatch(requirementId, workerId),
   getWaves: (requirementId: string) => getWaves(requirementId),
+  getDispatchDetail: (requirementId: string, workerId: string) =>
+    getDispatchDetail(requirementId, workerId), // ⬅ NEW
 };
