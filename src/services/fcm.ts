@@ -76,15 +76,16 @@ export async function sendFCMNotification(
     try {
       const message: Message = {
         token: deviceToken,
-        notification: {
+        android: {
+          priority: "high",
+          // no `notification` sub-block — data-only
+        },
+        data: {
           title: payload.title,
           body: payload.body,
+          ...(payload.data ?? {}),
         },
       };
-
-      if (payload.data) {
-        message.data = payload.data;
-      }
 
       const response = await getMessaging(app).send(message);
       console.log(`[FCM] Notification sent successfully: messageId=${response}`);

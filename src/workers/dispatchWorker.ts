@@ -32,7 +32,13 @@ const dispatchWorker = new Worker<DispatchJobData>(
     // 1. Fetch requirement + parent job for coordinates
     const req = await prisma.job_requirement.findUnique({
       where: { id: requirementId },
-      include: { job: true },
+      include: {
+        job: {
+          include: {
+            customer: true,
+          },
+        },
+      },
     });
     console.log("req", req)
     if (!req) {
@@ -123,8 +129,19 @@ const dispatchWorker = new Worker<DispatchJobData>(
         try {
           if (w.device_token) {
             await sendFCMNotification(w.device_token, {
-              title: 'New job nearby',
-              body: `${req.skill_type} needed — ₹${req.rate_per_day}/day`,
+              title: "New Job",
+              body: req.skill_type ?? "New Job",
+              data: {
+                type: "incoming_job",
+                jobId: req.job.id,
+                requirementId: req.id,
+                title: "New Job",
+                body: req.skill_type ?? "",
+                ratePerDay: String(req.rate_per_day ?? 0),
+                customerName: req.job.customer.name,
+                location: req.job.location ?? "",
+                expiresAt: expiresAt.toISOString(),
+              },
             });
           }
         } catch (err) {

@@ -493,17 +493,24 @@ async function notifyWorkers(
   const fcmResults = await Promise.allSettled(
     workersWithToken.map((w) =>
       sendFCMNotification(w.device_token as string, {
-        title: 'New job nearby',
-        body: `${req.skill_type ?? 'A job'} needed — \u20b9${req.rate_per_day ?? '—'}/day`,
-        // ⬅ NEW: without this, a tapped notification has nothing to act on —
-        // matches the job:incoming socket payload shape so both paths converge
-        // on the same IncomingJobScreen params.
+        // title/body must NOT be top-level — that makes this a "notification"
+        // message, which Android intercepts and auto-displays instead of
+        // calling IncomingJobFirebaseService.onMessageReceived() while the
+        // app is backgrounded/killed. Everything native needs lives in `data`.
+        title: '',
+        body: '',
         data: {
-          requirementId: String(req.id),
+          type: 'incoming_job', // was missing entirely — root cause
           jobId: String(job.id ?? ''),
-          skillType: String(req.skill_type ?? ''),
+          requirementId: String(req.id),
+          title: 'New Job',
+          body: `${req.skill_type ?? 'A job'} needed`,
           ratePerDay: String(req.rate_per_day ?? ''),
-          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : '', // ⬅ use whatever variable holds this wave's expiry in scope here
+          // JobForDispatch has no customer name / address on it — defaulting
+          // to '' so the native/JS side don't crash on a missing key. See note below.
+          customerName: '',
+          location: '',
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : '',
         },
       }),
     ),
