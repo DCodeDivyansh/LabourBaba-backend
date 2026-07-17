@@ -78,10 +78,7 @@ export async function sendFCMNotification(
         token: deviceToken,
         android: {
           priority: "high",
-          notification: {
-            priority: "max",
-            channelId: "incoming_jobs",
-          },
+          // no `notification` sub-block — data-only
         },
         data: {
           title: payload.title,
