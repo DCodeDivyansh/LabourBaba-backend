@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import cors from "cors";
-import morgan from "morgan";
+import logs from "./middlewares/morgan";
 import dotenv from "dotenv";
 
 import prisma from "./config/prisma";
@@ -68,8 +68,9 @@ app.use(
   })
 );
 
+// these are the midewares that are used in the app, they are used to parse the request body and log the requests
 app.use(express.json());
-app.use(morgan("dev"));
+app.use(logs());
 
 app.use((req, res, next) => {
   if (req.url.startsWith("/socket.io")) {
