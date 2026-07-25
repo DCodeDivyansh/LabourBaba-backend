@@ -1,7 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import prisma from '../config/prisma';
 import { redisConnectionOptions, timeoutQueue, dispatchQueue } from '../config/bullmq';
-import { sendFCMNotification } from '../services/fcm';
+import { sendFCMNotification } from '../shared/fcm';
 import { io } from '../server';
 const WAVE_TIMEOUT_MS = 30_000; // 30 seconds
 

@@ -7,18 +7,18 @@ import dotenv from "dotenv";
 
 import prisma from "./config/prisma";
 
-import workerRoutes from "./routes/workerRoutes";
-import clientRoute from "./routes/customerRoutes";
-import skillRoute from "./routes/skillRouter";
-import jobRoutes from "./routes/jobRoutes";
-import authRoutes from "./routes/authRoutes";
-import dispatchRoutes from "./routes/dispatchRoutes";
-import bookingRoutes from "./routes/bookingRoutes";
-import paymentRoutes from "./routes/paymentRoutes";
-import reviewRoutes from "./routes/reviewRoutes";
-import chatRoutes from "./routes/chatRoutes";
-import adminRoutes from "./routes/adminRoutes";
-import workerLocationRoute from "./routes/worker_location.routes";
+import workerRoutes from "./features/worker/workerRoutes";
+import clientRoute from "./features/auth/customerRoutes";
+import skillRoute from "./features/skill/skillRouter";
+import jobRoutes from "./features/jobs/jobRoutes";
+import authRoutes from "./features/auth/auth.routes";
+import dispatchRoutes from "./features/dispatch/dispatchRoutes";
+import bookingRoutes from "./features/booking/bookingRoutes";
+import paymentRoutes from "./features/payment/paymentRoutes";
+import reviewRoutes from "./features/review/reviewRoutes";
+import chatRoutes from "./features/chat/chatRoutes";
+import adminRoutes from "./features/admin/adminRoutes";
+import workerLocationRoute from "./features/worker_location/worker_location.routes";
 
 import { setupSwagger } from "./config/swagger";
 
