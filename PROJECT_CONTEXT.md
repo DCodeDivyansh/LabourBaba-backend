@@ -461,26 +461,55 @@ Two GIST indexes optimize spatial queries:
 
 ## 8. Recent Architecture Changes (Latest Updates)
 
-### A. Worker Profile `name` Field Integration
-- **Database Schema**: Added the `name` string field to the `Worker` model in `schema.prisma`.
-- **Validation Schemas**: Updated `WorkerSchema` and `CreateWorkerReqSchema` in `src/schemas/index.ts` to require `name`.
-- **Controllers & Services**: Integrated `name` parameter in `workerService.register()` and routes (`POST /api/workers/registerWorker`) to save and return worker names.
-- **Tests & Mocks**: Updated mock worker models in test suites (`tests/workerAuth.test.ts` and `src/test-dispatch.ts`) to include worker names.
+Summary: Since the previous documentation update, the codebase received multiple feature enhancements, bug fixes, and infra additions — primarily around dispatch workflow, location handling, socket + CORS stability, FCM notifications, device token management, Docker support, and API surface expansion. Key changes follow.
 
-### B. BullMQ Queue Dashboard (Bull Board) Connection
-- **Express Integration**: Connected **Bull Board** queue dashboard visualization at the path `/admin/queues` using `@bull-board/api` and `@bull-board/express` adapters.
-- **Queue Monitoring**: Placed `dispatchQueue` and `timeoutQueue` under monitoring to visualize waves, jobs, and timeouts.
+### A. Infrastructure & Dev Ops
+- Added Docker support (Dockerfile updates) to containerize the app and streamline local/dev deployments.
+- Added server entry point and a Prisma connectivity test script (`src/test-prisma.ts`) to validate DB access during startup.
 
-### C. Firebase Cloud Messaging (FCM) Integration
-- **SDK Upgrade**: Swapped out the old console-log stub for a complete `firebase-admin` integration in `src/services/fcm.ts`.
-- **Credentials Config**: Configured it to support initialization via:
-  1. A local Service Account JSON credential file (`labourbaba-*-firebase-adminsdk-*.json`) at the root (ignored by git).
-  2. The `FIREBASE_SERVICE_ACCOUNT_JSON` environment variable.
-  3. Falling back to Application Default Credentials (ADC), and falling back to debug-logging stub mode on failure.
+### B. Socket.IO, CORS & Error Handling
+- Fixed Socket.IO connection issues and many logging improvements for real-time events.
+- Refactored CORS middleware to allow configurable origins and fixed CORS-related bugs (Allowed-Origin updates).
+- Added global error handling middleware to centralize error responses and reduce controller duplication.
 
-### D. Location Updates and PostGIS Geography Storage Refactor
-- **Direct PostGIS Querying**: Since Prisma Client doesn't support writing unsupported columns directly, updated `jobService.createJob`, `workerService.updateLocation`, and `addLocation` controller to use transaction/raw-sql `$executeRaw` to insert/update coordinates using `ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography`.
-- **Synchronization**: The controller endpoint `POST /api/worker_location/add` now updates the history trail in `worker_location` and synchronizes the current location by updating `Worker.location_geo` using raw SQL.
+### C. Dispatch Workflow & Spatial Matching
+- Major refactors to dispatch logic: improved worker selection, wave handling, and queue reliability (multiple commits).
+- Restored skill matching normalization and adjusted worker pool sizing logic (introducing `workers_needed` in dispatch requirements).
+- Temporarily lifted radius filtering in some flows to broaden candidate selection while dispatch tuning is in progress.
+- Job creation now includes worker & user data to seed immediate dispatch processing for new jobs.
+- Added/find-by-location improvements: worker location now accompanies worker details in dispatch responses.
 
-### E. API Endpoint Fixes
-- **Customer Job Retrieval**: Fixed `getMyJobs` (`GET /api/jobs`) to correctly retrieve `customer_id` from the request query parameter (`req.query.customer_id`) rather than route parameters (`req.params.customer_id`).
+### D. Worker Location & PostGIS Enhancements
+- Continued hardening of the dual-write pattern: `worker_location` raw coordinates + `Worker.location_geo` geography kept synchronized via upserts and raw PostGIS updates where necessary.
+- Dispatch codepaths and search routines updated to match workers using geographic coordinates (ST functions expected in production DB).
+
+### E. Notifications & Device Token Management (FCM)
+- Added/expanded device token endpoints: `updateDeviceToken` / FCM device token update endpoints + request schema.
+- FCM payloads changed to a data-only format for background processing; added richer job details to FCM data payloads.
+- Refactored `src/services/fcm.ts` for production-ready initialization and data payload sending.
+
+### F. New / Improved Endpoints
+- `PATCH /api/workers/me/device-token` (or similar) — update worker's FCM device token
+- `GET /api/dispatch/:dispatchId` — get detailed dispatch information (getDispatchDetail)
+- Booking and dispatch endpoints: dispatch responses now may include OTP and booking-related metadata to improve client workflows.
+
+### G. Booking & OTP Flow Improvements
+- Enhanced OTP validation in booking verification; OTP may be included in dispatch responses to support immediate verification workflows.
+
+### H. Tests & Stability
+- Added automated test coverage scaffolding and more unit/integration test updates for dispatch and auth flows.
+- Fixed queue behavior and improved test-dispatch utilities to emulate real dispatch pipelines.
+
+### I. Miscellaneous Fixes
+- Fixed multiple smaller bugs (queue reliability, logging, acceptance of in-progress/confirmed bookings during dispatch)
+- Normalized skill matching and improved error messaging across controllers
+
+---
+
+Notes & Next Steps:
+- Verify PostGIS-enabled DB runs migrations and supports ST_* functions in production environment.
+- Implement spatial query endpoints (e.g., ST_DWithin search) and add integration tests for proximity search.
+- Consider adding feature flags for radius filtering while tuning dispatch heuristics.
+- Push Docker artifacts to registry and add a reference deployment script.
+
+(Use `git log --oneline` to review per-commit details; see commit history for granular changes.)
