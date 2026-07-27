@@ -11,78 +11,80 @@ This document provides a comprehensive overview of the **LabourBaba-backend** co
 
 ## 2. Directory Structure
 
-The project has the following directory layout under the source root (`src/`):
+The project follows a **feature-based (functional) architecture** (restructured from MVC on 2026-07-25, commit 67b300c). The source root (`src/`) is organized by features, with shared utilities and configurations centralized:
 
 - **`src/`**
-  - **`config/`**
+  - **`config/`** - Global configurations
     - `prisma.ts`: Configures the connection pooling (`pg.Pool`) and initializes `PrismaClient` with the PostgreSQL adapter (`@prisma/adapter-pg`).
     - `redis.ts`: Configures the Upstash Redis client.
     - `swagger.ts`: Configures and exports Swagger (OpenAPI) setup helper using `@asteasolutions/zod-to-openapi` and `swagger-ui-express`.
     - `bullmq.ts`: Declares `dispatchQueue` and `timeoutQueue` with connection options configured for Aiven Redis.
-  - **`controllers/`**
-    - `authController.ts`: Handles worker and customer auth (OTP delivery and JWT verification/refresh/logout).
-    - `customerAuthController.ts`: Handles customer sign-up/login authentication.
-    - `customerController.ts`: Handles requests related to customers.
-    - `jobController.ts`: Handles creating and listing jobs.
-    - `dispatchController.ts`: Handles job dispatch incoming status, acceptance, declines, and history waves.
-    - `bookingController.ts`: Handles booking lifecycles, OTP start verification, completions, and cancellations.
-    - `paymentController.ts`: Handles Razorpay payment order creation, refunds, and webhook captures.
-    - `reviewController.ts`: Handles booking ratings and comments.
-    - `chatController.ts`: Handles reading and sending conversation messages.
-    - `adminController.ts`: Handles backend administration features (worker verifications, platform jobs, suspension).
-    - `skillControllers.ts`: Handles retrieving and adding skill categories.
-    - `workerController.ts`: Handles worker registration, profiles, online status, documents, earnings, and analytics.
-    - `worker_location.controller.ts`: Handles worker location add/update requests (upserts location and updates worker geography).
-  - **`middlewares/`**
+  - **`features/`** - Feature modules (each self-contained with controllers, routes, services)
+    - **`admin/`**: Admin management
+      - `adminController.ts`: Handles backend administration features (worker verifications, platform jobs, suspension).
+      - `adminRoutes.ts`: Defines endpoint mappings under `/api/admin`.
+      - `adminServices.ts`: Business logic for admin operations.
+    - **`auth/`**: Authentication & customer management
+      - `auth.controller.ts`: Handles worker authentication (OTP delivery and JWT verification/refresh/logout).
+      - `auth.routes.ts`: Routes for `/api/auth` (OTP sending, OTP verifying, Token Refresh, Logout).
+      - `auth.services.ts`: Logic for SMS OTP and verification tokens.
+      - `customerAuthController.ts`: Handles customer sign-up/login authentication.
+      - `customerController.ts`: Handles customer requests and profile management.
+      - `customerRoutes.ts`: Routes for `/api/clients` (signup, login, list, and create).
+    - **`booking/`**: Booking lifecycle management
+      - `bookingController.ts`: Handles booking lifecycles, OTP start verification, completions, and cancellations.
+      - `bookingRoutes.ts`: Routes for `/api/bookings`.
+      - `bookingServices.ts`: State management and OTP verification routines for active bookings.
+    - **`chat/`**: Messaging system
+      - `chatController.ts`: Handles reading and sending conversation messages.
+      - `chatRoutes.ts`: Routes for `/api/chat`.
+      - `chatServices.ts`: Conversation generation and persistent chat tracking.
+    - **`dispatch/`**: Job dispatch workflow
+      - `dispatchController.ts`: Handles job dispatch incoming status, acceptance, declines, and history waves.
+      - `dispatchRoutes.ts`: Routes for `/api/dispatch`.
+      - `dispatchServices.ts`: Transaction logic for atomic booking creations upon job dispatch acceptances.
+      - `simpleDispatch.ts`: Simplified dispatch processing and worker matching logic.
+    - **`jobs/`**: Job management
+      - `jobController.ts`: Handles creating and listing jobs.
+      - `jobRoutes.ts`: Routes for `/api/jobs` (create, list, details, cancellations, requirements).
+      - `job.services.ts`: Business logic for jobs including PostGIS geographic conversions and BullMQ queue dispatch.
+      - `jobReqServices.ts`: Job requirement management.
+    - **`payment/`**: Payment processing
+      - `paymentController.ts`: Handles Razorpay payment order creation, refunds, and webhook captures.
+      - `paymentRoutes.ts`: Routes for `/api/payments`.
+      - `paymentServices.ts`: Webhook handlers and Razorpay mock integrations.
+    - **`review/`**: Review & rating system
+      - `reviewController.ts`: Handles booking ratings and comments.
+      - `reviewRoutes.ts`: Routes for `/api/reviews`.
+      - `reviewServices.ts`: Database reviews mapping.
+    - **`skill/`**: Skill categories management
+      - `skillControllers.ts`: Handles retrieving and adding skill categories.
+      - `skillRouter.ts`: Routes for `/api/skill`.
+    - **`worker/`**: Worker profiles and management
+      - `workerController.ts`: Handles worker registration, profiles, online status, documents, earnings, and analytics.
+      - `workerRoutes.ts`: Routes for `/api/workers`.
+      - `workerServices.ts`: Business logic for worker updates, documents, analytics, and location management.
+    - **`worker_location/`**: Real-time location tracking
+      - `worker_location.controller.ts`: Handles worker location add/update requests (upserts location and updates worker geography).
+      - `worker_location.routes.ts`: Routes for `/api/worker_location`.
+  - **`middlewares/`** - Global middleware
     - `authMiddleware.ts`: Custom middleware for verifying JWT tokens.
     - `validationMiddleware.ts`: Custom middleware using Zod schema to validate request bodies.
-  - **`routes/`**
-    - `authRoutes.ts`: Mapped under `/api/auth` (OTP sending, OTP verifying, Token Refresh, Logout).
-    - `customerRoutes.ts`: Defines endpoint mappings under `/api/clients` (includes signup, login, list, and create).
-    - `skillRouter.ts`: Defines endpoint mappings under `/api/skill` (list and create).
-    - `workerRoutes.ts`: Defines endpoint mappings under `/api/workers` (profile updates, locations, documents, earnings, analytics).
-    - `worker_location.routes.ts`: Defines endpoint mappings under `/api/worker_location` (add/update location).
-    - `jobRoutes.ts`: Defines endpoint mappings under `/api/jobs` (create, list customer jobs, details, cancellations, requirements).
-    - `dispatchRoutes.ts`: Defines endpoint mappings under `/api/dispatch` (worker incoming dispatches, accepts, declines, waves).
-    - `bookingRoutes.ts`: Defines endpoint mappings under `/api/bookings` (booking status, start OTP verify, completes, cancels).
-    - `paymentRoutes.ts`: Defines endpoint mappings under `/api/payments` (Razorpay orders, webhooks, statuses, refunds).
-    - `reviewRoutes.ts`: Defines endpoint mappings under `/api/reviews` (post reviews, get worker/booking reviews).
-    - `chatRoutes.ts`: Defines endpoint mappings under `/api/chat` (booking messages fetch/post).
-    - `adminRoutes.ts`: Defines endpoint mappings under `/api/admin` (workers verification management, platform analytics, suspensions).
-  - **`schemas/`**
+  - **`schemas/`** - Shared validation schemas
     - `index.ts`: Contains Zod validation schemas for requests and responses, registered to the Swagger/OpenAPI registry.
-  - **`services/`**
-    - `authServices.ts`: Logic for SMS OTP and verification tokens.
+  - **`shared/`** - Shared services across features (moved from `services/`)
     - `customerServices.ts`: Abstracted business logic layer for customer actions.
-    - `job.services.ts`: Abstracts business logic for jobs including:
-      - Coordinate-to-geography conversions using `convertToGeography()`.
-      - Storing both latitude/longitude AND `location_geo` (WKT POINT) when creating jobs.
-      - Queuing BullMQ dispatch jobs for each requirement.
-    - `workerServices.ts`: Handles worker updates including:
-      - Worker location updates via `updateLocation()` which upserts `worker_location` records and updates `Worker.location_geo` field.
-      - Document storage registrations, booking history calculations.
-      - PostGIS geography integration for spatial queries.
-    - `dispatchServices.ts`: Handles transaction logic for atomic booking creations upon job dispatch acceptances, immediate next wave triggers on decline, and job completeness checks.
-    - `bookingServices.ts`: State management and OTP verification routines for active bookings.
-    - `paymentServices.ts`: Webhook handlers and Razorpay mock integrations.
-    - `reviewServices.ts`: Database reviews mapping.
-    - `chatServices.ts`: Conversation generation and persistent chat tracking.
-    - `adminServices.ts`: Platform monitoring, flagged worker logic, and document verifications.
-    - `fcm.ts`: FCM notification service using `firebase-admin`. Configured via a local Service Account JSON (ignored by git), `FIREBASE_SERVICE_ACCOUNT_JSON` environment variable, or Application Default Credentials, with fallback to stub mode.
-  - **`workers/`**
-    - `dispatchWorker.ts`: Processes requirement dispatching, queries nearby online matching workers via PostGIS, handles waves, sends FCM notifications and Socket.IO events, and schedules wave timeouts.
-    - `timeoutWorker.ts`: Handles dispatch timeouts by transitioning waves to exhausted, and statelessly queuing the next wave at the proper offset if workers are still available.
-  - **`type/`**
+    - `fcm.ts`: Firebase Cloud Messaging integration for push notifications.
+  - **`type/`** - Shared TypeScript types
     - `api_req.type.ts`: Defines TypeScript interfaces/types for request payloads.
     - `api_res.types.ts`: Defines TypeScript interfaces/types for API responses.
-  - **`utils/`**
+  - **`utils/`** - Shared utility functions
     - `authUtils.ts`: Helper utilities for authentication, OTP generation, and hashing.
-    - `locationUtils.ts`: Helper utilities for PostGIS geography conversions with three core functions:
-      - `convertToGeography(lon, lat)`: Converts longitude/latitude to PostGIS WKT format `POINT(lon lat)` with validation (-90 to 90 for lat, -180 to 180 for lon).
-      - `convertToGeoJSON(lon, lat)`: Returns standard GeoJSON Point format `{ type: "Point", coordinates: [lon, lat] }`.
-      - `parseGeography(geography)`: Parses WKT POINT strings back to coordinates object.
+    - `locationUtils.ts`: Helper utilities for PostGIS geography conversions (WKT formatting and GeoJSON parsing).
+  - **`workers/`** - Background job workers
+    - `dispatchWorker.ts`: Processes requirement dispatching, queries nearby online matching workers via PostGIS, handles waves, sends FCM notifications and Socket.IO events, and schedules wave timeouts.
+    - `timeoutWorker.ts`: Handles dispatch timeouts by transitioning waves to exhausted, and statelessly queuing the next wave at the proper offset if workers are still available.
   - `server.ts`: Entry point of the Express server with CORS configured to accept both `FRONT_END_URL` and `APP_URL` environments, Socket.IO setup, and background worker instantiation.
-  - `test-prisma.ts`: A small testing script to verify Prisma integration.
 - **`prisma/`**
   - `schema.prisma`: The database design schema definition file.
 
@@ -506,6 +508,8 @@ Summary: Since the previous documentation update, the codebase received multiple
 
 ---
 
+---
+
 Notes & Next Steps:
 - Verify PostGIS-enabled DB runs migrations and supports ST_* functions in production environment.
 - Implement spatial query endpoints (e.g., ST_DWithin search) and add integration tests for proximity search.
@@ -513,3 +517,78 @@ Notes & Next Steps:
 - Push Docker artifacts to registry and add a reference deployment script.
 
 (Use `git log --oneline` to review per-commit details; see commit history for granular changes.)
+
+---
+
+## 9. Architecture Restructuring (2026-07-25)
+
+**Commit:** `67b300c` - "shifted the folder str of the project from mvc to the functional"
+
+### Migration from MVC to Feature-Based Architecture
+
+The project was restructured from a traditional MVC (Model-View-Controller) pattern to a **feature-based (functional) architecture**:
+
+#### Before (MVC Structure):
+```
+src/
+├── controllers/     (all controllers)
+├── services/        (all services)
+├── routes/          (all routes)
+└── ...
+```
+
+#### After (Feature-Based Structure):
+```
+src/
+├── features/
+│   ├── admin/
+│   │   ├── adminController.ts
+│   │   ├── adminRoutes.ts
+│   │   └── adminServices.ts
+│   ├── auth/
+│   │   ├── auth.controller.ts
+│   │   ├── auth.routes.ts
+│   │   ├── auth.services.ts
+│   │   └── ...
+│   ├── booking/
+│   ├── chat/
+│   ├── dispatch/
+│   ├── jobs/
+│   ├── payment/
+│   ├── review/
+│   ├── skill/
+│   ├── worker/
+│   └── worker_location/
+├── shared/          (shared services: customerServices, fcm)
+└── ...
+```
+
+### Benefits of Feature-Based Architecture:
+
+1. **Better Scalability**: Each feature is self-contained with its own controller, routes, and services.
+2. **Improved Modularity**: Easy to locate, understand, and modify a feature without affecting others.
+3. **Clearer Dependencies**: Feature dependencies are explicit (e.g., `dispatch/` imports from `jobs/`).
+4. **Easier Testing**: Feature tests can be isolated and run independently.
+5. **Team Collaboration**: Multiple teams can work on different features with minimal merge conflicts.
+6. **Faster Navigation**: Developers can navigate to a specific feature's directory and find everything there.
+
+### Files Moved:
+
+- **Controllers** (e.g., `authController.ts`) → `features/auth/auth.controller.ts`
+- **Routes** (e.g., `authRoutes.ts`) → `features/auth/auth.routes.ts`
+- **Feature Services** (e.g., `jobReqServices.ts`) → `features/jobs/jobReqServices.ts`
+- **Shared Services** (e.g., `fcm.ts`, `customerServices.ts`) → `shared/`
+
+### Import Path Updates:
+
+All internal imports were updated to reflect the new structure:
+- Feature files import from relative paths (e.g., `../../config/prisma`, `../../schemas`)
+- Shared services are imported from `src/shared/`
+- Configuration remains centralized in `src/config/`
+
+### Next Steps for Feature-Based Architecture:
+
+1. **Feature Modules**: Consider wrapping each feature in an Express Router with automatic mounting in `server.ts`.
+2. **Feature Exports**: Create barrel exports (e.g., `features/auth/index.ts`) for cleaner imports.
+3. **Feature Configuration**: Move feature-specific config to individual feature directories if needed.
+4. **Testing Structure**: Mirror feature structure in `tests/` directory for better test organization.
