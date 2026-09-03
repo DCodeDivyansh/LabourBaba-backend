@@ -1,6 +1,10 @@
 import express from "express";
 import { getClient, postClient } from "./customerController";
-import { signupCustomer, loginCustomer } from "./customerAuthController";
+import {
+  signupCustomer,
+  loginCustomer,
+  getCurrentCustomer,
+} from "./customerAuthController";
 import { validateBody } from "../../middlewares/validationMiddleware";
 import { authenticateJWT } from "../../middlewares/authMiddleware";
 import { CreateCustomerReqSchema, CustomerSchema, SignupCustomerReqSchema, LoginCustomerReqSchema } from "../../schemas";
@@ -153,5 +157,10 @@ registry.registerPath({
 // clientRoute.post("/add", authenticateJWT, validateBody(CreateCustomerReqSchema), postClient);
 clientRoute.post("/signup", validateBody(SignupCustomerReqSchema), signupCustomer);
 clientRoute.post("/login", validateBody(LoginCustomerReqSchema), loginCustomer);
+clientRoute.get(
+  "/me",
+  authenticateJWT,
+  getCurrentCustomer
+);
 
 export default clientRoute;
