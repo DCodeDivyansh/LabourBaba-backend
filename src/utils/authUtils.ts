@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { JwtPayload } from "../type/userRole";
 
 const JWT_SECRET = process.env.JWT_SECRET || "default_secret_key";
 const SALT_ROUNDS = 10;
@@ -26,7 +27,7 @@ export async function comparePassword(password: string, hash: string): Promise<b
  * @param payload Object containing user identifiers (e.g. { id, role })
  * @param expiresIn Expiration duration (defaults to '24h')
  */
-export function generateToken(payload: object, expiresIn: any = "24h"): string {
+export function generateToken(payload: JwtPayload | Record<string, any>, expiresIn: any = "24h"): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn });
 }
 

@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { workerService } from "./workerServices";
 import { CreateWorkerReq, LoginWorkerReq, UpdateWorkerProfileReq, UpdateWorkerLocationReq, UpdateWorkerOnlineStatusReq, UploadWorkerDocumentReq } from "../../type/api_req.type";
-import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
+import { AuthenticatedRequest, UserRole } from "../../middlewares/authMiddleware";
 import { comparePassword, generateToken } from "../../utils/authUtils";
 import prisma from "../../config/prisma";
 
@@ -27,7 +27,7 @@ export const loginWorker = async (req: Request, res: Response): Promise<void> =>
     const token = generateToken({
       id: worker.id,
       phone: worker.phone,
-      role: "worker",
+      role: UserRole.WORKER,
     });
     res.status(200).json({
       success: true,
