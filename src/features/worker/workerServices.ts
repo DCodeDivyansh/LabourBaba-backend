@@ -1,10 +1,18 @@
 import prisma from "../../config/prisma";
 import { CreateWorkerReq, UpdateWorkerProfileReq, UpdateWorkerLocationReq, UpdateWorkerOnlineStatusReq, UploadWorkerDocumentReq } from "../../type/api_req.type";
 import { hashPassword } from "../../utils/authUtils";
+import {
+  workerSelfSelect,
+  toWorkerSelfDTO,
+  customerSummarySelect,
+  bookingSafeSelect,
+  toBookingDTO,
+} from "../../shared/prismaSelects";
+
 export const workerService = {
   async register(payload: CreateWorkerReq) {
     const hashedPassword = await hashPassword(payload.password);
-    return await prisma.worker.create({
+    const worker = await prisma.worker.create({
       data: {
         name: payload.name,
         skill_category_id: payload.skill_category_id,
@@ -13,24 +21,28 @@ export const workerService = {
         skill_type: payload.skill_type,
         aadhaar_last4: payload.aadhaar_last4,
         device_token: payload.device_token,
-      }
+      },
+      select: workerSelfSelect,
     });
+    return toWorkerSelfDTO(worker);
   },
 
   async getProfile(workerId: string) {
     const worker = await prisma.worker.findUnique({
       where: { id: workerId },
-      include: { skill_category: true }
+      select: workerSelfSelect,
     });
     if (!worker) throw new Error("Worker not found");
-    return worker;
+    return toWorkerSelfDTO(worker);
   },
 
   async updateProfile(workerId: string, payload: UpdateWorkerProfileReq) {
-    return await prisma.worker.update({
+    const updated = await prisma.worker.update({
       where: { id: workerId },
-      data: payload
+      data: payload,
+      select: workerSelfSelect,
     });
+    return toWorkerSelfDTO(updated);
   },
 
   async updateLocation(workerId: string, payload: UpdateWorkerLocationReq) {
@@ -54,17 +66,21 @@ export const workerService = {
   },
 
   async updateDeviceToken(workerId: string, deviceToken: string) {
-    return prisma.worker.update({
+    await prisma.worker.update({
       where: { id: workerId },
       data: { device_token: deviceToken },
+      select: { id: true },
     });
+    return { success: true };
   },
 
   async updateOnlineStatus(workerId: string, payload: UpdateWorkerOnlineStatusReq) {
-    return await prisma.worker.update({
+    const updated = await prisma.worker.update({
       where: { id: workerId },
-      data: { is_online: payload.is_online }
+      data: { is_online: payload.is_online },
+      select: workerSelfSelect,
     });
+    return toWorkerSelfDTO(updated);
   },
 
   async uploadDocument(workerId: string, payload: UploadWorkerDocumentReq) {
@@ -91,17 +107,26 @@ export const workerService = {
   },
 
   async getBookings(workerId: string) {
-    return await prisma.booking.findMany({
+    const bookings = await prisma.booking.findMany({
       where: { worker_id: workerId },
-      include: { job: true, customer: true, job_requirement: true }
+      select: {
+        ...bookingSafeSelect,
+        job: true,
+        customer: {
+          select: customerSummarySelect,
+        },
+        job_requirement: true,
+      },
     });
+    return bookings.map(toBookingDTO);
   },
 
   async getEarnings(workerId: string) {
     const payments = await prisma.payment.findMany({
       where: { booking: { worker_id: workerId }, status: "COMPLETED" },
-      include: { booking: true }
+      select: { amount: true },
     });
     return payments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
   }
 };
+

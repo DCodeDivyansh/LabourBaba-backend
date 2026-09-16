@@ -33,7 +33,6 @@ export const CustomerSchema = z.object({
   phone: z.string().openapi({ example: "+919876543210" }),
   name: z.string().openapi({ example: "John Doe" }),
   created_at: z.date().nullable().optional().openapi({ example: "2026-06-25T00:00:00Z" }),
-  deleted_at: z.date().nullable().optional(),
 }).openapi("Customer");
 
 export const WorkerSchema = z.object({
@@ -48,8 +47,6 @@ export const WorkerSchema = z.object({
   verification_status: z.string().nullable().optional().openapi({ example: "pending" }),
   decline_count: z.number().int().nullable().optional(),
   timeout_count: z.number().int().nullable().optional(),
-  device_token: z.string().nullable().optional(),
-  deleted_at: z.date().nullable().optional(),
 }).openapi("Worker");
 
 export const SkillCategorySchema = z.object({
@@ -70,7 +67,6 @@ export const JobSchema = z.object({
   status: z.string().nullable().optional(),
   dispatch_status: z.string().nullable().optional(),
   created_at: z.date().nullable().optional(),
-  deleted_at: z.date().nullable().optional(),
 }).openapi("Job");
 
 export const JobRequirementSchema = z.object({
@@ -126,7 +122,6 @@ export const BookingSchema = z.object({
   worker_id: z.string().uuid(),
   customer_id: z.string().uuid(),
   status: z.string().nullable().optional(),
-  otp_hash: z.string().nullable().optional(),
   otp_verified: z.boolean().nullable().optional(),
   created_at: z.date().nullable().optional(),
   updated_at: z.date().nullable().optional(),

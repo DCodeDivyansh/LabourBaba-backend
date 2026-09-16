@@ -1,6 +1,7 @@
 import prisma from "../../config/prisma";
 import jwt from "jsonwebtoken";
 import { UserRole } from "../../type/userRole";
+import { toAuthUserDTO } from "../../shared/prismaSelects";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_key";
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "fallback_refresh_key";
@@ -36,7 +37,7 @@ export const authService = {
     const token = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: "1h" });
     const refreshToken = jwt.sign({ id: user.id, role }, JWT_REFRESH_SECRET, { expiresIn: "7d" });
 
-    return { user, role, token, refreshToken };
+    return { user: toAuthUserDTO(user), role, token, refreshToken };
   },
 
   async refreshToken(token: string) {

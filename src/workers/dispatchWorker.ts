@@ -35,12 +35,13 @@ const dispatchWorker = new Worker<DispatchJobData>(
       include: {
         job: {
           include: {
-            customer: true,
+            customer: {
+              select: { name: true },
+            },
           },
         },
       },
     });
-    console.log("req", req)
     if (!req) {
       console.warn(`[dispatchWorker] Requirement ${requirementId} not found — skipping`);
       return;

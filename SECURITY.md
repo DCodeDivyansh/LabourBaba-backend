@@ -233,3 +233,119 @@ While this remediation completely eliminates the P0 admin RBAC vulnerability, th
    - Verifying customer ownership of bookings before creating payment orders or refunds.
 4. **Token Revocation Store**:
    - Implementing a shared Redis blocklist for immediate token revocation upon password change or account suspension.
+
+---
+
+# Security Analysis: Remediation of P0 Vulnerability — Password Hashes & Sensitive ORM Data Leakage
+
+## 1. Executive Summary
+
+This section details the security audit, architecture overhaul, and automated regression test validation for the remediation of **P0 Release-Blocking Vulnerability — Password hashes and sensitive Prisma data leak across API boundaries**.
+
+The non-negotiable security invariant enforced throughout the repository is:
+
+```text
+Prisma entity
+    ↓
+explicit allow-listed select
+    ↓
+internal typed record
+    ↓
+explicit DTO mapper
+    ↓
+HTTP / Socket.IO response
+```
+
+**Never**:
+- Return raw Prisma model instances (`return prisma.worker.findUnique(...)`).
+- Serialize raw Prisma entities across HTTP or Socket.IO (`res.json(worker)` or `socket.emit(...)`).
+- Use object spread operators on database entities for API responses (`return { ...worker }`).
+- Use broad relation inclusions (`include: { worker: true, customer: true }`) where relations cross an API boundary.
+
+---
+
+## 2. Sensitive Data Classification Policy
+
+All database fields across the Prisma schema are strictly classified into disclosure tiers:
+
+| Tier | Fields & Models | Policy |
+| :--- | :--- | :--- |
+| **Critical Secrets** | `Worker.password`, `customer.password`, `booking.otp_hash` | **NEVER expose across any API, HTTP, or Socket.IO boundary.** Selected internally only during cryptographic credential verification (`bcrypt.compare`). |
+| **Sensitive / Private Data** | `Worker.device_token`, `Worker.aadhaar_last4`, `worker_document.file_url`, phone numbers | **Exposed only to authorized owners or admins in dedicated context-specific DTOs.** Never present in generic public summaries or search listings. Device tokens are strictly internal to push dispatch mechanisms. Private document URLs are protected workflows. |
+| **Internal Metadata** | `Worker.deleted_at`, `customer.deleted_at`, `job.deleted_at`, `decline_count`, `timeout_count` | **Excluded from public/generic DTOs.** Only surfaced to administrative audit panels via explicit admin DTOs. |
+| **Public / Shared Data** | `Worker.id`, `Worker.name`, `Worker.skill_type`, `Worker.worker_score`, `is_online` | Safely included in public search and booking confirmation cards via `workerPublicSelect` and `toWorkerPublicDTO`. |
+
+---
+
+## 3. ORM Boundary Architecture: Centralized Selects & Explicit DTOs
+
+All queries crossing network boundaries use centralized, type-safe Prisma allow-lists from `src/shared/prismaSelects.ts`:
+
+1. **`workerPublicSelect`**: Allows only `id`, `name`, `skill_type`, `worker_score`, `is_online`, `skill_category_id`.
+2. **`workerSelfSelect`**: Allows public fields plus `phone`, `aadhaar_last4`, `verification_status`, `skill_category`. Strictly excludes `password` and `device_token`.
+3. **`workerAdminSelect`**: Allows self fields plus operational counters (`decline_count`, `timeout_count`). Excludes `password`, `device_token`, and permanent document URLs.
+4. **`customerPublicSelect`**: Allows `id`, `name`, `phone`, `created_at`. Excludes `password` and `deleted_at`.
+5. **`customerSummarySelect`**: Allows `id`, `name`, `phone` for nested relation embedding in dispatches, bookings, and jobs. Excludes `password` and `deleted_at`.
+6. **`customerSelfSelect`**: Allows `id`, `name`, `phone`, `created_at`. Excludes `password` and `deleted_at`.
+7. **`bookingSafeSelect`**: Allows `id`, `job_id`, `requirement_id`, `worker_id`, `customer_id`, `status`, `otp_verified`, timestamps. **Strictly excludes `otp_hash`.**
+8. **`paymentSafeSelect`**: Allows `id`, `booking_id`, `razorpay_order_id`, `status`, `amount`. Excludes internal secret fields.
+
+### Explicit DTO Mappers:
+- `toWorkerPublicDTO()`
+- `toWorkerSelfDTO()`
+- `toWorkerAdminDTO()`
+- `toCustomerPublicDTO()`
+- `toCustomerSummaryDTO()`
+- `toCustomerSelfDTO()`
+- `toBookingDTO()`
+- `toDispatchDTO()`
+- `toAuthUserDTO()`
+
+Mappers construct output objects with explicitly allow-listed keys only. No dynamic key reflection or object spread of unverified sources is permitted.
+
+---
+
+## 4. Nested Relation Sanitization
+
+Broad `include: { ... }` queries have been completely eliminated:
+- In `bookingServices.getBookingDetail`: Replaced `include: { job: true, worker: true, customer: true, review: true, payment: true, job_requirement: true }` with `select: { ...bookingSafeSelect, worker: { select: workerPublicSelect }, customer: { select: customerSummarySelect }, payment: { select: paymentSafeSelect } }` and wrapped in `toBookingDTO()`.
+- In `adminServices.getAllJobs`: Nested customer relation selects only `customerSummarySelect` and maps through `toCustomerSummaryDTO()`.
+- In `dispatchServices.getIncomingDispatches` and `getDispatchDetail`: Nested `job.customer` relation selects only `customerSummarySelect` and maps through `toDispatchDTO()`.
+- In `workerServices.getBookings`: Customer relation selects only `customerSummarySelect` and booking selects `bookingSafeSelect`.
+- In `job.services.getJobBookings`: Top-level booking selects `bookingSafeSelect` (excluding `otp_hash`) with nested worker select.
+
+---
+
+## 5. Authentication & Logging Audit
+
+1. **Authentication Boundary Separation**:
+   - `authService.verifyOtp`: Authenticated user entity is transformed to `toAuthUserDTO(user)` containing only `{ id, name, phone }` prior to returning to `auth.controller.ts`. Password hashes never cross the controller boundary.
+2. **Logging Sanitization**:
+   - Eliminated `console.log(token)` in `workerController.ts`.
+   - Audited logs to ensure no passwords, OTPs, tokens, or private document URLs are logged.
+
+---
+
+## 6. OpenAPI / Swagger Schema Alignment
+
+Updated `src/schemas/index.ts`:
+- **`WorkerSchema`**: Removed `device_token` and `deleted_at`.
+- **`BookingSchema`**: Removed `otp_hash`.
+- **`CustomerSchema`**: Removed `deleted_at`.
+- **`JobSchema`**: Removed `deleted_at`.
+
+---
+
+## 7. Automated Security Regression Testing
+
+Comprehensive automated tests in `tests/sensitiveDataLeakage.test.ts` enforce:
+1. **Sentinel Value Absence**: Tests inject mock records with obvious sentinels (`"DO_NOT_LEAK_PASSWORD_123"`, `"DO_NOT_LEAK_DEVICE_TOKEN_456"`, `"DO_NOT_LEAK_OTP_HASH_789"`) and assert that the serialized response body never contains any sentinel substring.
+2. **Recursive Key Absence**: A recursive tree walker inspects every nested key in every JSON response and asserts that prohibited property keys (`password`, `device_token`, `otp_hash`) never appear anywhere.
+3. **Coverage**:
+   - Worker endpoints: Registration, self profile (`/api/workers/me`), booking list, device token update.
+   - Customer endpoints: List (`/api/clients`), create (`/api/clients/add`), self profile (`/api/clients/me`).
+   - Booking detail: Full nested fixture with worker, customer, payment, and booking relations.
+   - Admin endpoints: Worker list, flagged workers, all jobs with customer relation, document verification, worker suspension.
+   - Dispatch endpoints: Incoming dispatches and single dispatch detail with nested customer relations.
+   - Auth endpoints: OTP verification response.
+
