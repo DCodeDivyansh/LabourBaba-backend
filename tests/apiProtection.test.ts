@@ -90,6 +90,11 @@ jest.mock("../src/config/prisma", () => ({
       create: jest.fn(),
       findMany: jest.fn(),
     },
+    worker_document: {
+      findMany: jest.fn(),
+      updateMany: jest.fn(),
+      create: jest.fn(),
+    },
     $transaction: jest.fn(),
     $executeRaw: jest.fn(),
   },
@@ -99,6 +104,7 @@ import { app } from "../src/server";
 import prisma from "../src/config/prisma";
 import { dispatchQueue, timeoutQueue } from "../src/config/bullmq";
 import { generateToken } from "../src/utils/authUtils";
+import { UserRole } from "../src/type/userRole";
 
 const MOCK_CUSTOMER_ID = "a1b2c3d4-e5f6-4890-a234-56789abcdef0";
 const MOCK_WORKER_ID = "11b2c3d4-e5f6-4890-a234-56789abcdef1";
@@ -111,9 +117,9 @@ describe("API Protection and JWT Validation Tests", () => {
   let adminToken: string;
 
   beforeAll(() => {
-    customerToken = generateToken({ id: MOCK_CUSTOMER_ID, phone: "+919876543210", role: "customer" });
-    workerToken = generateToken({ id: MOCK_WORKER_ID, phone: "+919999999999", role: "worker" });
-    adminToken = generateToken({ id: MOCK_ADMIN_ID, phone: "+918888888888", role: "admin" });
+    customerToken = generateToken({ id: MOCK_CUSTOMER_ID, phone: "+919876543210", role: UserRole.CUSTOMER });
+    workerToken = generateToken({ id: MOCK_WORKER_ID, phone: "+919999999999", role: UserRole.WORKER });
+    adminToken = generateToken({ id: MOCK_ADMIN_ID, phone: "+918888888888", role: UserRole.ADMIN });
   });
 
   beforeEach(() => {
@@ -160,6 +166,9 @@ describe("API Protection and JWT Validation Tests", () => {
 
     (prisma.skill_category.create as jest.Mock).mockResolvedValue({});
     (prisma.skill_category.findMany as jest.Mock).mockResolvedValue([]);
+
+    (prisma.worker_document.findMany as jest.Mock).mockResolvedValue([{ id: "doc-uuid", status: "PENDING", worker_id: MOCK_WORKER_ID }]);
+    (prisma.worker_document.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
   });
 
   afterEach(() => {
@@ -283,7 +292,27 @@ describe("API Protection and JWT Validation Tests", () => {
       expect(res.status).toBe(401);
     });
 
-    it("POST /api/skill/add should return 200 when authenticated (matches controller)", async () => {
+    it("POST /api/skill/add should return 403 when authenticated as customer", async () => {
+      const res = await request(app)
+        .post("/api/skill/add")
+        .set("Authorization", `Bearer ${customerToken}`)
+        .send({ name: "Carpentry" });
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("Forbidden");
+    });
+
+    it("POST /api/skill/add should return 403 when authenticated as worker", async () => {
+      const res = await request(app)
+        .post("/api/skill/add")
+        .set("Authorization", `Bearer ${workerToken}`)
+        .send({ name: "Carpentry" });
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("Forbidden");
+    });
+
+    it("POST /api/skill/add should return 200 when authenticated as admin", async () => {
       (prisma.skill_category.create as jest.Mock).mockResolvedValue({ id: "skill-uuid", name: "Carpentry" });
       const res = await request(app)
         .post("/api/skill/add")
@@ -362,19 +391,287 @@ describe("API Protection and JWT Validation Tests", () => {
     });
   });
 
-  describe("Admin Endpoints (/api/admin)", () => {
-    it("GET /api/admin/workers should return 401 when unauthenticated", async () => {
-      const res = await request(app).get("/api/admin/workers");
-      expect(res.status).toBe(401);
+  describe("Admin RBAC Authorization Matrix (/api/admin)", () => {
+    describe("GET /api/admin/workers", () => {
+      it("should return 401 when unauthenticated", async () => {
+        const res = await request(app).get("/api/admin/workers");
+        expect(res.status).toBe(401);
+      });
+
+      it("should return 403 when authenticated as customer", async () => {
+        const res = await request(app)
+          .get("/api/admin/workers")
+          .set("Authorization", `Bearer ${customerToken}`);
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+        expect(res.body.message).toContain("Forbidden");
+      });
+
+      it("should return 403 when authenticated as worker", async () => {
+        const res = await request(app)
+          .get("/api/admin/workers")
+          .set("Authorization", `Bearer ${workerToken}`);
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+        expect(res.body.message).toContain("Forbidden");
+      });
+
+      it("should return 403 when customer attempts role spoofing via query param ?role=admin", async () => {
+        const res = await request(app)
+          .get("/api/admin/workers?role=admin")
+          .set("Authorization", `Bearer ${customerToken}`);
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+      });
+
+      it("should return 403 when worker attempts role spoofing via query param ?role=admin", async () => {
+        const res = await request(app)
+          .get("/api/admin/workers?role=admin")
+          .set("Authorization", `Bearer ${workerToken}`);
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+      });
+
+      it("should return 200 when authenticated as admin", async () => {
+        (prisma.worker.findMany as jest.Mock).mockResolvedValue([]);
+        const res = await request(app)
+          .get("/api/admin/workers")
+          .set("Authorization", `Bearer ${adminToken}`);
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(Array.isArray(res.body.data)).toBe(true);
+      });
     });
 
-    it("GET /api/admin/workers should return 200 when authenticated", async () => {
-      (prisma.worker.findMany as jest.Mock).mockResolvedValue([]);
-      const res = await request(app)
-        .get("/api/admin/workers")
-        .set("Authorization", `Bearer ${adminToken}`);
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
+    describe("PATCH /api/admin/workers/:id/verify", () => {
+      it("should return 401 when unauthenticated", async () => {
+        const res = await request(app)
+          .patch(`/api/admin/workers/${MOCK_WORKER_ID}/verify`)
+          .send({ status: "VERIFIED" });
+        expect(res.status).toBe(401);
+      });
+
+      it("should return 403 when customer attempts verification AND NOT modify database", async () => {
+        const res = await request(app)
+          .patch(`/api/admin/workers/${MOCK_WORKER_ID}/verify`)
+          .set("Authorization", `Bearer ${customerToken}`)
+          .send({ status: "VERIFIED" });
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+        expect(prisma.worker.update).not.toHaveBeenCalled();
+        expect(prisma.worker_document.updateMany).not.toHaveBeenCalled();
+      });
+
+      it("should return 403 when worker attempts verification AND NOT modify database", async () => {
+        const res = await request(app)
+          .patch(`/api/admin/workers/${MOCK_WORKER_ID}/verify`)
+          .set("Authorization", `Bearer ${workerToken}`)
+          .send({ status: "VERIFIED" });
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+        expect(prisma.worker.update).not.toHaveBeenCalled();
+        expect(prisma.worker_document.updateMany).not.toHaveBeenCalled();
+      });
+
+      it("should return 403 when customer attempts role spoofing in body AND NOT modify database", async () => {
+        const res = await request(app)
+          .patch(`/api/admin/workers/${MOCK_WORKER_ID}/verify`)
+          .set("Authorization", `Bearer ${customerToken}`)
+          .send({ status: "VERIFIED", role: "admin" });
+        expect(res.status).toBe(403);
+        expect(prisma.worker.update).not.toHaveBeenCalled();
+        expect(prisma.worker_document.updateMany).not.toHaveBeenCalled();
+      });
+
+      it("should return 200 when authenticated as admin and successfully update verification", async () => {
+        const updatedWorker = { id: MOCK_WORKER_ID, verification_status: "verified" };
+        (prisma.worker.update as jest.Mock).mockResolvedValue(updatedWorker);
+
+        const res = await request(app)
+          .patch(`/api/admin/workers/${MOCK_WORKER_ID}/verify`)
+          .set("Authorization", `Bearer ${adminToken}`)
+          .send({ status: "VERIFIED" });
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(prisma.worker.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: MOCK_WORKER_ID },
+            data: { verification_status: "verified" },
+          })
+        );
+      });
+    });
+
+    describe("GET /api/admin/jobs", () => {
+      it("should return 401 when unauthenticated", async () => {
+        const res = await request(app).get("/api/admin/jobs");
+        expect(res.status).toBe(401);
+      });
+
+      it("should return 403 when authenticated as customer", async () => {
+        const res = await request(app)
+          .get("/api/admin/jobs")
+          .set("Authorization", `Bearer ${customerToken}`);
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+      });
+
+      it("should return 403 when authenticated as worker", async () => {
+        const res = await request(app)
+          .get("/api/admin/jobs")
+          .set("Authorization", `Bearer ${workerToken}`);
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+      });
+
+      it("should return 200 when authenticated as admin", async () => {
+        (prisma.job.findMany as jest.Mock).mockResolvedValue([]);
+        const res = await request(app)
+          .get("/api/admin/jobs")
+          .set("Authorization", `Bearer ${adminToken}`);
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+      });
+    });
+
+    describe("GET /api/admin/flagged", () => {
+      it("should return 401 when unauthenticated", async () => {
+        const res = await request(app).get("/api/admin/flagged");
+        expect(res.status).toBe(401);
+      });
+
+      it("should return 403 when authenticated as customer", async () => {
+        const res = await request(app)
+          .get("/api/admin/flagged")
+          .set("Authorization", `Bearer ${customerToken}`);
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+      });
+
+      it("should return 403 when authenticated as worker", async () => {
+        const res = await request(app)
+          .get("/api/admin/flagged")
+          .set("Authorization", `Bearer ${workerToken}`);
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+      });
+
+      it("should return 200 when authenticated as admin", async () => {
+        (prisma.worker.findMany as jest.Mock).mockResolvedValue([]);
+        const res = await request(app)
+          .get("/api/admin/flagged")
+          .set("Authorization", `Bearer ${adminToken}`);
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+      });
+    });
+
+    describe("POST /api/admin/workers/:id/suspend", () => {
+      it("should return 401 when unauthenticated", async () => {
+        const res = await request(app)
+          .post(`/api/admin/workers/${MOCK_WORKER_ID}/suspend`)
+          .send({ reason: "Unprofessional conduct" });
+        expect(res.status).toBe(401);
+      });
+
+      it("should return 403 when customer attempts suspension AND NOT modify database", async () => {
+        const res = await request(app)
+          .post(`/api/admin/workers/${MOCK_WORKER_ID}/suspend`)
+          .set("Authorization", `Bearer ${customerToken}`)
+          .send({ reason: "Unprofessional conduct" });
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+        expect(prisma.worker.update).not.toHaveBeenCalled();
+      });
+
+      it("should return 403 when worker attempts suspension AND NOT modify database", async () => {
+        const res = await request(app)
+          .post(`/api/admin/workers/${MOCK_WORKER_ID}/suspend`)
+          .set("Authorization", `Bearer ${workerToken}`)
+          .send({ reason: "Unprofessional conduct" });
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+        expect(prisma.worker.update).not.toHaveBeenCalled();
+      });
+
+      it("should return 403 when worker attempts role spoofing in body AND NOT modify database", async () => {
+        const res = await request(app)
+          .post(`/api/admin/workers/${MOCK_WORKER_ID}/suspend`)
+          .set("Authorization", `Bearer ${workerToken}`)
+          .send({ reason: "Unprofessional conduct", role: "admin" });
+        expect(res.status).toBe(403);
+        expect(res.body.success).toBe(false);
+        expect(prisma.worker.update).not.toHaveBeenCalled();
+      });
+
+      it("should return 200 when authenticated as admin and successfully suspend worker", async () => {
+        const suspendedWorker = { id: MOCK_WORKER_ID, verification_status: "suspended", deleted_at: new Date() };
+        (prisma.worker.update as jest.Mock).mockResolvedValue(suspendedWorker);
+
+        const res = await request(app)
+          .post(`/api/admin/workers/${MOCK_WORKER_ID}/suspend`)
+          .set("Authorization", `Bearer ${adminToken}`)
+          .send({ reason: "Policy violation" });
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(prisma.worker.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: { id: MOCK_WORKER_ID },
+            data: expect.objectContaining({ verification_status: "suspended" }),
+          })
+        );
+      });
+    });
+
+    describe("Token Integrity & Boundary Role Validation", () => {
+      it("should return 401 when token has tampered/invalid signature", async () => {
+        const tamperedToken = adminToken.slice(0, -5) + "abcde";
+        const res = await request(app)
+          .get("/api/admin/workers")
+          .set("Authorization", `Bearer ${tamperedToken}`);
+        expect(res.status).toBe(401);
+        expect(res.body.success).toBe(false);
+        expect(res.body.message).toContain("expired or is invalid");
+      });
+
+      it("should return 401 when token contains an invalid/unsupported role claim", async () => {
+        const invalidRoleToken = generateToken({
+          id: MOCK_CUSTOMER_ID,
+          phone: "+919876543210",
+          role: "superuser_spoofed" as any,
+        });
+        const res = await request(app)
+          .get("/api/admin/workers")
+          .set("Authorization", `Bearer ${invalidRoleToken}`);
+        expect(res.status).toBe(401);
+        expect(res.body.success).toBe(false);
+        expect(res.body.message).toContain("invalid or unsupported role claim");
+      });
+
+      it("should return 401 when token is missing role claim", async () => {
+        const noRoleToken = generateToken({
+          id: MOCK_CUSTOMER_ID,
+          phone: "+919876543210",
+        });
+        const res = await request(app)
+          .get("/api/admin/workers")
+          .set("Authorization", `Bearer ${noRoleToken}`);
+        expect(res.status).toBe(401);
+        expect(res.body.success).toBe(false);
+        expect(res.body.message).toContain("invalid or unsupported role claim");
+      });
+
+      it("should return 401 when token has expired", async () => {
+        const expiredToken = generateToken(
+          { id: MOCK_ADMIN_ID, phone: "+918888888888", role: UserRole.ADMIN },
+          "-1s"
+        );
+        const res = await request(app)
+          .get("/api/admin/workers")
+          .set("Authorization", `Bearer ${expiredToken}`);
+        expect(res.status).toBe(401);
+        expect(res.body.success).toBe(false);
+      });
     });
   });
 });

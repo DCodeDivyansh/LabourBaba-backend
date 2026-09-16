@@ -153,8 +153,8 @@ registry.registerPath({
 });
 
 // Express route mappings
-// clientRoute.get("/", authenticateJWT, getClient);
-// clientRoute.post("/add", authenticateJWT, validateBody(CreateCustomerReqSchema), postClient);
+clientRoute.get("/", authenticateJWT, getClient);
+clientRoute.post("/add", authenticateJWT, validateBody(CreateCustomerReqSchema), postClient);
 clientRoute.post("/signup", validateBody(SignupCustomerReqSchema), signupCustomer);
 clientRoute.post("/login", validateBody(LoginCustomerReqSchema), loginCustomer);
 clientRoute.get(
