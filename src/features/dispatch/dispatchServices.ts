@@ -4,6 +4,7 @@ import prisma from '../../config/prisma';
 import { generateOTP, hashOTP } from '../../utils/authUtils';
 import { Prisma } from '@prisma/client';
 import { io } from '../../server';
+import { customerSummarySelect, bookingSafeSelect, toDispatchDTO } from '../../shared/prismaSelects';
 
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
@@ -68,6 +69,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
         status: 'confirmed',
         otp_hash,
       },
+      select: bookingSafeSelect,
     });
 
     // Increment filled count and flip status if all slots filled
@@ -278,39 +280,31 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
 // ── Get Incoming (worker polling) ────────────────────────────────────────────
 
 export const getIncomingDispatches = async (workerId: string) => {
-  // NOTE: `customer` lives on `job`, not on `job_requirement` — the old
-  // include (`job_requirement: { include: { job: true, customer: true } }`)
-  // referenced a field that doesn't exist on job_requirement, which made
-  // Prisma throw on every call. That's why the worker app's "incoming job"
-  // screen was never able to load the customer's name/phone.
-  return await prisma.job_dispatch.findMany({
+  const dispatches = await prisma.job_dispatch.findMany({
     where: { worker_id: workerId, status: 'pending' },
     include: {
       job_requirement: {
-        include: { job: { include: { customer: true } } },
+        include: { job: { include: { customer: { select: customerSummarySelect } } } },
       },
     },
     orderBy: { notified_at: 'desc' },
   });
+  return dispatches.map(toDispatchDTO);
 };
 
 
 // ── Get Single Dispatch Detail (for expired/tapped-notification checks) ─────
-// Unlike getIncomingDispatches (which only returns still-pending dispatches),
-// this looks up one specific dispatch regardless of status — needed so a
-// tapped notification for an already-expired/filled job can be told "this
-// job is no longer available" instead of just silently not appearing.
 export const getDispatchDetail = async (requirementId: string, workerId: string) => {
   const dispatch = await prisma.job_dispatch.findFirst({
     where: { requirement_id: requirementId, worker_id: workerId },
     include: {
       job_requirement: {
-        include: { job: { include: { customer: true } } },
+        include: { job: { include: { customer: { select: customerSummarySelect } } } },
       },
     },
   });
   if (!dispatch) throw new Error("Dispatch not found");
-  return dispatch;
+  return toDispatchDTO(dispatch);
 };
 
 // ── Get Waves (for a requirement) ────────────────────────────────────────────

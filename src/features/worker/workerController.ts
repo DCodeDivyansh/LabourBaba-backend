@@ -41,7 +41,6 @@ export const loginWorker = async (req: Request, res: Response): Promise<void> =>
       },
       token,
     });
-    console.log(token)
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
