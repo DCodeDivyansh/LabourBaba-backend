@@ -1,5 +1,6 @@
 import prisma from "../../config/prisma";
 import jwt from "jsonwebtoken";
+import { UserRole } from "../../type/userRole";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_key";
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "fallback_refresh_key";
@@ -21,11 +22,11 @@ export const authService = {
 
     // Check if customer or worker exists
     let user = await prisma.customer.findUnique({ where: { phone } });
-    let role = "customer";
+    let role: UserRole = UserRole.CUSTOMER;
 
     if (!user) {
       user = await prisma.worker.findUnique({ where: { phone } }) as any;
-      role = "worker";
+      role = UserRole.WORKER;
     }
 
     if (!user) {
