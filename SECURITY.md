@@ -1081,15 +1081,106 @@ Implemented in `tests/dispatchRadiusSecurity.test.ts`:
 
 ### Test Suite Execution Summary
 - `tests/dispatchRadiusSecurity.test.ts`: **13 / 13 passed**
-- Full test suite (`npm test`): **9 / 9 suites passed, 202 / 202 tests passed**
+- `tests/bullmqDispatchSecurity.test.ts`: **24 / 24 passed**
+- Full test suite (`npm test`): **10 / 10 suites passed, 226 / 226 tests passed**
+- TypeScript build (`npm run build`): **Clean compilation with 0 errors**
+- Prisma validation (`npx prisma validate`): **Schema valid**
+
+---
+
+# Production Readiness Security Audit — P0 Finding #8: BullMQ Dispatch Lacks Geographic Filtering
+
+## 1. Executive Summary
+- **Finding**: #8 — BullMQ dispatch also lacks geographic filtering
+- **Severity**: P0 — Release Blocker
+- **Primary Code Area**: `src/workers/dispatchWorker.ts`, `src/features/dispatch/simpleDispatch.ts`, `src/features/dispatch/dispatchCandidate.service.ts`
+- **Remediation Status**: **RESOLVED & VERIFIED**
+
+---
+
+## 2. Root Cause Analysis
+Prior to remediation, `src/workers/dispatchWorker.ts` selected dispatch candidate workers using a raw SQL query filtering solely on `w.is_online = true` and `w.skill_category_id = ...`, with an arbitrary `LIMIT 30 OFFSET ...`.
+1. **Disabled Spatial Filter**: The PostGIS `ST_DWithin` spatial query was completely commented out, omitting geographic filtering and wave radius bounds entirely.
+2. **Missing Status & Verification Guards**: The query failed to filter on `w.verification_status = 'verified'` and `w.deleted_at IS NULL`, permitting suspended, rejected, pending, or deactivated workers to receive dispatches.
+3. **Missing Active Booking Guards**: Workers currently engaged in active (`confirmed` or `in_progress`) bookings were not excluded from receiving additional job dispatches.
+4. **Missing Location Freshness**: Stale locations were admitted regardless of age, dispatching workers whose location had not been updated for days or weeks.
+5. **Falsy Coordinate Bug**: Falsy checks `if (!req.job.latitude || !req.job.longitude)` rejected valid Null Island coordinates `(0, 0)`.
+6. **Architecture Divergence**: BullMQ dispatch and Simple dispatch maintained independent candidate selection logic that could diverge.
+
+---
+
+## 3. Remediation Architecture & Invariants
+
+### 3.1 Centralized Candidate Eligibility Service (`dispatchCandidate.service.ts`)
+A single authoritative service `src/features/dispatch/dispatchCandidate.service.ts` exports `getEligibleDispatchCandidates(...)`, `getWaveRadiusMeters(waveNumber)`, and `validateDispatchCoordinates(latitude, longitude)`. Both `dispatchWorker.ts` and `simpleDispatch.ts` now call this centralized implementation.
+
+### 3.2 PostGIS Spatial Semantics
+- **Coordinate Order**: WGS 84 ellipsoid (SRID 4326) using `ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography` where `X = longitude` and `Y = latitude`.
+- **Distance Filtering**: Enforced in the database via `ST_DWithin(w.location_geo, ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography, radiusMeters)`.
+- **Distance Calculation & Ranking**: `ST_Distance(...) AS dist_m`, ordered by `dist_m ASC, w.worker_score DESC NULLS LAST`.
+- **Wave Radii**: Progressive wave escalation defined centrally:
+  - Wave 1: **3,000 meters** (3 km)
+  - Wave 2: **5,000 meters** (5 km)
+  - Wave 3: **10,000 meters** (10 km)
+  - Wave 4+: **15,000 meters** (15 km)
+
+### 3.3 Complete Mandatory Database Predicates
+Under `getEligibleDispatchCandidates`:
+1. `w.is_online = true`
+2. `w.deleted_at IS NULL`
+3. `w.verification_status = 'verified'` (excludes 'pending', 'rejected', 'suspended')
+4. `w.location_geo IS NOT NULL`
+5. `ST_DWithin(...)` within active wave radius
+6. Skill matching on `w.skill_type` or `skill_category.name`
+7. Not previously dispatched: `NOT EXISTS (SELECT 1 FROM job_dispatch jd WHERE jd.requirement_id = req.id AND jd.worker_id = w.id)`
+8. Not committed to active booking: `NOT EXISTS (SELECT 1 FROM booking b WHERE b.worker_id = w.id AND LOWER(b.status) IN ('confirmed', 'in_progress'))`
+9. Location Freshness: `EXISTS (SELECT 1 FROM worker_location wl WHERE wl.worker_id = w.id AND wl.updated_at >= NOW() - INTERVAL '<hours> hours')` (default 24h, configurable via `DISPATCH_LOCATION_FRESHNESS_HOURS`)
+
+### 3.4 Fail-Closed Security
+If coordinate validation fails or the PostGIS query throws an error, the system fails closed:
+- An empty candidate array `[]` is returned.
+- No workers are notified.
+- No `job_dispatch` rows are written.
+- The requirement is marked `no_workers_available`.
+- The system **never** falls back to an un-geocoded candidate pool.
+
+---
+
+## 4. Verification & Regression Coverage
+
+| Test Area | Invariant Verified | Result |
+| :--- | :--- | :--- |
+| **1. Inside Radius (2.9 km vs 3.0 km)** | Worker at 2.9 km is selected for 3.0 km wave | **PASS** |
+| **2. Exact Boundary (3.0 km vs 3.0 km)** | Worker at exact 3.0 km boundary is selected (inclusive `<=`) | **PASS** |
+| **3. Just Outside Radius (3.1 km vs 3.0 km)** | Worker at 3.1 km is strictly excluded from candidate pool | **PASS** |
+| **4. Far Outside Radius (10 km vs 3.0 km)** | Worker at 10 km is strictly excluded from candidate pool | **PASS** |
+| **5. Missing Coordinates** | Worker with `location_geo IS NULL` is strictly excluded | **PASS** |
+| **6. Invalid Coordinates** | Rejects null, undefined, NaN, Infinity, out-of-range (>90 lat, >180 lon) | **PASS** |
+| **7. Zero Coordinates (0, 0)** | Zero coordinates (Null Island) accepted as valid numeric coordinates | **PASS** |
+| **8. Location Freshness** | Worker with fresh location (<= 24h) eligible; stale location (> 24h) excluded | **PASS** |
+| **9. Suspended / Soft-Deleted Worker** | Excludes worker with `verification_status = 'suspended'` or `deleted_at != null` | **PASS** |
+| **10. Unverified Worker** | Excludes worker with `verification_status = 'pending'` or `'rejected'` | **PASS** |
+| **11. Skill Mismatch** | Excludes worker inside radius but with mismatched skill | **PASS** |
+| **12. Active Booking Conflict** | Excludes worker currently committed to `confirmed` or `in_progress` booking | **PASS** |
+| **13. Wave Radius Escalation** | Worker at 4.2 km excluded in Wave 1 (3 km) but included in Wave 2 (5 km) | **PASS** |
+| **14. Combined Eligibility** | 8 workers evaluated; only Worker A meeting all criteria is selected | **PASS** |
+| **15. BullMQ End-to-End Execution** | Worker A (inside) notified via FCM + Socket.IO + DB; Worker B (outside) receives nothing | **PASS** |
+| **16. Fail-Closed on Query Error** | PostGIS error returns empty array, never falling back to unrestricted dispatch | **PASS** |
+| **17. SQL Parameterization** | Parameterized Prisma template binds coordinates, radius, and IDs safely | **PASS** |
+
+### Test Suite Execution Summary
+- `tests/bullmqDispatchSecurity.test.ts`: **24 / 24 passed**
+- `tests/dispatchRadiusSecurity.test.ts`: **13 / 13 passed**
+- Full test suite (`npm test`): **10 / 10 suites passed, 226 / 226 tests passed**
 - TypeScript build (`npm run build`): **Clean compilation with 0 errors**
 - Prisma validation (`npx prisma validate`): **Schema valid**
 
 ---
 
 ## 5. Remaining Risks Boundary
-- **Finding #8 (BullMQ Dispatch Candidate Query)**: `src/workers/dispatchWorker.ts` also contains an un-geocoded candidate query; it remains a separate backlog item until BullMQ dispatch is activated and remediated.
-- **Finding #45 (Dispatch Location Freshness)**: Location staleness threshold / TTL remains a separate audit item.
+- **Finding #8 (BullMQ Candidate Geographic Filtering)**: **FULLY RESOLVED & VERIFIED**.
+- **Finding #45 (Dispatch Location Freshness Dynamic Tuning)**: A baseline 24-hour freshness guard is now enforced on all dispatches via `DISPATCH_LOCATION_FRESHNESS_HOURS`. Dynamic runtime tuning per category remains tracked under Finding #45.
+
 
 
 
