@@ -960,5 +960,137 @@ All regression tests are implemented in `tests/workerLocationSecurity.test.ts` a
 - Full test suite (`npm test`): **8 / 8 suites passed, 189 / 189 tests passed**
 - TypeScript build (`npm run build`): **Clean compilation with 0 errors**
 
+---
+
+# Security Analysis: Remediation of P0 Vulnerability — Finding #7: Dispatch Radius Filtering Disabled
+
+## 1. Executive Summary
+
+This section details the security audit, root cause analysis, PostGIS spatial query restoration, and automated regression test suite for **Finding #7 — Dispatch radius filtering is disabled (Severity: P0 — Release Blocker)**.
+
+### Core Security & Correctness Invariant
+> **A worker must not enter the dispatch candidate pool unless the worker has a valid canonical `location_geo` and that location is within the active dispatch wave radius of the requirement/job location. Geographic eligibility is enforced directly inside the PostgreSQL/PostGIS candidate query.**
+
+---
+
+## 2. Root Cause Analysis
+
+Prior to remediation:
+1. **Commented-Out `ST_DWithin`**:
+   In `src/features/dispatch/simpleDispatch.ts`:
+   The candidate query in `findAvailableWorkers` calculated distance via `ST_Distance(...) AS dist_m`, but omitted the `ST_DWithin` filtering predicate. A developer note documented that `ST_DWithin` had been temporarily removed while debugging `location_geo` writes.
+2. **Unused `radiusMeters`**:
+   While `dispatchRequirementSimple` calculated the wave radius (e.g. 3,000m, 5,000m, etc.) and passed it to `findAvailableWorkers(job, req, radius)`, the parameter was completely ignored by the database query.
+3. **Out-of-Radius & NULL-Coordinate Candidates**:
+   Because `ST_DWithin` was missing, any online worker with matching skills—even workers 100 km away—entered the candidate pool. Furthermore, workers with `location_geo = NULL` were returned at the tail of the candidate set due to `ORDER BY dist_m ASC NULLS LAST`.
+4. **Falsy Zero-Coordinate Bug**:
+   In `dispatchRequirementSimple`:
+   ```typescript
+   if (!job.latitude || !job.longitude)
+   ```
+   rejected `0` as an invalid coordinate due to JavaScript falsiness.
+
+---
+
+## 3. Geographic Architecture & Remediation
+
+### A. PostGIS `ST_DWithin` Database Predicate
+In `src/features/dispatch/simpleDispatch.ts`, `findAvailableWorkers` was updated and exported with a mandatory database predicate:
+```sql
+SELECT w.id,
+       w.device_token,
+       ST_Distance(
+         w.location_geo,
+         ST_SetSRID(ST_MakePoint(${job.longitude}, ${job.latitude}), 4326)::geography
+       ) AS dist_m
+FROM worker w
+WHERE w.is_online = true
+  AND w.deleted_at IS NULL
+  AND w.location_geo IS NOT NULL
+  AND ST_DWithin(
+        w.location_geo,
+        ST_SetSRID(ST_MakePoint(${job.longitude}, ${job.latitude}), 4326)::geography,
+        ${radiusMeters}
+      )
+  AND (
+        ${req.skill_type ?? null}::text IS NULL
+        OR LOWER(TRIM(w.skill_type)) = LOWER(TRIM(${req.skill_type ?? ''}))
+        OR EXISTS (
+             SELECT 1 FROM skill_category sc
+             WHERE sc.id = w.skill_category_id
+               AND LOWER(TRIM(sc.name)) = LOWER(TRIM(${req.skill_type ?? ''}))
+           )
+      )
+  AND NOT EXISTS (
+        SELECT 1 FROM job_dispatch jd
+        WHERE jd.requirement_id = ${req.id}
+          AND jd.worker_id = w.id
+      )
+  AND NOT EXISTS (
+        SELECT 1 FROM booking b
+        WHERE b.worker_id = w.id
+          AND b.status IN ('confirmed', 'in_progress')
+      )
+ORDER BY dist_m ASC
+LIMIT ${poolLimit}
+```
+
+### B. Geographic Coordinate & Unit Specifications
+- **SRID / Spatial Reference**: SRID 4326 (WGS 84 ellipsoid).
+- **Coordinate Order**: PostGIS expects `(longitude, latitude)` for `ST_MakePoint(X, Y)`. Longitude is strictly the first argument, latitude is the second.
+- **Distance Units**: On PostgreSQL `geography` types, `ST_Distance` and `ST_DWithin` measure distance in **meters**.
+- **Boundary Semantics**: `ST_DWithin` evaluates `distance <= radiusMeters` (inclusive boundary).
+- **Sorting**: `ORDER BY dist_m ASC` guarantees that candidates are sorted nearest-first.
+
+### C. Configured Wave Escalation
+Radii are derived from `DISPATCH_CONFIG.waves`:
+- **Wave 1**: 3,000 meters (3 km)
+- **Wave 2**: 5,000 meters (5 km)
+- **Wave 3**: 10,000 meters (10 km)
+- **Wave 4**: 15,000 meters (15 km)
+
+### D. Safe Failover & Coordinate Validation
+- Explicit coordinate validation (`Number.isFinite`, `[-90, 90]`, `[-180, 180]`) permits zero coordinates `(0, 0)`.
+- If a job has missing or invalid coordinates, dispatch safely marks the requirement `no_workers_available` without querying or notifying workers globally.
+
+### E. Normalization of Requirement Worker Count
+- `RequirementForDispatch` interface supports both `worker_count_needed` and `workers_needed`.
+- `job.services.ts` selects `worker_count_needed` when fetching requirements for dispatch.
+- `docker-compose.yml` updated to `postgis/postgis:17-3.5` for local containerized PostGIS compatibility.
+
+---
+
+## 4. Security Verification & Test Results
+
+Implemented in `tests/dispatchRadiusSecurity.test.ts`:
+
+| Test Case | Description | Result |
+| :--- | :--- | :--- |
+| **1. Inside Radius (2.9 km)** | Worker at 2.9 km is included for a 3.0 km wave | **PASS** |
+| **2. Exact Boundary (3.0 km)** | Worker at exactly 3.0 km is included (`dist <= R`) | **PASS** |
+| **3. Just Outside (3.1 km)** | Worker at 3.1 km is strictly excluded for a 3.0 km wave | **PASS** |
+| **4. Significantly Outside (10+ km)** | Worker at 10+ km is strictly excluded for a 3.0 km wave | **PASS** |
+| **5. Missing Worker Coordinates** | Worker with `location_geo = NULL` is strictly excluded | **PASS** |
+| **6. Missing Job Coordinates** | Missing job coordinates fail safely without querying or dispatching | **PASS** |
+| **7. Zero Coordinates (0, 0)** | Zero coordinates are accepted as valid geographic coordinates | **PASS** |
+| **8. Multi-Worker Candidate Pool** | Proves only workers within radius are returned, ordered nearest-first | **PASS** |
+| **9. Wave Radius Escalation** | Progressively expands candidate set across 3km, 5km, 10km, 15km | **PASS** |
+| **10. Deactivated Worker** | Worker with `deleted_at != null` is excluded | **PASS** |
+| **11. Active Booking Worker** | Worker with `confirmed` / `in_progress` booking is excluded | **PASS** |
+| **12. SQL Parameterization** | Confirms Prisma template tag binds parameters safely | **PASS** |
+
+### Test Suite Execution Summary
+- `tests/dispatchRadiusSecurity.test.ts`: **13 / 13 passed**
+- Full test suite (`npm test`): **9 / 9 suites passed, 202 / 202 tests passed**
+- TypeScript build (`npm run build`): **Clean compilation with 0 errors**
+- Prisma validation (`npx prisma validate`): **Schema valid**
+
+---
+
+## 5. Remaining Risks Boundary
+- **Finding #8 (BullMQ Dispatch Candidate Query)**: `src/workers/dispatchWorker.ts` also contains an un-geocoded candidate query; it remains a separate backlog item until BullMQ dispatch is activated and remediated.
+- **Finding #45 (Dispatch Location Freshness)**: Location staleness threshold / TTL remains a separate audit item.
+
+
 
 

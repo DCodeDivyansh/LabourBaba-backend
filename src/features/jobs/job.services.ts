@@ -50,7 +50,7 @@ export const jobService = {
     // Fetch created requirements with fields needed for dispatch
     const createdRequirements = await prisma.job_requirement.findMany({
       where: { job_id: job.id },
-      select: { id: true, skill_type: true, rate_per_day: true },
+      select: { id: true, skill_type: true, rate_per_day: true, worker_count_needed: true },
     });
     console.log("[jobService] requirements", createdRequirements);
 
