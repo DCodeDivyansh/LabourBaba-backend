@@ -1,13 +1,18 @@
 import prisma from "../../config/prisma";
-import jwt from "jsonwebtoken";
 import { UserRole } from "../../type/userRole";
 import { toAuthUserDTO } from "../../shared/prismaSelects";
-import { generateOTP, hashOTP, comparePassword, normalizePhone, maskPhone } from "../../utils/authUtils";
+import {
+  generateOTP,
+  hashOTP,
+  comparePassword,
+  normalizePhone,
+  maskPhone,
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} from "../../utils/authUtils";
 import { authConfig } from "../../config/authConfig";
 import { getSmsProvider } from "../../providers/sms/smsProviderFactory";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_key";
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "fallback_refresh_key";
 
 export const authService = {
   /**
@@ -217,21 +222,20 @@ export const authService = {
       }
 
       // 6. Issue JWT credentials
-      const token = jwt.sign({ id: user.id, role }, JWT_SECRET, { expiresIn: "1h" });
-      const refreshToken = jwt.sign({ id: user.id, role }, JWT_REFRESH_SECRET, { expiresIn: "7d" });
+      const token = signAccessToken({ id: user.id, role, phone: user.phone }, "1h");
+      const refreshToken = signRefreshToken({ id: user.id, role, phone: user.phone }, "7d");
 
       return { user: toAuthUserDTO(user), role, token, refreshToken };
     });
   },
 
   async refreshToken(token: string) {
-    try {
-      const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as any;
-      const newToken = jwt.sign({ id: decoded.id, role: decoded.role }, JWT_SECRET, { expiresIn: "1h" });
-      return { token: newToken };
-    } catch (err) {
+    const decoded = verifyRefreshToken(token);
+    if (!decoded || !decoded.id || !decoded.role) {
       throw new Error("Invalid refresh token");
     }
+    const newToken = signAccessToken({ id: decoded.id, role: decoded.role, phone: decoded.phone }, "1h");
+    return { token: newToken };
   },
 
   async logout(token: string) {

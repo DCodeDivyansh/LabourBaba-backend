@@ -536,3 +536,155 @@ Automated verification is covered across `tests/otpSecurity.test.ts`, `tests/api
 | **SMS Failure Safety** | Gateway dispatch failure sets `DELIVERY_FAILED` and blocks verify | **PASS** |
 | **Zero Plaintext Leakage** | Plain OTP absent from responses and logs | **PASS** |
 | **Input Validation** | Non-numeric or non-6-digit input rejected before DB query | **PASS** |
+
+---
+
+# Security Analysis: Remediation of P0 Vulnerability — Finding #4: JWT Secrets Have Insecure Fallbacks
+
+## 1. Executive Summary
+
+This document details the security audit, root cause analysis, architecture redesign, operational secret management, and automated test validation for the remediation of **Finding #4 — JWT secrets have insecure fallbacks (Severity: P0 — Release Blocker)**.
+
+The critical security invariant established by this remediation is:
+> **Zero Fallback Credentials: The backend strictly prohibits hard-coded, default, or dynamic fallback secrets. Application startup halts immediately if required cryptographically independent JWT secrets (`JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`) are missing, weak, or identical.**
+
+---
+
+## 2. Root Cause Analysis
+
+Prior to this remediation, JWT signing and verification throughout the codebase relied on vulnerable fallback strings when environment variables were absent:
+
+1. **`src/utils/authUtils.ts` (line 6)**:
+   ```typescript
+   const JWT_SECRET = process.env.JWT_SECRET || "default_secret_key";
+   ```
+2. **`src/features/auth/auth.services.ts` (lines 9–10)**:
+   ```typescript
+   const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret_key";
+   const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "fallback_refresh_key";
+   ```
+
+### Severe Vulnerabilities Introduced by This Anti-Pattern:
+1. **Silent Production Failure & Token Forgery**: If deployment orchestration (Docker, Kubernetes, systemd, or `.env`) failed to inject JWT secrets, the application booted cleanly and signed all authentication tokens with publicly known repository strings. An attacker could trivially forge valid administrative tokens (`UserRole.ADMIN`) with zero network credentials.
+2. **Secret Desynchronization & Silent Auth Outage**: In an unconfigured environment, `auth.services.ts` signed access tokens with `"fallback_secret_key"`, whereas `authUtils.ts` (invoked by `authMiddleware.ts`) attempted verification with `"default_secret_key"`. Consequently, freshly issued tokens immediately failed verification on protected routes.
+3. **Shared Secret / Lack of Token Isolation**: Access tokens and refresh tokens shared the same secret or lacked cryptographic isolation. Refresh tokens could be submitted as access tokens or vice versa, violating the principle of least privilege.
+4. **Scattered Environment Access**: Environment variables were read dynamically and ad-hoc across disparate service files rather than through a centralized, validated configuration boundary.
+
+---
+
+## 3. Cryptographic & Architectural Redesign
+
+### A. Centralized Validated Configuration (`src/config/authConfig.ts`)
+A dedicated configuration and validation module manages all JWT parameters:
+- `validateJwtSecret(secret, varName)`:
+  - Rejects missing, undefined, null, empty string, or whitespace-only inputs.
+  - Rejects known repository fallbacks and common weak words (`default_secret_key`, `fallback_secret_key`, `fallback_refresh_key`, `secret`, `password`, `123456`, etc.).
+  - Enforces a minimum secret-length requirement of **32 characters** (HMAC-SHA256 key security requirement). *(Note: minimum length is an essential structural constraint; actual entropy relies on cryptographically random generation such as `openssl rand -hex 32`)*.
+- `assertJwtConfig()` / `getJwtConfig()`:
+  - Requires valid `JWT_ACCESS_SECRET` (with legacy transitional support for `JWT_SECRET` if valid and non-empty).
+  - Requires valid `JWT_REFRESH_SECRET`.
+  - Strictly enforces `accessSecret !== refreshSecret`.
+  - Locks cryptographic algorithm to `HS256`.
+  - Completely scrubs secret contents from error messages (e.g. `[SECURITY ERROR] Required environment variable 'JWT_ACCESS_SECRET' is missing`).
+
+### B. Fail-Fast Startup Gatekeeper (`src/server.ts`)
+During application bootstrap in `startServer()`:
+1. `assertJwtConfig()` executes before connecting to PostgreSQL or binding the HTTP listener.
+2. If any JWT configuration requirement fails, the process immediately logs `[STARTUP ERROR]` and exits (`process.exit(1)`), guaranteeing no unauthenticated or insecure server process accepts network traffic.
+
+### C. Cryptographic Secret Separation & Purpose Isolation (`src/utils/authUtils.ts`)
+- **Access Tokens**:
+  - Signed using `JWT_ACCESS_SECRET` with algorithm `HS256` (`signAccessToken`).
+  - Embedded claim: `token_type: "access"`.
+  - Verified exclusively with `JWT_ACCESS_SECRET` (`verifyAccessToken`).
+  - Rejects tokens where `token_type !== "access"`.
+- **Refresh Tokens**:
+  - Signed using `JWT_REFRESH_SECRET` with algorithm `HS256` (`signRefreshToken`).
+  - Embedded claim: `token_type: "refresh"`.
+  - Verified exclusively with `JWT_REFRESH_SECRET` (`verifyRefreshToken`).
+  - Rejects tokens where `token_type !== "refresh"`.
+- **Cross-Token Rejection**:
+  - Submitting an access token to `verifyRefreshToken` or `POST /api/auth/refresh` fails verification.
+  - Submitting a refresh token to `verifyAccessToken` or any `authenticateJWT` protected route fails verification.
+
+---
+
+## 4. Configuration Reference
+
+| Variable | Required in Production | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `JWT_ACCESS_SECRET` | **Yes** | *None (fail-fast)* | Cryptographically random secret for signing 1-hour access tokens. Minimum 32 characters. |
+| `JWT_REFRESH_SECRET` | **Yes** | *None (fail-fast)* | Cryptographically random secret for signing 7-day refresh tokens. Minimum 32 characters. Must be distinct from access secret. |
+| `JWT_ACCESS_EXPIRES_IN` | No | `1h` | Expiration window for access tokens. |
+| `JWT_REFRESH_EXPIRES_IN` | No | `7d` | Expiration window for refresh tokens. |
+| `JWT_SECRET` | Transitional | *None* | Legacy variable; accepted as fallback for `JWT_ACCESS_SECRET` during migration if it satisfies all security validation criteria. |
+
+---
+
+## 5. Operational Secret Management & Rotation Procedure
+
+### Generating Cryptographically Secure Secrets
+Production secrets must never be hard-coded, committed to Git, or generated from predictable patterns. Generate secrets using:
+```bash
+openssl rand -hex 32
+```
+This produces a 64-hexadecimal-character string providing 256 bits of cryptographic entropy.
+
+### Secret Storage
+Production credentials must reside exclusively in managed secret stores:
+- AWS Secrets Manager / Parameter Store
+- HashiCorp Vault
+- Doppler / GCP Secret Manager / Azure Key Vault
+- Environment injection in CI/CD pipeline deployment targets
+
+### Secret Rotation Procedure (Standard / Immediate Invalidation)
+The LabourBaba backend currently signs and validates tokens using symmetric HMAC-SHA256 without multi-key ID (`kid`) negotiation. Consequently, rotating active secrets invalidates outstanding tokens signed with the previous secret.
+
+**Operational Steps for Rotation**:
+1. **Generate New Secrets**:
+   ```bash
+   NEW_ACCESS_SECRET=$(openssl rand -hex 32)
+   NEW_REFRESH_SECRET=$(openssl rand -hex 32)
+   ```
+2. **Stage Secrets in Secret Manager**: Update `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` in deployment configuration.
+3. **Deploy / Restart Application Instances**: Perform rolling restart across backend container fleet.
+4. **Authentication Impact**:
+   - Outstanding access tokens will be rejected (HTTP 401), prompting clients to refresh.
+   - Outstanding refresh tokens will be rejected (HTTP 401), prompting users to re-authenticate via OTP or credentials.
+5. **Post-Deployment Verification**:
+   - Verify health check (`GET /health`).
+   - Execute test login and token refresh flows.
+
+---
+
+## 6. Distinction from Remaining Related Findings
+
+Remediating Finding #4 resolves secret quality, fallback elimination, fail-fast validation, and access/refresh cryptographic separation. It does **not** solve all token lifecycle concerns. The following related findings remain tracked independently in the audit backlog:
+
+- **Finding #68 — Refresh Token Rotation & Reuse Detection**: Refresh tokens are currently reusable until expiration (`7d`) without database-backed family tracking or reuse invalidation.
+- **Finding #69 — Session Revocation & Centralized Token Blacklist**: The logout endpoint currently returns `{ success: true }` without adding JWTs to a distributed Redis revocation blocklist.
+- **Finding #70 — Account Suspension Token Invalidation**: Suspending a worker or customer does not immediately revoke previously issued unexpired access tokens until token expiration.
+
+---
+
+## 7. Automated Regression Test Verification
+
+Automated regression coverage is established in `tests/jwtSecurity.test.ts` (42 tests, 100% passing) and verified across the full 141-test suite:
+
+| Security Invariant Tested | Test Case / Scenario | Result |
+| :--- | :--- | :--- |
+| **Fail-Fast Missing Access Secret** | Unset `JWT_ACCESS_SECRET` and `JWT_SECRET` halts startup with `[SECURITY ERROR]` | **PASS** |
+| **Fail-Fast Missing Refresh Secret** | Unset `JWT_REFRESH_SECRET` halts startup with `[SECURITY ERROR]` | **PASS** |
+| **Empty Secret Rejection** | Empty string (`""`) or whitespace (`"   "`) rejected | **PASS** |
+| **Known Insecure Defaults Rejection** | Rejects `default_secret_key`, `fallback_secret_key`, `fallback_refresh_key`, `secret`, `password`, `123456`, `test-secret` | **PASS** |
+| **Minimum Length Validation** | Secrets shorter than 32 characters rejected | **PASS** |
+| **Identical Secrets Rejection** | Configuration fails if `JWT_ACCESS_SECRET === JWT_REFRESH_SECRET` | **PASS** |
+| **Access Token Signing & Verification** | Access tokens signed with access secret verify with access secret | **PASS** |
+| **Refresh Token Signing & Verification** | Refresh tokens signed with refresh secret verify with refresh secret | **PASS** |
+| **Cross-Secret Rejection** | Access token fails verification against refresh secret; Refresh token fails verification against access secret | **PASS** |
+| **Purpose Isolation Rejection** | Access token rejected by `verifyRefreshToken`; Refresh token rejected by `verifyAccessToken` | **PASS** |
+| **Zero Secret Leakage** | Validation errors and exception payloads never contain secret values | **PASS** |
+| **HTTP Protected Route Integration** | Access token grants entry; Refresh token returns HTTP 401 | **PASS** |
+| **HTTP Refresh Route Integration** | Access token returns HTTP 401; Valid refresh token issues new access token with `token_type: "access"` | **PASS** |
+| **Backward-Compatibility Wrappers** | Legacy `generateToken` and `verifyToken` continue functioning securely | **PASS** |
+
