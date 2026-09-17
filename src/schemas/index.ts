@@ -223,11 +223,16 @@ export const SendMessageReqSchema = z.object({
 }).openapi("SendMessageReq");
 
 export const UpdateWorkerLocationReqSchema = z.object({
-  worker_id: z.string().uuid("Invalid worker UUID"),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
+  latitude: z.number({ message: "Latitude must be a valid number" })
+    .finite("Latitude must be a finite number")
+    .min(-90, "Latitude must be between -90 and 90")
+    .max(90, "Latitude must be between -90 and 90"),
+  longitude: z.number({ message: "Longitude must be a valid number" })
+    .finite("Longitude must be a finite number")
+    .min(-180, "Longitude must be between -180 and 180")
+    .max(180, "Longitude must be between -180 and 180"),
   location: z.string().optional(),
-}).openapi("UpdateWorkerLocationReq");
+}).strict().openapi("UpdateWorkerLocationReq");
 
 export const LocateWorkerReqSchema = z.object({
   id: z.string().uuid("Invalid worker UUID").openapi({ example: "123e4567-e89b-12d3-a456-426614174000" }),

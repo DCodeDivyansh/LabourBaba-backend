@@ -811,4 +811,154 @@ Automated regression coverage is established in `tests/socketSecurity.test.ts` (
 | **Chat Message Intruder Defense** | Unauthorized Customer A sending message on Booking B rejected (`FORBIDDEN`) | **PASS** |
 | **Authorized Chat Delivery** | Legitimate Customer B sends message; delivered with authoritative `sender_id` | **PASS** |
 
+---
+
+# Security Analysis: Remediation of P0 Vulnerability — Finding #6: Worker Location Identity Spoofing
+
+## 1. Executive Summary
+
+This section details the security audit, root cause analysis, architecture redesign, and automated regression test suite for **Finding #6 — Worker location endpoint permits identity spoofing (Severity: P0 — Release Blocker)**.
+
+### Core Security Invariant
+> **For a worker self-service location update, the target worker is exclusively the authenticated principal represented by `req.user.id`. No client-controlled worker identity can influence which worker record is modified.**
+
+---
+
+## 2. Root Cause Analysis
+
+Prior to remediation, the worker location endpoints exhibited critical authorization and schema flaws:
+
+1. **Identity Fallback in Controller**:
+   In `src/features/worker_location/worker_location.controller.ts`:
+   ```typescript
+   const worker_id = (req as any).user?.id || req.body.worker_id;
+   ```
+   If `(req as any).user?.id` was undefined or if the code prioritized body inputs, any client could pass `worker_id` in the JSON request body.
+2. **Missing Role Authorization**:
+   In `src/features/worker_location/worker_location.routes.ts`:
+   ```typescript
+   workerLocationRoute.post("/add", authenticateJWT, addLocation);
+   ```
+   The endpoint lacked `requireRole(UserRole.WORKER)`. Any authenticated principal (including Customers or Admins) could invoke the endpoint.
+   Similarly, `PATCH /api/workers/me/location` in `src/features/worker/workerRoutes.ts` lacked `requireRole(UserRole.WORKER)`.
+3. **Flawed API Schema Contract**:
+   In `src/schemas/index.ts`, `UpdateWorkerLocationReqSchema` explicitly specified `worker_id: z.string().uuid()` as a required client field and was not marked `.strict()`. This made client-controlled identity a formal requirement in the OpenAPI/Swagger documentation and allowed client payloads to inject `worker_id` or `workerId`.
+4. **Desynchronized Database Updates**:
+   `workerServices.ts` updated only the historical `worker_location` table without updating the worker's current spatial coordinates (`worker.location_geo`), breaking dispatch queries.
+
+---
+
+## 3. Attack Scenario
+
+1. **Attacker Identity**: An authenticated worker (Worker A) signs in via `POST /api/workers/login` and receives a valid JWT token.
+2. **Victim Identification**: Worker A obtains the UUID of a competitor worker (Worker B).
+3. **Exploitation**: Worker A crafts an HTTP request:
+   ```http
+   POST /api/worker_location/add HTTP/1.1
+   Host: api.labourbaba.com
+   Authorization: Bearer <worker_a_jwt>
+   Content-Type: application/json
+
+   {
+     "worker_id": "22222222-2222-4222-a222-222222222222",
+     "latitude": 26.85,
+     "longitude": 80.95
+   }
+   ```
+4. **Impact**: Under the vulnerable implementation, the controller or service used `req.body.worker_id` as the database target. Worker B's current location and location history were updated with attacker-controlled coordinates, displacing Worker B from job dispatch radiuses or falsifying attendance.
+
+---
+
+## 4. Architecture Remediation
+
+### A. Strict Input Schema & Coordinate Bounds Validation
+Updated `UpdateWorkerLocationReqSchema` in `src/schemas/index.ts`:
+- Stripped `worker_id` and `workerId` completely from the schema.
+- Added `.strict()` to reject any unrecognized fields (e.g., unexpected identity attempts).
+- Enforced geographic bounds and finite numbers:
+  - `latitude`: finite number between `-90` and `+90` (explicitly allows `0`).
+  - `longitude`: finite number between `-180` and `+180` (explicitly allows `0`).
+
+### B. Route-Level RBAC Enforcement
+Both location mutation routes now enforce role guards:
+1. `POST /api/worker_location/add`:
+   ```typescript
+   workerLocationRoute.post(
+     "/add",
+     authenticateJWT,
+     requireRole(UserRole.WORKER),
+     validateBody(UpdateWorkerLocationReqSchema),
+     addLocation
+   );
+   ```
+2. `PATCH /api/workers/me/location`:
+   ```typescript
+   router.patch(
+     "/me/location",
+     authenticateJWT,
+     requireRole(UserRole.WORKER),
+     validateBody(UpdateWorkerLocationReqSchema),
+     updateLocation
+   );
+   ```
+
+### C. Controller Identity Scoping & Defense-in-Depth
+In both `worker_location.controller.ts` and `workerController.ts`:
+- Worker identity is derived strictly from `(req as AuthenticatedRequest).user?.id`.
+- Rejects any client-supplied `worker_id` or `workerId` in `req.body`, `req.query`, or `req.params` with HTTP 400.
+- Never falls back to client input.
+
+### D. Hardened Service Layer & Transactional PostGIS Consistency
+Created `src/features/worker_location/worker_location.service.ts` with `workerLocationService.updateLocation(workerId, latitude, longitude)`:
+1. Checks that the target worker exists and is active (`deleted_at === null`). If not found or soft-deleted, throws HTTP 404.
+2. Uses `prisma.$transaction` to execute an atomic dual-write:
+   - Appends historical log entry to `worker_location` and updates its `location_geo` using `ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography`.
+   - Updates current worker location on `worker.location_geo` using the same PostGIS function.
+3. Unified `workerServices.ts` to delegate directly to `workerLocationService.updateLocation`, eliminating competing implementations.
+
+### E. OpenAPI / Swagger Documentation
+Updated route registrations in Swagger:
+- Removed `worker_id` from the request schema.
+- Documented Bearer authentication requirement (`security: [{ bearerAuth: [] }]`).
+- Documented worker role restriction and status codes (200, 400, 401, 403, 404, 500).
+
+---
+
+## 5. Security Verification & Test Results
+
+All regression tests are implemented in `tests/workerLocationSecurity.test.ts` and verify end-to-end database isolation:
+
+| Test Case | Description | Result |
+| :--- | :--- | :--- |
+| **A1: Unauthenticated POST** | `POST /api/worker_location/add` without token returns 401 | **PASS** |
+| **A2: Unauthenticated PATCH** | `PATCH /api/workers/me/location` without token returns 401 | **PASS** |
+| **B1: Customer Role POST** | Customer token on `POST /api/worker_location/add` returns 403 | **PASS** |
+| **B2: Customer Role PATCH** | Customer token on `PATCH /api/workers/me/location` returns 403 | **PASS** |
+| **C1: Worker Self-Update POST** | Worker A updates location via POST; Worker A modified, Worker B untouched | **PASS** |
+| **C2: Worker Self-Update PATCH** | Worker A updates location via PATCH; Worker A modified, Worker B untouched | **PASS** |
+| **D1: worker_id Spoofing POST** | Worker A passing `body.worker_id = Worker B` rejected with 400; Worker B untouched | **PASS** |
+| **D2: worker_id Spoofing PATCH** | Worker A passing `body.worker_id = Worker B` rejected with 400; Worker B untouched | **PASS** |
+| **E1: workerId Spoofing POST** | Worker A passing `body.workerId = Worker B` rejected with 400; Worker B untouched | **PASS** |
+| **E2: workerId Spoofing PATCH** | Worker A passing `body.workerId = Worker B` rejected with 400; Worker B untouched | **PASS** |
+| **F1: Query worker_id Spoofing** | Worker A passing `?worker_id=Worker B` rejected with 400; Worker B untouched | **PASS** |
+| **F2: Query workerId Spoofing** | Worker A passing `?workerId=Worker B` rejected with 400; Worker B untouched | **PASS** |
+| **G1: Database-Level Isolation** | Proves database isolation: Worker A record updated, Worker B completely unchanged | **PASS** |
+| **H1: Boundary (-90, -180)** | Valid coordinate boundary accepted with 200 | **PASS** |
+| **H2: Boundary (90, 180)** | Valid coordinate boundary accepted with 200 | **PASS** |
+| **H3: Zero Coordinates (0, 0)** | Zero coordinates explicitly allowed and recorded with 200 | **PASS** |
+| **H4: Latitude > 90** | Latitude 90.000001 rejected with 400 | **PASS** |
+| **H5: Latitude < -90** | Latitude -90.000001 rejected with 400 | **PASS** |
+| **H6: Longitude > 180** | Longitude 180.000001 rejected with 400 | **PASS** |
+| **H7: Longitude < -180** | Longitude -180.000001 rejected with 400 | **PASS** |
+| **H8: Non-numeric Coordinate** | String coordinate rejected with 400 | **PASS** |
+| **H9: Missing Coordinate** | Incomplete coordinate pair rejected with 400 | **PASS** |
+| **I1: Deactivated Worker** | Worker with `deleted_at != null` rejected with 404 | **PASS** |
+| **I2: Non-existent Worker** | Worker not found in database rejected with 404 | **PASS** |
+
+### Test Suite Execution Summary
+- `tests/workerLocationSecurity.test.ts`: **24 / 24 passed**
+- Full test suite (`npm test`): **8 / 8 suites passed, 189 / 189 tests passed**
+- TypeScript build (`npm run build`): **Clean compilation with 0 errors**
+
+
 

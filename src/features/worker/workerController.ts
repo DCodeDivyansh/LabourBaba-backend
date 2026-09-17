@@ -82,14 +82,33 @@ export const updateMe = async (req: Request, res: Response): Promise<void> => {
 export const updateLocation = async (req: Request, res: Response): Promise<void> => {
   try {
     const workerId = getWorkerId(req);
-    if (!workerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
-    console.log(req.body)
+    if (!workerId) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
+
+    // Defense-in-depth: reject client-supplied identity in body, query, or params
+    if (
+      (req.body as any)?.worker_id ||
+      (req.body as any)?.workerId ||
+      (req.query as any)?.worker_id ||
+      (req.query as any)?.workerId ||
+      (req.params as any)?.worker_id ||
+      (req.params as any)?.workerId
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Client-controlled worker identity is not permitted",
+      });
+      return;
+    }
+
     const payload: UpdateWorkerLocationReq = req.body;
     const location = await workerService.updateLocation(workerId, payload);
     res.status(200).json({ success: true, data: location });
   } catch (error: any) {
-    console.log(error.message)
-    res.status(500).json({ success: false, message: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ success: false, message: error.message });
   }
 };
 

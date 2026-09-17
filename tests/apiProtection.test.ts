@@ -275,7 +275,18 @@ describe("API Protection and JWT Validation Tests", () => {
       expect(res.status).toBe(401);
     });
 
-    it("POST /api/worker_location/add should return 200 when authenticated", async () => {
+    it("POST /api/worker_location/add should return 403 when authenticated as customer", async () => {
+      const res = await request(app)
+        .post("/api/worker_location/add")
+        .set("Authorization", `Bearer ${customerToken}`)
+        .send({ latitude: 12.34, longitude: 56.78 });
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toContain("Forbidden");
+    });
+
+    it("POST /api/worker_location/add should return 200 when authenticated as worker", async () => {
+      (prisma.worker.findUnique as jest.Mock).mockResolvedValue({ id: MOCK_WORKER_ID, deleted_at: null });
       (prisma.worker_location.create as jest.Mock).mockResolvedValue({ id: "loc-uuid" });
       const res = await request(app)
         .post("/api/worker_location/add")

@@ -1,5 +1,6 @@
 import prisma from "../../config/prisma";
 import { CreateWorkerReq, UpdateWorkerProfileReq, UpdateWorkerLocationReq, UpdateWorkerOnlineStatusReq, UploadWorkerDocumentReq } from "../../type/api_req.type";
+import { workerLocationService } from "../worker_location/worker_location.service";
 import { hashPassword } from "../../utils/authUtils";
 import {
   workerSelfSelect,
@@ -46,23 +47,7 @@ export const workerService = {
   },
 
   async updateLocation(workerId: string, payload: UpdateWorkerLocationReq) {
-    // In a real application, also update redis for fast geo queries
-    const worker_location = await prisma.worker_location.create({
-      data: {
-        worker_id: workerId,
-        // PostGIS integration for location_geo omitted for brevity; update longitude/latitude separately if added to model
-      }
-    });
-
-    await prisma.$executeRaw`
-      UPDATE worker_location
-      SET location_geo = ST_SetSRID(
-        ST_MakePoint(${payload.longitude}, ${payload.latitude}),
-        4326
-      )::geography
-      WHERE id = ${worker_location.id}::uuid;
-    `;
-    return worker_location;
+    return workerLocationService.updateLocation(workerId, payload.latitude, payload.longitude);
   },
 
   async updateDeviceToken(workerId: string, deviceToken: string) {
