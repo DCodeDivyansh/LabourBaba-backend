@@ -130,9 +130,11 @@ export const BookingSchema = z.object({
 export const PaymentSchema = z.object({
   id: z.string().uuid(),
   booking_id: z.string().uuid(),
-  razorpay_order_id: z.string().nullable().optional(),
+  razorpay_order_id: z.string().nullable().optional().openapi({ description: "Razorpay provider order ID. Null until order is created." }),
+  razorpay_payment_id: z.string().nullable().optional().openapi({ description: "Razorpay provider payment ID. Null until payment is captured." }),
   status: z.string().nullable().optional(),
-  amount: z.number().int().nullable().optional(),
+  amount: z.number().int().nullable().optional().openapi({ description: "Amount in paise (1 rupee = 100 paise)." }),
+  currency: z.string().default("INR").openapi({ description: "ISO 4217 currency code." }),
 }).openapi("Payment");
 
 export const ReviewSchema = z.object({
@@ -203,10 +205,13 @@ export const VerifyOtpReqSchema = z.object({
   otp: z.string().length(6, "OTP must be exactly 6 characters"),
 }).openapi("VerifyOtpReq");
 
-export const CreatePaymentReqSchema = z.object({
-  booking_id: z.string().uuid("Invalid booking UUID"),
-  amount: z.number().int().positive("Amount must be a positive integer"),
-}).openapi("CreatePaymentReq");
+/**
+ * CreatePaymentReqSchema — Issue #11 remediation:
+ * The authoritative payment amount is derived SERVER-SIDE from job_requirement.rate_per_day.
+ * The client supplies only the bookingId (as a URL path parameter, not body).
+ * No amount is accepted from the client.
+ */
+export const CreatePaymentReqSchema = z.object({}).openapi("CreatePaymentReq");
 
 export const CreateReviewReqSchema = z.object({
   booking_id: z.string().uuid("Invalid booking UUID"),
