@@ -30,6 +30,18 @@ async function checkJobComplete(
   return false;
 }
 
+export class DispatchAcceptanceError extends Error {
+  statusCode: number;
+  code: string;
+
+  constructor(message: string, code: string, statusCode: number = 400) {
+    super(message);
+    this.name = 'DispatchAcceptanceError';
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
+
 // ── Accept ───────────────────────────────────────────────────────────────────
 
 export const acceptDispatch = async (requirementId: string, workerId: string) => {
@@ -46,14 +58,93 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       include: { job: true },
     });
 
-    if (!req) throw new Error('REQUIREMENT_NOT_FOUND');
-    if (req.status === 'filled') throw new Error('SLOTS_FULL');
+    if (!req) {
+      throw new DispatchAcceptanceError('Requirement not found', 'REQUIREMENT_NOT_FOUND', 404);
+    }
+    if (req.status === 'filled' || (req.worker_count_filled ?? 0) >= req.worker_count_needed) {
+      throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
+    }
 
-    // Mark this worker's dispatch as accepted
-    await tx.job_dispatch.updateMany({
-      where: { requirement_id: requirementId, worker_id: workerId },
-      data: { status: 'accepted', responded_at: new Date() },
+    // Guard: ensure worker does not already have a confirmed booking for this requirement
+    const existingBooking = await tx.booking.findFirst({
+      where: {
+        requirement_id: requirementId,
+        worker_id: workerId,
+      },
     });
+    if (existingBooking) {
+      throw new DispatchAcceptanceError(
+        'Worker already has an active booking for this requirement',
+        'BOOKING_ALREADY_EXISTS',
+        409,
+      );
+    }
+
+    // Atomic conditional transition: must be pending, non-expired, matching exact requirement and worker
+    const now = new Date();
+    const updateResult = await tx.job_dispatch.updateMany({
+      where: {
+        requirement_id: requirementId,
+        worker_id: workerId,
+        status: 'pending',
+        expires_at: {
+          gt: now,
+        },
+      },
+      data: {
+        status: 'accepted',
+        responded_at: now,
+      },
+    });
+
+    if (updateResult.count === 0) {
+      // Investigate why acceptance failed for precise, safe error handling
+      const existingDispatch = await tx.job_dispatch.findFirst({
+        where: {
+          requirement_id: requirementId,
+          worker_id: workerId,
+        },
+        select: {
+          status: true,
+          expires_at: true,
+        },
+      });
+
+      if (!existingDispatch) {
+        throw new DispatchAcceptanceError(
+          'No dispatch record found for this worker and requirement',
+          'NO_VALID_DISPATCH',
+          404,
+        );
+      }
+      if (existingDispatch.status === 'accepted') {
+        throw new DispatchAcceptanceError(
+          'Dispatch has already been accepted',
+          'DISPATCH_ALREADY_ACCEPTED',
+          409,
+        );
+      }
+      if (existingDispatch.expires_at && existingDispatch.expires_at <= now) {
+        throw new DispatchAcceptanceError(
+          'Dispatch has expired',
+          'DISPATCH_EXPIRED',
+          410,
+        );
+      }
+      throw new DispatchAcceptanceError(
+        `Dispatch is in terminal state '${existingDispatch.status}' and cannot be accepted`,
+        'DISPATCH_NOT_ACTIONABLE',
+        409,
+      );
+    }
+
+    if (updateResult.count > 1) {
+      throw new DispatchAcceptanceError(
+        'Invariant violation: Multiple dispatch records updated',
+        'INVARIANT_VIOLATION_MULTIPLE_DISPATCHES',
+        500,
+      );
+    }
 
     // Generate and hash a fresh OTP for job start verification
     const otp = generateOTP();
@@ -128,16 +219,20 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
   // Problem 2: AFTER transaction commits, notify remaining workers via Socket.IO
   // This runs outside the transaction so it doesn't block or rollback on socket errors
   if (result.nowFilled && result.expiredWorkerIds.length > 0) {
-    for (const losingWorkerId of result.expiredWorkerIds) {
-      io.to(`worker:${losingWorkerId}`).emit('job:closed', {
-        requirementId,
-        jobId: result.jobId,
-        reason: 'filled',
-      });
+    try {
+      for (const losingWorkerId of result.expiredWorkerIds) {
+        io?.to(`worker:${losingWorkerId}`)?.emit('job:closed', {
+          requirementId,
+          jobId: result.jobId,
+          reason: 'filled',
+        });
+      }
+      console.log(
+        `[dispatchServices] Notified ${result.expiredWorkerIds.length} workers that requirement ${requirementId} is filled`,
+      );
+    } catch (err) {
+      console.error('[dispatchServices] Failed to emit job:closed:', err);
     }
-    console.log(
-      `[dispatchServices] Notified ${result.expiredWorkerIds.length} workers that requirement ${requirementId} is filled`,
-    );
   }
 
   // Notify the customer's website in real-time that a worker accepted the

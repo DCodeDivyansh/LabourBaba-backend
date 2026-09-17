@@ -1181,6 +1181,59 @@ If coordinate validation fails or the PostGIS query throws an error, the system 
 - **Finding #8 (BullMQ Candidate Geographic Filtering)**: **FULLY RESOLVED & VERIFIED**.
 - **Finding #45 (Dispatch Location Freshness Dynamic Tuning)**: A baseline 24-hour freshness guard is now enforced on all dispatches via `DISPATCH_LOCATION_FRESHNESS_HOURS`. Dynamic runtime tuning per category remains tracked under Finding #45.
 
+---
+
+# Security Analysis: Remediation of P0 Vulnerability — Finding #9: Dispatch Acceptance Does Not Prove a Valid Dispatch Row Exists
+
+## 1. Executive Summary
+Finding #9 was a P0 release blocker identified in the Production Readiness Audit. Prior to remediation, the dispatch acceptance endpoint permitted any worker with knowledge of a `requirementId` to claim the job and create a booking, even if the worker was never dispatched, had an expired dispatch, or attempted to accept a terminal dispatch.
+
+This remediation establishes the mandatory invariant:
+> **A worker may accept a requirement only when there is a currently valid, pending, non-expired dispatch row for that exact requirement and that exact authenticated worker.**
+
+## 2. Root Cause Analysis
+1. `acceptDispatch` executed `tx.job_dispatch.updateMany` without checking `updateResult.count === 1`.
+2. The conditional query did not enforce `status: 'pending'` or `expires_at: { gt: now }`.
+3. `POST /api/dispatch/:requirementId/accept` and `/decline` routes lacked `requireRole(UserRole.WORKER)`.
+4. Concurrent acceptance attempts on the same requirement were not serialized via row-locking, enabling capacity races.
+
+## 3. Remediation Architecture & Invariants
+1. **Pessimistic Row-Locking**: Inside `prisma.$transaction`, `SELECT id FROM job_requirement WHERE id = $1 FOR UPDATE` serializes concurrent worker claims.
+2. **Atomic Conditional Update**:
+   ```typescript
+   const now = new Date();
+   const updateResult = await tx.job_dispatch.updateMany({
+     where: {
+       requirement_id: requirementId,
+       worker_id: workerId,
+       status: 'pending',
+       expires_at: { gt: now },
+     },
+     data: {
+       status: 'accepted',
+       responded_at: now,
+     },
+   });
+   ```
+3. **Strict Row-Count Evaluation**:
+   - `count === 0`: Acceptance fails closed. Detailed diagnostic checks map safe typed errors (`NO_VALID_DISPATCH` [404], `DISPATCH_ALREADY_ACCEPTED` [409], `DISPATCH_EXPIRED` [410], `DISPATCH_NOT_ACTIONABLE` [409]).
+   - `count > 1`: Invariant violation error (500).
+4. **All Operations in Single Transaction**: Dispatch update, duplicate booking check, booking creation with hashed OTP, capacity increment (`worker_count_filled`), and auto-expiration of remaining dispatches execute inside the same transaction.
+5. **Identity Derived Solely from JWT**: `req.user.id` is the single source of truth. Body or query `worker_id` overrides are rejected with 400.
+6. **Route RBAC**: `requireRole(UserRole.WORKER)` added to all worker dispatch routes.
+
+## 4. Verification & Automated Coverage
+- Comprehensive suite in `tests/dispatchAcceptanceSecurity.test.ts` (17 tests covering unauthenticated, customer role, foreign dispatch, valid dispatch, requirement ID alone, expired dispatch, replay protection, terminal states, transaction rollback, spoofing defense, same-worker concurrency, and multi-worker slot race).
+- All 11 test suites (243 tests) passing across the codebase.
+- Full TypeScript compilation passing without errors.
+
+## 5. Related Findings
+- **Finding #9 (Dispatch Acceptance Proof)**: **FULLY RESOLVED & VERIFIED**.
+- **Finding #10 (Duplicate Bookings)**: Application-level check active in transaction; DB composite uniqueness index tracked separately.
+- **Finding #43 (Dispatch Idempotency)**: Resolved via atomic conditional state transition.
+- **Finding #44 (Atomic Capacity Reservation)**: Resolved via `SELECT FOR UPDATE` on `job_requirement`.
+
+
 
 
 
