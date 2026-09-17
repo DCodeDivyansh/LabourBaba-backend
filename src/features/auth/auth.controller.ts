@@ -8,17 +8,53 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     const response = await authService.sendOtp(payload.phone, payload.type);
     res.status(200).json(response);
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    if (error.code === "OTP_RESEND_COOLDOWN") {
+      res.status(429).json({
+        success: false,
+        code: "OTP_RESEND_COOLDOWN",
+        message: error.message,
+        waitSeconds: error.waitSeconds,
+      });
+      return;
+    }
+    if (error.code === "SMS_DELIVERY_FAILED") {
+      res.status(502).json({
+        success: false,
+        code: "SMS_DELIVERY_FAILED",
+        message: error.message,
+      });
+      return;
+    }
+    res.status(500).json({ success: false, message: error.message || "Failed to send OTP" });
   }
 };
 
 export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   try {
     const payload: AuthVerifyOtpReq = req.body;
-    const response = await authService.verifyOtp(payload.phone, payload.otp);
+    const response = await authService.verifyOtp(payload.phone, payload.otp, payload.type);
     res.status(200).json({ success: true, data: response });
   } catch (error: any) {
-    res.status(401).json({ success: false, message: error.message });
+
+
+    if (error.code === "USER_NOT_FOUND") {
+      res.status(404).json({ success: false, code: "USER_NOT_FOUND", message: error.message });
+      return;
+    }
+    if (error.code === "OTP_MAX_ATTEMPTS") {
+      res.status(401).json({
+        success: false,
+        code: "OTP_MAX_ATTEMPTS",
+        message: error.message,
+      });
+      return;
+    }
+    // Uniform safe error for invalid, expired, or already-consumed OTPs
+    res.status(401).json({
+      success: false,
+      code: "OTP_INVALID",
+      message: "Invalid OTP",
+    });
   }
 };
 

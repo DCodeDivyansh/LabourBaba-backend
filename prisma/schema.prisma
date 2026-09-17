@@ -264,3 +264,20 @@ model spatial_ref_sys {
   srtext    String? @db.VarChar(2048)
   proj4text String? @db.VarChar(2048)
 }
+
+model otp_challenge {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone         String    @db.VarChar(20)
+  purpose       String    @db.VarChar(50)
+  otp_hash      String    @db.VarChar(255)
+  expires_at    DateTime  @db.Timestamptz(6)
+  attempt_count Int       @default(0)
+  status        String    @default("ACTIVE") @db.VarChar(20)
+  consumed_at   DateTime? @db.Timestamptz(6)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([phone, purpose], map: "idx_otp_challenge_phone_purpose")
+  @@index([expires_at], map: "idx_otp_challenge_expires_at")
+  @@map("otp_challenge")
+}
+

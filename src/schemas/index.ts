@@ -301,14 +301,16 @@ export const WorkerAnalyticsSchema = z.object({
 }).openapi("WorkerAnalytics");
 
 export const SendOtpReqSchema = z.object({
-  phone: z.string().min(10, "Phone number must be at least 10 digits").openapi({ example: "+919876543210" }),
+  phone: z.string().min(10, "Phone number must be at least 10 digits").max(15, "Phone number cannot exceed 15 digits").regex(/^\+?[1-9]\d{9,14}$/, "Invalid phone number format").openapi({ example: "+919876543210" }),
   type: z.enum(["login", "register"]).openapi({ example: "login" }),
 }).openapi("SendOtpReq");
 
 export const AuthVerifyOtpReqSchema = z.object({
-  phone: z.string().min(10, "Phone number must be at least 10 digits").openapi({ example: "+919876543210" }),
-  otp: z.string().length(6, "OTP must be 6 digits").openapi({ example: "123456" }),
+  phone: z.string().min(10, "Phone number must be at least 10 digits").max(15, "Phone number cannot exceed 15 digits").regex(/^\+?[1-9]\d{9,14}$/, "Invalid phone number format").openapi({ example: "+919876543210" }),
+  otp: z.string().regex(/^\d{6}$/, "OTP must be exactly 6 numeric digits").openapi({ example: "123456" }),
+  type: z.enum(["login", "register"]).optional().openapi({ example: "login" }),
 }).openapi("AuthVerifyOtpReq");
+
 
 export const RefreshTokenReqSchema = z.object({
   token: z.string().min(1, "Refresh token is required"),

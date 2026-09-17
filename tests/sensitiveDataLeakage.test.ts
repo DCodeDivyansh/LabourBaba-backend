@@ -102,14 +102,26 @@ jest.mock("../src/config/prisma", () => ({
       updateMany: jest.fn(),
       create: jest.fn(),
     },
-    $transaction: jest.fn(),
+    otp_challenge: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      deleteMany: jest.fn(),
+    },
+    $transaction: jest.fn(async (callback: any) => {
+      if (typeof callback === "function") {
+        return await callback(prisma);
+      }
+      return callback;
+    }),
     $executeRaw: jest.fn(),
   },
 }));
 
 import { app } from "../src/server";
 import prisma from "../src/config/prisma";
-import { generateToken } from "../src/utils/authUtils";
+import { generateToken, hashPassword, hashOTP } from "../src/utils/authUtils";
 import { UserRole } from "../src/type/userRole";
 
 // Sentinel values that must NEVER appear in serialized responses or as field values
@@ -616,6 +628,27 @@ describe("P0 Security Regression: Sensitive Data & Password Hash Leakage", () =>
   // ─────────────────────────────────────────────────────────────────────────────
   describe("Auth Endpoints", () => {
     it("POST /api/auth/verify-otp must never leak user password hash", async () => {
+      (prisma.$transaction as jest.Mock).mockImplementation(async (cb: any) =>
+        typeof cb === "function" ? await cb(prisma) : cb
+      );
+
+      const validOtp = "654321";
+      const hashedOtp = await hashOTP(validOtp);
+
+
+      (prisma.otp_challenge.findFirst as jest.Mock).mockResolvedValue({
+        id: "mock-challenge-uuid-leak-test",
+        phone: "+919876543210",
+        purpose: "login",
+        otp_hash: hashedOtp,
+        status: "ACTIVE",
+        attempt_count: 0,
+        consumed_at: null,
+        expires_at: new Date(Date.now() + 300000),
+        created_at: new Date(),
+      });
+      (prisma.otp_challenge.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
       (prisma.customer.findUnique as jest.Mock).mockResolvedValue({
         id: MOCK_CUSTOMER_ID,
         name: "Auth Customer",
@@ -627,7 +660,7 @@ describe("P0 Security Regression: Sensitive Data & Password Hash Leakage", () =>
         .post("/api/auth/verify-otp")
         .send({
           phone: "+919876543210",
-          otp: "123456",
+          otp: validOtp,
         });
 
       expect(res.status).toBe(200);
