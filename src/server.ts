@@ -68,9 +68,27 @@ app.use(
   })
 );
 
-// these are the midewares that are used in the app, they are used to parse the request body and log the requests
-app.use(express.json());
+
+// Extend Express Request to carry the raw body buffer for webhook signature verification.
+// This is set by the express.json verify callback below.
+declare global {
+  namespace Express {
+    interface Request {
+      rawBody?: Buffer;
+    }
+  }
+}
+
+// these are the middlewares that are used in the app, they are used to parse the request body and log the requests.
+// The `verify` callback captures the exact raw bytes before JSON parsing — required for
+// Razorpay webhook HMAC-SHA256 verification (see paymentRoutes.ts and paymentServices.ts).
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  },
+}));
 app.use(logs());
+
 
 app.use((req, res, next) => {
   if (req.url.startsWith("/socket.io")) {
@@ -175,12 +193,15 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 });
 
 import { assertJwtConfig, assertProductionAuthConfig } from "./config/authConfig";
+import { assertProductionPaymentConfig } from "./config/paymentConfig";
 
 async function startServer() {
   try {
     // 1. Fail-fast configuration gatekeepers (JWT security & production provider checks)
     assertJwtConfig();
     assertProductionAuthConfig();
+    assertProductionPaymentConfig();
+
 
     await prisma.$connect();
 
