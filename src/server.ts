@@ -217,8 +217,14 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
+import { assertJwtConfig, assertProductionAuthConfig } from "./config/authConfig";
+
 async function startServer() {
   try {
+    // 1. Fail-fast configuration gatekeepers (JWT security & production provider checks)
+    assertJwtConfig();
+    assertProductionAuthConfig();
+
     await prisma.$connect();
 
     console.log("Database Connected");
@@ -228,8 +234,8 @@ async function startServer() {
       console.log("Allowed Origins:");
       console.table(allowedOrigins);
     });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    console.error("[STARTUP ERROR]", err.message || err);
     await prisma.$disconnect();
     process.exit(1);
   }
