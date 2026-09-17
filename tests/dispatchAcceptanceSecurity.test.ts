@@ -164,7 +164,11 @@ describe("P0 Finding #9 Security Regression Suite: Dispatch Acceptance Invariant
       let releaseLock: (() => void) | null = null;
 
       const takeSnapshot = () => {
-        snapshotDispatches = JSON.parse(JSON.stringify(db.dispatches));
+        snapshotDispatches = db.dispatches.map((d) => ({
+          ...d,
+          expires_at: d.expires_at ? new Date(d.expires_at) : null,
+          responded_at: d.responded_at ? new Date(d.responded_at) : null,
+        }));
         snapshotBookings = JSON.parse(JSON.stringify(db.bookings));
         snapshotRequirements = new Map(
           Array.from(db.requirements.entries()).map(([k, v]) => [k, { ...v, job: { ...v.job } }])
@@ -261,7 +265,11 @@ describe("P0 Finding #9 Security Regression Suite: Dispatch Acceptance Invariant
               if (where.requirement_id && d.requirement_id !== where.requirement_id) continue;
               if (where.worker_id && d.worker_id !== where.worker_id) continue;
               if (where.status && d.status !== where.status) continue;
-              if (where.expires_at?.gt && (!d.expires_at || d.expires_at <= where.expires_at.gt)) continue;
+              if (where.expires_at?.gt) {
+                const dTime = d.expires_at ? new Date(d.expires_at).getTime() : 0;
+                const gtTime = new Date(where.expires_at.gt).getTime();
+                if (dTime <= gtTime) continue;
+              }
 
               d.status = data.status;
               d.responded_at = data.responded_at || now;
