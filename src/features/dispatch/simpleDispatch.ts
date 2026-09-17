@@ -17,6 +17,10 @@
 import prisma from '../../config/prisma';
 import { sendFCMNotification } from '../../shared/fcm';
 import { io } from '../../server';
+import {
+  getEligibleDispatchCandidates,
+  validateDispatchCoordinates,
+} from './dispatchCandidate.service';
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -240,18 +244,7 @@ async function dispatchRequirementSimple(
   job: JobForDispatch,
   req: RequirementForDispatch,
 ): Promise<void> {
-  if (
-    job.latitude === null ||
-    job.latitude === undefined ||
-    job.longitude === null ||
-    job.longitude === undefined ||
-    !Number.isFinite(job.latitude) ||
-    !Number.isFinite(job.longitude) ||
-    job.latitude < -90 ||
-    job.latitude > 90 ||
-    job.longitude < -180 ||
-    job.longitude > 180
-  ) {
+  if (!validateDispatchCoordinates(job.latitude, job.longitude)) {
     log('dispatch.no_coordinates', { jobId: job.id, requirementId: req.id });
     await prisma.job_requirement.update({
       where: { id: req.id },
@@ -407,16 +400,7 @@ export async function findAvailableWorkers(
 ): Promise<NearbyWorker[]> {
   // Validate coordinates and radius before executing spatial query
   if (
-    job.latitude === null ||
-    job.latitude === undefined ||
-    job.longitude === null ||
-    job.longitude === undefined ||
-    !Number.isFinite(job.latitude) ||
-    !Number.isFinite(job.longitude) ||
-    job.latitude < -90 ||
-    job.latitude > 90 ||
-    job.longitude < -180 ||
-    job.longitude > 180 ||
+    !validateDispatchCoordinates(job.latitude, job.longitude) ||
     !Number.isFinite(radiusMeters) ||
     radiusMeters <= 0
   ) {
@@ -429,51 +413,19 @@ export async function findAvailableWorkers(
       ? needed * 2
       : DISPATCH_CONFIG.workersPerWave;
 
-  // Geographic eligibility is enforced in the database with PostGIS ST_DWithin.
-  // Do not move this check to client-side or application-only filtering.
-  // Coordinates are parameterized and mapped as ST_MakePoint(longitude, latitude).
-  // Distance radius is in meters on WGS 84 geography ellipsoid.
-  return prisma.$queryRaw<NearbyWorker[]>`
-    SELECT w.id,
-           w.device_token,
-           ST_Distance(
-             w.location_geo,
-             ST_SetSRID(ST_MakePoint(${job.longitude}, ${job.latitude}), 4326)::geography
-           ) AS dist_m
-    FROM worker w
-    WHERE w.is_online = true
-      AND w.deleted_at IS NULL
-      AND w.location_geo IS NOT NULL
-      AND ST_DWithin(
-            w.location_geo,
-            ST_SetSRID(ST_MakePoint(${job.longitude}, ${job.latitude}), 4326)::geography,
-            ${radiusMeters}
-          )
-      AND (
-            ${req.skill_type ?? null}::text IS NULL
-            OR LOWER(TRIM(w.skill_type)) = LOWER(TRIM(${req.skill_type ?? ''}))
-            OR EXISTS (
-                 SELECT 1 FROM skill_category sc
-                 WHERE sc.id = w.skill_category_id
-                   AND LOWER(TRIM(sc.name)) = LOWER(TRIM(${req.skill_type ?? ''}))
-               )
-          )
-      AND NOT EXISTS (
-            SELECT 1 FROM job_dispatch jd
-            WHERE jd.requirement_id = ${req.id}
-              AND jd.worker_id = w.id
-          )
-      AND NOT EXISTS (
-            SELECT 1 FROM booking b
-            WHERE b.worker_id = w.id
-              AND b.status IN ('confirmed', 'in_progress')
-          )
-    ORDER BY dist_m ASC
-    LIMIT ${poolLimit}
-  `.then((workers) => {
-    log('dispatch.pool_limit_used', { requirementId: req.id, workersNeeded: needed ?? null, poolLimit });
-    return workers;
+  const workers = await getEligibleDispatchCandidates({
+    requirementId: req.id,
+    latitude: job.latitude,
+    longitude: job.longitude,
+    radiusMeters,
+    skillType: req.skill_type,
+    limit: poolLimit,
+    offset: 0,
+    excludeDispatched: true,
   });
+
+  log('dispatch.pool_limit_used', { requirementId: req.id, workersNeeded: needed ?? null, poolLimit });
+  return workers;
 }
 
 // ── Transactional write of dispatch rows ─────────────────────────────────────
