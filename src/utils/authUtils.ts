@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { JwtPayload } from "../type/userRole";
@@ -43,11 +44,14 @@ export function verifyToken(token: string): any {
   }
 }
 
+
+
 /**
- * Generate a random 6-digit OTP string.
+ * Generate a cryptographically secure random 6-digit OTP string.
+ * Uses crypto.randomInt to guarantee uniform, non-predictable distribution.
  */
 export function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 1000000).toString();
 }
 
 /**
@@ -57,3 +61,29 @@ export function generateOTP(): string {
 export async function hashOTP(otp: string): Promise<string> {
   return bcrypt.hash(otp, SALT_ROUNDS);
 }
+
+/**
+ * Normalizes phone numbers to a canonical representation by stripping
+ * whitespace, hyphens, parentheses, and dots.
+ * Note: Broader international E.164 normalization is tracked in Issue #66.
+ */
+export function normalizePhone(phone: string): string {
+  if (!phone) return "";
+  return phone.trim().replace(/[\s\-\(\)\.]/g, "");
+}
+
+/**
+ * Safely masks a phone number for logging and non-sensitive API responses.
+ * Example: "+919876543210" -> "+91*****3210"
+ */
+export function maskPhone(phone: string): string {
+  if (!phone || phone.length < 5) return "****";
+  const startLen = phone.startsWith("+") ? 3 : 2;
+  const endLen = 4;
+  if (phone.length <= startLen + endLen) return phone.slice(0, 2) + "****";
+  const start = phone.slice(0, startLen);
+  const end = phone.slice(-endLen);
+  const mask = "*".repeat(Math.max(4, phone.length - startLen - endLen));
+  return `${start}${mask}${end}`;
+}
+

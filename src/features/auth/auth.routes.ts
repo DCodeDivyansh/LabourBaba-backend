@@ -1,9 +1,11 @@
 import express from "express";
 import { sendOtp, verifyOtp, refreshToken, logout } from "./auth.controller";
 import { validateBody } from "../../middlewares/validationMiddleware";
+import { otpRequestRateLimiter, otpVerifyRateLimiter } from "../../middlewares/otpRateLimiter";
 import { SendOtpReqSchema, AuthVerifyOtpReqSchema, RefreshTokenReqSchema } from "../../schemas";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
+
 
 const router = express.Router();
 
@@ -112,9 +114,10 @@ registry.registerPath({
   },
 });
 
-router.post("/send-otp", validateBody(SendOtpReqSchema), sendOtp);
-router.post("/verify-otp", validateBody(AuthVerifyOtpReqSchema), verifyOtp);
+router.post("/send-otp", otpRequestRateLimiter, validateBody(SendOtpReqSchema), sendOtp);
+router.post("/verify-otp", otpVerifyRateLimiter, validateBody(AuthVerifyOtpReqSchema), verifyOtp);
 router.post("/refresh", validateBody(RefreshTokenReqSchema), refreshToken);
 router.post("/logout", logout);
 
 export default router;
+

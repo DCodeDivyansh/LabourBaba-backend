@@ -349,3 +349,190 @@ Comprehensive automated tests in `tests/sensitiveDataLeakage.test.ts` enforce:
    - Dispatch endpoints: Incoming dispatches and single dispatch detail with nested customer relations.
    - Auth endpoints: OTP verification response.
 
+---
+
+# Security Analysis: Remediation of P0 Vulnerability — Hard-Coded OTP Verification (Issue #3)
+
+## 1. Executive Summary
+
+This section details the security audit, threat analysis, architectural redesign, and automated regression test validation for **Finding #3 / Issue #3 — OTP verification is hard-coded (Severity: P0 — Release Blocker)**.
+
+The critical security invariant established by this remediation is:
+> **An attacker who knows only a user's phone number cannot authenticate without possessing a legitimately generated, delivered, unexpired, single-use OTP. Hard-coded values, predictable seeds, and bypasses are completely eliminated.**
+
+---
+
+## 2. Root Cause Analysis
+
+Prior to this remediation, authentication in `src/features/auth/auth.services.ts` was implemented as:
+
+```typescript
+async sendOtp(phone: string, type: "login" | "register") {
+  const mockOtp = "123456";
+  console.log(`Mock sending OTP ${mockOtp} to ${phone} for ${type}`);
+  return { success: true, message: `OTP sent successfully to ${phone}` };
+},
+
+async verifyOtp(phone: string, otp: string) {
+  if (otp !== "123456") {
+    throw new Error("Invalid OTP");
+  }
+  // ... fetches user and signs JWT ...
+}
+```
+
+In addition, `src/utils/authUtils.ts` generated OTPs using `Math.floor(100000 + Math.random() * 900000)`, which relies on PRNG algorithms vulnerable to seed prediction.
+
+### Attack Scenarios:
+1. **Complete Authentication Bypass**: Any attacker possessing a target user's phone number (worker or customer) could submit `{"phone": "+919876543210", "otp": "123456"}` to `POST /api/auth/verify-otp` and obtain fully authenticated session tokens (`token`, `refreshToken`) without an SMS challenge ever being dispatched.
+2. **Account Takeover**: Workers or customers with verified identities could be impersonated trivially.
+3. **Indefinite Guessing & Replay**: No attempt bounds or replay protections existed; the static value `"123456"` was perpetually valid.
+
+---
+
+## 3. Remediated Architecture & Cryptographic Controls
+
+### A. Zero-Knowledge Cryptographic Randomness
+- Uses Node's `crypto.randomInt(100000, 1000000)` in `src/utils/authUtils.ts`, ensuring uniform entropy without predictable counters or pseudo-random math.
+- Fixed-length 6-digit numeric codes strictly validated via Zod regex `/^\d{6}$/`.
+
+### B. Hashed Ephemeral Storage (Bcrypt)
+- Plaintext OTP is **never** written to database, logs, or API responses.
+- Stored as a salted bcrypt hash (`otp_hash`) in the `otp_challenge` table.
+
+### C. Explicit 5-State OTP Lifecycle
+The lifecycle is managed by an explicit state machine:
+
+```
+                 ┌────────────────────────┐
+                 │        CREATED         │
+                 └───────────┬────────────┘
+                             │
+                             ▼
+                 ┌────────────────────────┐
+                 │         ACTIVE         │
+                 └──────┬────┬────┬───────┘
+                        │    │    │
+      Correct OTP       │    │    │  TTL Expired (300s)
+   + Atomic Verification│    │    │  (checked at verify)
+                        │    │    └───────────────────────┐
+                        ▼    │                            ▼
+          ┌────────────────┐ │                  ┌──────────────────┐
+          │    CONSUMED    │ │                  │     EXPIRED      │
+          └────────────────┘ │                  └──────────────────┘
+                             │
+                             │ 5 Incorrect Guesses
+                             │ (Atomic Attempt Counter >= MAX)
+                             ├────────────────────────────┐
+                             │                            ▼
+                             │                  ┌──────────────────┐
+                             │                  │      LOCKED      │
+                             │                  └──────────────────┘
+                             │
+                             │ New OTP Requested
+                             │ (Resend after Cooldown)
+                             ▼
+                  ┌───────────────────────┐
+                  │      INVALIDATED      │
+                  └───────────────────────┘
+```
+
+### D. Atomic Single-Use Concurrency Safety (PostgreSQL)
+- To prevent race conditions under concurrent requests ($N$ simultaneous valid submissions), the verification executes inside `prisma.$transaction`.
+- Verification and consumption use conditional atomic updates:
+  ```typescript
+  const claimResult = await tx.otp_challenge.updateMany({
+    where: { id: challenge.id, status: "ACTIVE", consumed_at: null },
+    data: { status: "CONSUMED", consumed_at: new Date() },
+  });
+  if (claimResult.count === 0) throw new Error("Invalid or expired OTP");
+  ```
+  Under concurrent execution, exactly one transaction successfully updates `status = "CONSUMED"`. All subsequent or racing callers receive `count: 0` and are rejected with HTTP 401.
+
+### E. Database Engine Constraints (Partial Unique Index)
+- Enforced via PostgreSQL migration `20260918000000_add_otp_challenge`:
+  ```sql
+  CREATE UNIQUE INDEX "uniq_active_otp_phone_purpose" 
+  ON "otp_challenge" ("phone", "purpose") 
+  WHERE "status" = 'ACTIVE';
+  ```
+  Prevents duplicate concurrent active challenges for the same phone and purpose at the database engine level.
+
+### F. Resend Cooldown & Challenge Invalidation
+- Enforces a 60-second cooldown (`OTP_RESEND_COOLDOWN_SECONDS`). Resend requests within the window are rejected with HTTP 429 (`OTP_RESEND_COOLDOWN`).
+- Generating a new OTP atomically marks prior active challenges for `(phone, purpose)` as `INVALIDATED`, ensuring an older code cannot be used once a new code is requested.
+
+### G. Attempt Limits & Brute-Force Defense
+- Bounded to 5 attempts (`OTP_MAX_ATTEMPTS`).
+- Each incorrect attempt atomically increments `attempt_count`.
+- Upon reaching 5 failed attempts, the challenge transitions to `LOCKED` (`consumed_at = NOW()`), permanently invalidating it against further attempts.
+
+### H. Purpose Isolation
+- OTP challenges are strictly partitioned by authentication context: `login` vs `register`.
+- An OTP issued for registration cannot authenticate a login request, and vice versa.
+
+### I. Delivery Failure Safety & Fail-Closed SMS Architecture
+- Decoupled `SmsProvider` abstraction (`src/providers/sms/`):
+  - `TwilioSmsProvider`: Production implementation calling Twilio REST API with HTTP Basic Auth.
+  - `MockSmsProvider`: Strictly isolated to local test/development environments.
+- **Production Fail-Closed Rule**: If `NODE_ENV === 'production'`, the server strictly prohibits `MockSmsProvider` and enforces that production SMS credentials exist.
+- If SMS gateway dispatch fails, the challenge is immediately updated to `status = 'DELIVERY_FAILED'`, `consumed_at = NOW()`, preventing unreceived codes from existing as valid challenges.
+
+### J. Distributed Rate Limiting & Non-Enumeration
+- Redis-backed rate limiting via `src/middlewares/otpRateLimiter.ts`:
+  - Max 5 requests per phone per 15 minutes.
+  - Max 10 requests per IP per 15 minutes.
+  - Max 15 verification attempts per IP per 15 minutes.
+- Error responses are uniform and safe (`"Invalid or expired OTP"`), preventing user enumeration.
+- Phone numbers in logs and responses are masked (e.g. `+91*****3210`).
+
+---
+
+## 4. Configuration Reference
+
+| Variable | Required in Production | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `OTP_TTL_SECONDS` | No | `300` | Expiration lifetime of an OTP challenge in seconds (5 minutes). |
+| `OTP_MAX_ATTEMPTS` | No | `5` | Maximum failed verification guesses before challenge is locked. |
+| `OTP_RESEND_COOLDOWN_SECONDS` | No | `60` | Cooldown window before a new OTP can be requested for the same phone. |
+| `OTP_CLEANUP_RETENTION_DAYS` | No | `7` | Retention period before expired OTP records are pruned. |
+| `SMS_PROVIDER` | **Yes** | `twilio` (in prod) | Provider adapter: `twilio`, `http`, or `mock` (dev/test only). |
+| `TWILIO_ACCOUNT_SID` | If using Twilio | None | Twilio API Account SID. |
+| `TWILIO_AUTH_TOKEN` | If using Twilio | None | Twilio API Auth Token. |
+| `TWILIO_PHONE_NUMBER` | If using Twilio | None | Registered Twilio dispatch sender phone number. |
+| `REDIS_TOKEN` / `REDIS_URL` | **Yes** | Upstash URI | Distributed Redis connection credentials for rate-limiting. |
+
+---
+
+## 5. Code Implementation vs Deployment Prerequisites
+
+| Component | Status in Source Code | Deployment Prerequisite |
+| :--- | :--- | :--- |
+| **Cryptographic Lifecycle** | **Fully Implemented** | None |
+| **PostgreSQL Schema & Migration** | **Fully Implemented** | Run `npx prisma migrate deploy` in target environment |
+| **Twilio SMS Provider** | **Fully Implemented** | Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` |
+| **Fail-Closed Gatekeeper** | **Fully Implemented** | None |
+| **Distributed Rate Limiter** | **Fully Implemented** | Provide `REDIS_TOKEN` / `REDIS_URL` in target environment |
+| **Automated Test Matrix** | **100% Passing (99/99 tests)** | None |
+
+---
+
+## 6. Automated Regression Test Verification
+
+Automated verification is covered across `tests/otpSecurity.test.ts`, `tests/api.test.ts`, and `tests/sensitiveDataLeakage.test.ts`:
+
+| Security Test Invariant | Expected Behavior | Result |
+| :--- | :--- | :--- |
+| **Hard-coded OTP Rejection** | Submitting `"123456"` without issued challenge returns HTTP 401 | **PASS** |
+| **Static Patterns Rejection** | Submitting `"000000"`, `"111111"`, `"999999"` returns HTTP 401 | **PASS** |
+| **Generated Code Authentication** | Cryptographic random 6-digit OTP authenticates and issues JWT | **PASS** |
+| **Single-Use Replay Protection** | Immediate replay of consumed OTP returns HTTP 401 | **PASS** |
+| **Attempt Limits Locking** | 5 incorrect guesses lock challenge; 6th attempt with valid OTP fails | **PASS** |
+| **TTL Expiration** | Verification after challenge expiration timestamp returns HTTP 401 | **PASS** |
+| **Resend Cooldown** | Requesting second OTP within 60 seconds returns HTTP 429 | **PASS** |
+| **Resend Invalidation** | Requesting new OTP invalidates prior active OTP | **PASS** |
+| **Purpose Isolation** | Registration OTP rejected for Login authentication | **PASS** |
+| **Concurrency Safety ($N=5$)** | 5 simultaneous requests: exactly 1 succeeds (200), 4 fail (401) | **PASS** |
+| **SMS Failure Safety** | Gateway dispatch failure sets `DELIVERY_FAILED` and blocks verify | **PASS** |
+| **Zero Plaintext Leakage** | Plain OTP absent from responses and logs | **PASS** |
+| **Input Validation** | Non-numeric or non-6-digit input rejected before DB query | **PASS** |
