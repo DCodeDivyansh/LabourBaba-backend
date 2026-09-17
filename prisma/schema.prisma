@@ -58,6 +58,7 @@ model booking {
   payment         payment?
   review          review[]
 
+  @@unique([requirement_id, worker_id], map: "uniq_booking_requirement_worker")
   @@index([customer_id], map: "idx_booking_customer")
   @@index([job_id], map: "idx_booking_job")
   @@index([worker_id], map: "idx_booking_worker")

@@ -151,17 +151,34 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
     const otp_hash = await hashOTP(otp);
 
     // Create booking
-    const booking = await tx.booking.create({
-      data: {
-        job_id: req.job_id,
-        requirement_id: requirementId,
-        worker_id: workerId,
-        customer_id: req.job.customer_id,
-        status: 'confirmed',
-        otp_hash,
-      },
-      select: bookingSafeSelect,
-    });
+    let booking;
+    try {
+      booking = await tx.booking.create({
+        data: {
+          job_id: req.job_id,
+          requirement_id: requirementId,
+          worker_id: workerId,
+          customer_id: req.job.customer_id,
+          status: 'confirmed',
+          otp_hash,
+        },
+        select: bookingSafeSelect,
+      });
+    } catch (err: any) {
+      if (
+        (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') ||
+        err?.code === 'P2002' ||
+        err?.message?.includes('Unique constraint') ||
+        err?.message?.includes('uniq_booking_requirement_worker')
+      ) {
+        throw new DispatchAcceptanceError(
+          'Worker already has an active booking for this requirement',
+          'BOOKING_ALREADY_EXISTS',
+          409,
+        );
+      }
+      throw err;
+    }
 
     // Increment filled count and flip status if all slots filled
     const newFilled = (req.worker_count_filled ?? 0) + 1;

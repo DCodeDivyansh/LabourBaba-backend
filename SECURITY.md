@@ -1229,9 +1229,38 @@ This remediation establishes the mandatory invariant:
 
 ## 5. Related Findings
 - **Finding #9 (Dispatch Acceptance Proof)**: **FULLY RESOLVED & VERIFIED**.
-- **Finding #10 (Duplicate Bookings)**: Application-level check active in transaction; DB composite uniqueness index tracked separately.
+- **Finding #10 (Duplicate Bookings)**: **FULLY RESOLVED & VERIFIED**. Enforced via database composite unique index `uniq_booking_requirement_worker` and transaction handling.
 - **Finding #43 (Dispatch Idempotency)**: Resolved via atomic conditional state transition.
 - **Finding #44 (Atomic Capacity Reservation)**: Resolved via `SELECT FOR UPDATE` on `job_requirement`.
+
+---
+
+# Security Analysis: Remediation of P0 Vulnerability — Finding #10: Duplicate Bookings Are Not Prevented at the Database Level
+
+## 1. Executive Summary
+Finding #10 was a P0 release blocker identified in the Production Readiness Audit. Prior to remediation, `model booking` lacked a database-level uniqueness constraint on `(requirement_id, worker_id)`. Under high concurrency or mobile retries, application-level pre-checks failed to prevent multiple transactions from simultaneously inserting duplicate bookings for the same requirement and worker.
+
+This remediation establishes the database invariant:
+> **The database unconditionally guarantees at most one booking per (requirement_id, worker_id). Any racing insert fails at the PostgreSQL boundary with unique constraint violation, automatically rolling back the transaction.**
+
+## 2. Root Cause Analysis
+1. `model booking` had non-unique indexes on `customer_id`, `job_id`, and `worker_id`, but omitted a composite unique constraint on `[requirement_id, worker_id]`.
+2. Application-level check `tx.booking.findFirst({ where: { requirement_id, worker_id } })` is inherently subject to check-then-act races under concurrency.
+3. Rapid client retries on high-latency mobile networks produced multiple concurrent transactions that both observed zero existing bookings and committed separate bookings.
+
+## 3. Remediation Architecture & Invariants
+1. **Database-Level Unique Constraint**: Added `@@unique([requirement_id, worker_id], map: "uniq_booking_requirement_worker")` to `model booking` in `prisma/schema.prisma`.
+2. **Versioned Migration with Data Reconciliation**: Created `prisma/migrations/20260918010000_prevent_duplicate_bookings/migration.sql` which safely deduplicates any existing duplicate data (prioritizing active statuses and earliest creation times) before creating `UNIQUE INDEX "uniq_booking_requirement_worker"`.
+3. **Service Exception Handling**: In `src/features/dispatch/dispatchServices.ts`, `tx.booking.create` intercepts Prisma error `P2002` / `uniq_booking_requirement_worker`, rolls back the transaction, and throws `DispatchAcceptanceError('Worker already has an active booking for this requirement', 'BOOKING_ALREADY_EXISTS', 409)`.
+4. **Information Leakage Defense**: Raw Prisma errors and internal database constraint names are never leaked to the client.
+
+## 4. Verification & Concurrency Coverage
+- Created `tests/duplicateBookingSecurity.test.ts` executing 50 simultaneous acceptance requests from the same worker (Scenario A), serial retries (Scenario B), 20 competing workers for 2 slots (Scenario C), identical dispatch concurrency (Scenario D), expired dispatch concurrency (Scenario E), already-accepted dispatch concurrency (Scenario F), direct database unique constraint violation handling (Scenario G), transaction rollback (Scenario H), and RBAC/identity protection (Scenario I).
+- **Results**: All 10 concurrency tests passed. Full test suite: 12 suites, 253 tests passed.
+
+## 5. Status
+**Finding #10: FULLY RESOLVED & VERIFIED**.
+
 
 
 
