@@ -112,57 +112,14 @@ io.engine.on("connection_error", (err) => {
   console.log(err.context);
 });
 
-io.on("connection", (socket) => {
-  console.log(`Socket Connected: ${socket.id}`);
+import { socketAuthMiddleware } from "./socket/socketAuth";
+import { registerSocketHandlers } from "./socket/socketHandlers";
 
-  socket.on("join:worker", (workerId: string) => {
-    socket.join(`worker:${workerId}`);
-    console.log(`Worker ${workerId} joined room`);
-  });
+// Authenticate handshake using JWT access token & database principal resolution
+io.use(socketAuthMiddleware);
 
-  socket.on("join:customer", (customerId: string) => {
-    socket.join(`customer:${customerId}`);
-    console.log(`Customer ${customerId} joined room`);
-  });
-
-  socket.on(
-    "worker:location_update",
-    async ({
-      workerId,
-      customerId,
-      lat,
-      lng,
-    }: {
-      workerId: string;
-      customerId: string;
-      lat: number;
-      lng: number;
-    }) => {
-      // BUG FIX: this previously emitted to the literal room name
-      // "customer:CUSTOMER_ID" (a hardcoded string, not a variable),
-      // so the location update never reached any real customer.
-      // The worker app now needs to send `customerId` in this event's
-      // payload (the active job's customer) so we can target the
-      // correct room.
-      if (!customerId) {
-        console.warn(
-          `worker:location_update from worker ${workerId} missing customerId; dropping event`
-        );
-        return;
-      }
-
-      io.to(`customer:${customerId}`).emit("worker:location", {
-        workerId,
-        lat,
-        lng,
-      });
-    }
-  );
-
-  socket.on("disconnect", () => {
-    console.log(`Socket Disconnected: ${socket.id}`);
-  });
-});
+// Register authoritative, role-guarded socket event handlers
+registerSocketHandlers(io);
 
 /**
  * Routes
@@ -251,4 +208,4 @@ process.on("SIGTERM", async () => {
   httpServer.close(() => process.exit(0));
 });
 
-export { app, io };
+export { app, io, httpServer };

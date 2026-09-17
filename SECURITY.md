@@ -688,3 +688,127 @@ Automated regression coverage is established in `tests/jwtSecurity.test.ts` (42 
 | **HTTP Refresh Route Integration** | Access token returns HTTP 401; Valid refresh token issues new access token with `token_type: "access"` | **PASS** |
 | **Backward-Compatibility Wrappers** | Legacy `generateToken` and `verifyToken` continue functioning securely | **PASS** |
 
+---
+
+# Security Analysis: Remediation of P0 Vulnerability — Finding #5: Socket.IO Accepts Client-Supplied Identity
+
+## 1. Executive Summary
+
+This document details the security audit, root cause analysis, architecture redesign, and automated test validation for the remediation of **Finding #5 — Socket.IO accepts client-supplied identity (Severity: P0 — Release Blocker)**.
+
+The critical security invariant established by this fix is:
+> **Client-Supplied Identity Is Never Authoritative: Sockets are cryptographically authenticated during the connection handshake via a verified JWT access token. The authenticated principal (`socket.data.user`) serves as the sole, authoritative source of identity for all room subscriptions, location broadcasts, and message delivery. Client attempts to specify or spoof another user's identity are strictly rejected.**
+
+---
+
+## 2. Root Cause Analysis
+
+Prior to this remediation, Socket.IO in `src/server.ts` lacked handshake authentication and trusted client-provided parameters across all handlers:
+
+1. **Zero Connection Authentication**:
+   `io.on("connection", (socket) => ...)` was registered without any authentication middleware. Any arbitrary internet client could establish a WebSocket connection.
+2. **Arbitrary Room Eavesdropping (`join:worker` & `join:customer`)**:
+   ```typescript
+   socket.on("join:worker", (workerId: string) => {
+     socket.join(`worker:${workerId}`);
+   });
+   socket.on("join:customer", (customerId: string) => {
+     socket.join(`customer:${customerId}`);
+   });
+   ```
+   Any client could supply another worker's UUID or customer's UUID. As a result:
+   - An attacker joining `worker:<target_id>` intercepted incoming job offers (`job:incoming`), which contained customer phone numbers, pickup/drop coordinates, and pricing.
+   - An attacker joining `customer:<target_id>` intercepted booking updates and live worker tracking events (`worker:location`).
+3. **Location Spoofing in `worker:location_update`**:
+   ```typescript
+   socket.on("worker:location_update", async ({ workerId, customerId, lat, lng }) => {
+     io.to(`customer:${customerId}`).emit("worker:location", { workerId, lat, lng });
+   });
+   ```
+   The handler accepted `workerId` directly from the client payload without verifying if the sender was actually that worker, or even a worker at all. Any user could forge live GPS coordinates for any worker.
+
+---
+
+## 3. Cryptographic & Architectural Redesign
+
+### A. Handshake Authentication Middleware (`src/socket/socketAuth.ts`)
+Socket.IO connection requests must present a valid JWT access token in `socket.handshake.auth.token` or the `Authorization: Bearer <token>` header:
+- Validates token signature with `JWT_ACCESS_SECRET` via `verifyAccessToken`.
+- Enforces `HS256` algorithm and `token_type: "access"`. Refresh tokens are strictly rejected.
+- Resolves the principal in PostgreSQL (`prisma.worker` or `prisma.customer`) and verifies the account is active (`deleted_at == null`).
+- Attaches the verified principal to `socket.data.user`:
+  ```typescript
+  export interface SocketUserData {
+    id: string;
+    role: UserRole;
+    phone?: string;
+  }
+  ```
+- Rejects unauthenticated connections with safe error messages (`"Authentication required"`, `"Invalid authentication credentials"`).
+
+### B. Automatic Personal Room Membership (`src/socket/socketHandlers.ts`)
+Personal rooms are established automatically upon successful connection:
+- `UserRole.WORKER` → automatically joins `worker:${socket.data.user.id}`.
+- `UserRole.CUSTOMER` → automatically joins `customer:${socket.data.user.id}`.
+- `UserRole.ADMIN` → automatically joins `admin:${socket.data.user.id}` and `admins`.
+Clients no longer need to emit `join:worker` or `join:customer`.
+
+### C. Rejection of Identity Spoofing & Room Impersonation
+- If a client emits `join:worker` or `join:customer`:
+  - Must possess the required role (`WORKER` or `CUSTOMER`).
+  - If a target ID is passed, it must strictly match `socket.data.user.id`. Any attempt to supply another user's ID is rejected with `FORBIDDEN`.
+- Non-workers are blocked from worker-only rooms and events.
+
+### D. Authorized Location Updates (`worker:location_update`)
+- The authoritative worker identity is strictly `socket.data.user.id`. Any `workerId` in the client payload is checked and cannot override the authenticated identity.
+- Enforces role `UserRole.WORKER`.
+- Enforces an active database relationship: Worker must have an active booking (`assigned`, `accepted`, `in_progress`, `arrived`, `confirmed`) with the target customer before a location update can be broadcast.
+
+### E. Database-Backed Booking & Chat Authorization
+- Joining booking rooms (`join:booking`) requires database verification that the authenticated user is either the customer, the assigned worker, or an administrator (`booking.customer_id === user.id || booking.worker_id === user.id || user.role === ADMIN`).
+- Chat message delivery (`chat:message`) enforces participant authorization and uses `socket.data.user.id` as the authoritative sender.
+
+---
+
+## 4. Identity Trust Model
+
+| Value | Origin | Trust Level | Usage |
+| :--- | :--- | :--- | :--- |
+| `socket.data.user.id` | Verified JWT access token | **Authoritative (Trusted)** | Room routing, event attribution, sender identity |
+| `socket.data.user.role` | Verified JWT access token | **Authoritative (Trusted)** | Role-based event guards |
+| `payload.workerId` | Client payload | **Untrusted** | Checked against `user.id`; rejected on mismatch |
+| `payload.customerId` | Client payload | **Untrusted** | Validated against database assignment records |
+| `payload.bookingId` | Client payload | **Untrusted** | Verified against participant database records |
+
+---
+
+## 5. Automated Regression Test Verification
+
+Automated regression coverage is established in `tests/socketSecurity.test.ts` (23 tests, 100% passing):
+
+| Security Invariant Tested | Test Case / Scenario | Result |
+| :--- | :--- | :--- |
+| **Missing Token Rejection** | Connection without token rejected with `"Authentication required"` | **PASS** |
+| **Malformed Token Rejection** | Connection with malformed JWT rejected | **PASS** |
+| **Invalid Signature Rejection** | Token signed with unknown key rejected | **PASS** |
+| **Expired Token Rejection** | Token with past `exp` rejected | **PASS** |
+| **Refresh Token Rejection** | Refresh token (`token_type: "refresh"`) rejected | **PASS** |
+| **Deleted User Rejection** | Token for soft-deleted worker (`deleted_at != null`) rejected | **PASS** |
+| **Valid Worker Handshake** | Valid worker token accepted; auto-joins `worker:<id>` | **PASS** |
+| **Valid Customer Handshake** | Valid customer token accepted; auto-joins `customer:<id>` | **PASS** |
+| **Valid Admin Handshake** | Valid admin token accepted; auto-joins `admin:<id>` | **PASS** |
+| **Worker Room Spoofing Defense** | Worker A attempting `join:worker` with Worker B's ID rejected (`FORBIDDEN`) | **PASS** |
+| **Customer Room Spoofing Defense** | Customer A attempting `join:customer` with Customer B's ID rejected (`FORBIDDEN`) | **PASS** |
+| **Customer Role Violation** | Customer attempting `join:worker` rejected (`FORBIDDEN`) | **PASS** |
+| **Worker Role Violation** | Worker attempting `join:customer` rejected (`FORBIDDEN`) | **PASS** |
+| **Location Update Non-Worker Defense** | Customer attempting `worker:location_update` rejected (`FORBIDDEN`) | **PASS** |
+| **Location Identity Spoofing Defense** | Worker A sending `workerId: Worker B` rejected (`FORBIDDEN`) | **PASS** |
+| **Location Unassigned Target Defense** | Worker A sending location to unassigned Customer B rejected (`FORBIDDEN`) | **PASS** |
+| **Authorized Location Broadcast** | Assigned Worker B sends location to Customer B; event delivers with authoritative Worker B ID | **PASS** |
+| **Booking Room Customer Impersonation** | Customer A attempting to join Booking B room rejected (`FORBIDDEN`) | **PASS** |
+| **Booking Room Worker Impersonation** | Worker A attempting to join Booking B room rejected (`FORBIDDEN`) | **PASS** |
+| **Authorized Booking Access** | Legitimate Customer B and Worker B permitted into Booking B room | **PASS** |
+| **Chat Message Intruder Defense** | Unauthorized Customer A sending message on Booking B rejected (`FORBIDDEN`) | **PASS** |
+| **Authorized Chat Delivery** | Legitimate Customer B sends message; delivered with authoritative `sender_id` | **PASS** |
+
+
