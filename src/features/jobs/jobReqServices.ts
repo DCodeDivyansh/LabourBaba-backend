@@ -1,9 +1,15 @@
 import prisma from "../../config/prisma";
 import { CreateJobRequirementReq } from "../../type/api_req.type";
+import { jobPolicy, PolicyActor, assertPolicy } from "../../policies";
 
 export const jobReqService = {
-    async createJobReq(jobId: string, payload: CreateJobRequirementReq) {
+    async createJobReq(jobId: string, payload: CreateJobRequirementReq, actor?: PolicyActor) {
         try {
+            if (actor) {
+                const job = await prisma.job.findUnique({ where: { id: jobId } });
+                if (!job) throw new Error("Job not found");
+                assertPolicy(jobPolicy.canCreateRequirement(actor, job));
+            }
             return await prisma.job_requirement.create({
                 data: {
                     job_id: jobId,
@@ -18,4 +24,4 @@ export const jobReqService = {
             throw error;
         }
     }
-}
+};

@@ -2,6 +2,7 @@ import prisma from '../../config/prisma';
 import { CreateJobReq } from '../../type/api_req.type';
 import { dispatchJobSimple } from '../dispatch/simpleDispatch';
 import { bookingSafeSelect } from '../../shared/prismaSelects';
+import { jobPolicy, assertPolicy, AuthenticatedUser, PolicyActor } from '../../policies';
 // BullMQ import kept for reference — uncomment to switch back:
 // import { dispatchQueue } from '../config/bullmq'
 
@@ -70,22 +71,30 @@ export const jobService = {
     });
   },
 
-  async getJobDetail(jobId: string) {
+  async getJobDetail(jobId: string, actor?: AuthenticatedUser) {
     const job = await prisma.job.findUnique({
       where: { id: jobId },
       include: {
+        booking: { select: { worker_id: true } },
         job_requirement: { include: { job_dispatch: true } }
       }
     });
     if (!job) throw new Error("Job not found");
+    if (actor) {
+      assertPolicy(jobPolicy.canRead(actor, job));
+    }
     return job;
   },
 
-  async cancelJob(jobId: string, customerId: string) {
+  async cancelJob(jobId: string, customerId: string, actor?: PolicyActor) {
     return await prisma.$transaction(async (tx) => {
       const job = await tx.job.findUnique({ where: { id: jobId } });
       if (!job) throw new Error("Job not found");
-      if (job.customer_id !== customerId) throw new Error("Forbidden: You do not own this job");
+      if (actor) {
+        assertPolicy(jobPolicy.canCancel(actor, job));
+      } else {
+        if (job.customer_id !== customerId) throw new Error("Forbidden: You do not own this job");
+      }
       if (job.status === "COMPLETED") throw new Error("Cannot cancel a completed job");
 
       await tx.job.update({
@@ -111,13 +120,23 @@ export const jobService = {
     });
   },
 
-  async getJobRequirements(jobId: string) {
+  async getJobRequirements(jobId: string, actor?: PolicyActor) {
+    if (actor) {
+      const job = await prisma.job.findUnique({ where: { id: jobId } });
+      if (!job) throw new Error("Job not found");
+      assertPolicy(jobPolicy.canRead(actor, job));
+    }
     return await prisma.job_requirement.findMany({
       where: { job_id: jobId }
     });
   },
 
-  async getJobBookings(jobId: string) {
+  async getJobBookings(jobId: string, actor?: PolicyActor) {
+    if (actor) {
+      const job = await prisma.job.findUnique({ where: { id: jobId } });
+      if (!job) throw new Error("Job not found");
+      assertPolicy(jobPolicy.canReadBookings(actor, job));
+    }
     // Only select safe, displayable worker fields — never the password
     // hash or other sensitive data — since this is what the customer's
     // website renders directly as "worker details" once a booking exists.

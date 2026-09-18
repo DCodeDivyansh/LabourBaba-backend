@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { reviewService, ReviewError } from "./reviewServices";
 import { CreateReviewReq } from "../../type/api_req.type";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
+import { AuthorizationError } from "../../policies";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -10,6 +11,14 @@ function isValidUUID(val: unknown): boolean {
 }
 
 function handleReviewError(error: unknown, res: Response): void {
+  if (error instanceof AuthorizationError) {
+    res.status(error.status).json({
+      success: false,
+      code: error.status === 404 ? "BOOKING_NOT_FOUND" : "FORBIDDEN",
+      message: error.message,
+    });
+    return;
+  }
   if (error instanceof ReviewError) {
     res.status(error.statusCode).json({
       success: false,
@@ -99,7 +108,8 @@ export const getBookingReview = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const review = await reviewService.getBookingReview(bookingId);
+    const actor = (req as AuthenticatedRequest).user;
+    const review = await reviewService.getBookingReview(bookingId, actor);
     res.status(200).json({ success: true, data: review });
   } catch (error) {
     handleReviewError(error, res);

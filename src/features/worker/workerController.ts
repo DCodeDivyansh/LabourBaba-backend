@@ -4,6 +4,7 @@ import { CreateWorkerReq, LoginWorkerReq, UpdateWorkerProfileReq, UpdateWorkerLo
 import { AuthenticatedRequest, UserRole } from "../../middlewares/authMiddleware";
 import { comparePassword, generateToken } from "../../utils/authUtils";
 import prisma from "../../config/prisma";
+import { workerPolicy, assertPolicy, AuthorizationError } from "../../policies";
 
 const getWorkerId = (req: Request) => {
   return (req as AuthenticatedRequest).user?.id || null;
@@ -126,23 +127,33 @@ export const updateOnline = async (req: Request, res: Response): Promise<void> =
 
 export const uploadDocuments = async (req: Request, res: Response): Promise<void> => {
   try {
-    const workerId = getWorkerId(req);
-    if (!workerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+    const actor = (req as AuthenticatedRequest).user;
+    if (!actor?.id) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+    assertPolicy(workerPolicy.canUploadDocuments(actor, actor.id));
     const payload: UploadWorkerDocumentReq = req.body;
-    const document = await workerService.uploadDocument(workerId, payload);
+    const document = await workerService.uploadDocument(actor.id, payload);
     res.status(201).json({ success: true, data: document });
   } catch (error: any) {
+    if (error instanceof AuthorizationError) {
+      res.status(error.status).json({ success: false, message: error.message });
+      return;
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const getDocuments = async (req: Request, res: Response): Promise<void> => {
   try {
-    const workerId = getWorkerId(req);
-    if (!workerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
-    const documents = await workerService.getDocuments(workerId);
+    const actor = (req as AuthenticatedRequest).user;
+    if (!actor?.id) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+    assertPolicy(workerPolicy.canReadDocuments(actor, actor.id));
+    const documents = await workerService.getDocuments(actor.id);
     res.status(200).json({ success: true, data: documents });
   } catch (error: any) {
+    if (error instanceof AuthorizationError) {
+      res.status(error.status).json({ success: false, message: error.message });
+      return;
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };

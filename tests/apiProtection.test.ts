@@ -272,7 +272,7 @@ describe("API Protection and JWT Validation Tests", () => {
     });
 
     it("GET /api/jobs/:jobId should return 200 when authenticated", async () => {
-      (prisma.job.findUnique as jest.Mock).mockResolvedValue({ id: MOCK_BOOKING_ID });
+      (prisma.job.findUnique as jest.Mock).mockResolvedValue({ id: MOCK_BOOKING_ID, customer_id: MOCK_CUSTOMER_ID });
       const res = await request(app)
         .get(`/api/jobs/${MOCK_BOOKING_ID}`)
         .set("Authorization", `Bearer ${customerToken}`);

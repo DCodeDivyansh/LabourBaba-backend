@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../../config/prisma";
 import { CreateReviewReq } from "../../type/api_req.type";
+import { reviewPolicy, PolicyActor, assertPolicy } from "../../policies";
 
 export class ReviewError extends Error {
   public readonly code: string;
@@ -137,7 +138,14 @@ export const reviewService = {
     });
   },
 
-  async getBookingReview(bookingId: string) {
+  async getBookingReview(bookingId: string, actor?: PolicyActor) {
+    if (actor) {
+      const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+      if (!booking) {
+        throw new ReviewError("Booking not found", "BOOKING_NOT_FOUND", 404);
+      }
+      assertPolicy(reviewPolicy.canReadBookingReview(actor, booking));
+    }
     return await prisma.review.findFirst({
       where: { booking_id: bookingId }
     });
