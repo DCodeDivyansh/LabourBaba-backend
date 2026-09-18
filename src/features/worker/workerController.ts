@@ -130,9 +130,32 @@ export const uploadDocuments = async (req: Request, res: Response): Promise<void
     const actor = (req as AuthenticatedRequest).user;
     if (!actor?.id) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
     assertPolicy(workerPolicy.canUploadDocuments(actor, actor.id));
+
+    if (req.body?.worker_id && req.body.worker_id !== actor.id) {
+      res.status(400).json({ success: false, message: "Client-controlled worker identity is not permitted" });
+      return;
+    }
+
     const payload: UploadWorkerDocumentReq = req.body;
     const document = await workerService.uploadDocument(actor.id, payload);
     res.status(201).json({ success: true, data: document });
+  } catch (error: any) {
+    if (error instanceof AuthorizationError) {
+      res.status(error.status).json({ success: false, message: error.message });
+      return;
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const requestUploadUrl = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const actor = (req as AuthenticatedRequest).user;
+    if (!actor?.id) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+    assertPolicy(workerPolicy.canUploadDocuments(actor, actor.id));
+    const { document_type, file_extension } = req.body;
+    const result = await workerService.requestUploadUrl(actor.id, document_type, file_extension);
+    res.status(200).json({ success: true, data: result });
   } catch (error: any) {
     if (error instanceof AuthorizationError) {
       res.status(error.status).json({ success: false, message: error.message });
@@ -149,6 +172,22 @@ export const getDocuments = async (req: Request, res: Response): Promise<void> =
     assertPolicy(workerPolicy.canReadDocuments(actor, actor.id));
     const documents = await workerService.getDocuments(actor.id);
     res.status(200).json({ success: true, data: documents });
+  } catch (error: any) {
+    if (error instanceof AuthorizationError) {
+      res.status(error.status).json({ success: false, message: error.message });
+      return;
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getDocumentAccess = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const actor = (req as AuthenticatedRequest).user;
+    if (!actor?.id) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+    const { documentId } = req.params as any;
+    const accessDto = await workerService.getDocumentAccessUrl(actor, documentId);
+    res.status(200).json({ success: true, data: accessDto });
   } catch (error: any) {
     if (error instanceof AuthorizationError) {
       res.status(error.status).json({ success: false, message: error.message });
