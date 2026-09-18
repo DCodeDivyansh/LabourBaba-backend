@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { chatService } from "./chatServices";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
+import { toChatMessageDTO } from "../../shared/prismaSelects";
 
 export const getMessages = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -12,7 +13,7 @@ export const getMessages = async (req: Request, res: Response): Promise<void> =>
     }
 
     const messages = await chatService.getMessages(bookingId, actor);
-    res.status(200).json({ success: true, data: messages });
+    res.status(200).json({ success: true, data: messages.map(toChatMessageDTO).filter(Boolean) });
   } catch (error: any) {
     if (error.statusCode === 403 || error.code === "NOT_PARTICIPANT" || error.message?.includes("Forbidden")) {
       res.status(403).json({ success: false, message: error.message || "Forbidden: Not an authorized participant of this conversation" });
@@ -37,7 +38,7 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
     }
 
     const message = await chatService.sendMessage(bookingId, actor.id, content, actor);
-    res.status(201).json({ success: true, data: message });
+    res.status(201).json({ success: true, data: toChatMessageDTO(message) });
   } catch (error: any) {
     if (error.statusCode === 403 || error.code === "NOT_PARTICIPANT" || error.message?.includes("Forbidden")) {
       res.status(403).json({ success: false, message: error.message || "Forbidden: Not an authorized participant of this conversation" });

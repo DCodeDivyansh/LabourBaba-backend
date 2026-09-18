@@ -8,6 +8,8 @@ import {
   customerSummarySelect,
   bookingSafeSelect,
   toBookingDTO,
+  toWorkerDocumentDTO,
+  toWorkerAnalyticsDTO,
 } from "../../shared/prismaSelects";
 
 export const workerService = {
@@ -69,7 +71,7 @@ export const workerService = {
   },
 
   async uploadDocument(workerId: string, payload: UploadWorkerDocumentReq) {
-    return await prisma.worker_document.create({
+    const doc = await prisma.worker_document.create({
       data: {
         worker_id: workerId,
         document_type: payload.document_type,
@@ -77,18 +79,21 @@ export const workerService = {
         status: "PENDING"
       }
     });
+    return toWorkerDocumentDTO(doc);
   },
 
   async getDocuments(workerId: string) {
-    return await prisma.worker_document.findMany({
+    const docs = await prisma.worker_document.findMany({
       where: { worker_id: workerId }
     });
+    return docs.map(toWorkerDocumentDTO).filter(Boolean);
   },
 
   async getAnalytics(workerId: string) {
-    return await prisma.worker_analytics.findUnique({
+    const analytics = await prisma.worker_analytics.findUnique({
       where: { worker_id: workerId }
     });
+    return toWorkerAnalyticsDTO(analytics);
   },
 
   async getBookings(workerId: string) {
@@ -103,7 +108,7 @@ export const workerService = {
         job_requirement: true,
       },
     });
-    return bookings.map(toBookingDTO);
+    return bookings.map(toBookingDTO).filter(Boolean);
   },
 
   async getEarnings(workerId: string) {

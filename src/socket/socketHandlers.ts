@@ -9,7 +9,8 @@ import {
   SocketAckResponse,
 } from "./socketTypes";
 import { chatService } from "../features/chat/chatServices";
-import { chatPolicy } from "../policies";
+import { chatPolicy, AuthorizationError } from "../policies";
+import { toChatMessageDTO } from "../shared/prismaSelects";
 
 /**
  * Registers secure Socket.IO event handlers.
@@ -271,8 +272,8 @@ export function registerSocketHandlers(io: Server): void {
             );
             const response: SocketAckResponse = {
               success: false,
-              code: decision.code || "FORBIDDEN",
-              message: decision.reason || "Forbidden: Not an authorized participant of this booking",
+              code: "FORBIDDEN",
+              message: "Forbidden: Not an authorized participant of this booking",
             };
             socket.emit("error", response);
             callback?.(response);
@@ -317,7 +318,8 @@ export function registerSocketHandlers(io: Server): void {
           }
 
           // Authoritative sender is ALWAYS socket.data.user.id
-          const message = await chatService.sendMessage(bookingId, user.id, content.trim(), user);
+          const rawMessage = await chatService.sendMessage(bookingId, user.id, content.trim(), user);
+          const message = toChatMessageDTO(rawMessage);
 
           // Broadcast to authorized booking room
           io.to(`booking:${bookingId}`).emit("chat:message", message);
@@ -325,9 +327,15 @@ export function registerSocketHandlers(io: Server): void {
           callback?.({ success: true, data: message });
         } catch (err: any) {
           console.warn(`[SOCKET] Chat message failed for user ${user.id}:`, err.message);
+          const isForbidden =
+            err instanceof AuthorizationError ||
+            err.code === "NOT_PARTICIPANT" ||
+            err.message === "Unauthorized" ||
+            err.message?.includes("Forbidden");
+
           const response: SocketAckResponse = {
             success: false,
-            code: err.message === "Unauthorized" ? "FORBIDDEN" : "INTERNAL_ERROR",
+            code: isForbidden ? "FORBIDDEN" : (err.code || "INTERNAL_ERROR"),
             message: err.message || "Failed to send message",
           };
           socket.emit("error", response);

@@ -1,4 +1,5 @@
 import prisma from "../../config/prisma";
+import { toWorkerLocationDTO } from "../../shared/prismaSelects";
 
 export class WorkerLocationServiceError extends Error {
   statusCode: number;
@@ -75,7 +76,12 @@ export const workerLocationService = {
         WHERE id = ${workerId}::uuid;
       `;
 
-      return workerLocation;
+      return toWorkerLocationDTO({
+        worker_id: workerLocation.worker_id,
+        latitude,
+        longitude,
+        updated_at: workerLocation.updated_at,
+      });
     });
   },
 };

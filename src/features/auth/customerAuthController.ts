@@ -10,24 +10,7 @@ import {
   LoginCustomerReq,
 } from "../../type/api_req.type";
 import { AuthenticatedRequest, UserRole } from "../../middlewares/authMiddleware";
-
-/**
- * Remove sensitive fields before sending customer data to the frontend.
- */
-function sanitizeCustomer(customer: {
-  id: string;
-  phone: string;
-  name: string;
-  created_at?: Date | null;
-  deleted_at?: Date | null;
-}) {
-  return {
-    id: customer.id,
-    phone: customer.phone,
-    name: customer.name,
-    created_at: customer.created_at,
-  };
-}
+import { customerSelfSelect, toCustomerSelfDTO } from "../../shared/prismaSelects";
 
 /**
  * Register a new customer.
@@ -59,6 +42,7 @@ export const signupCustomer = async (
         phone,
         password: hashedPassword,
       },
+      select: customerSelfSelect,
     });
 
     const token = generateToken({
@@ -70,7 +54,7 @@ export const signupCustomer = async (
     res.status(201).json({
       success: true,
       message: "Customer registered successfully",
-      data: sanitizeCustomer(customer),
+      data: toCustomerSelfDTO(customer),
       token,
     });
   } catch (error: any) {
@@ -127,7 +111,7 @@ export const loginCustomer = async (
     res.status(200).json({
       success: true,
       message: "Customer logged in successfully",
-      data: sanitizeCustomer(customer),
+      data: toCustomerSelfDTO(customer),
       token,
     });
   } catch (error: any) {
@@ -175,9 +159,10 @@ export const getCurrentCustomer = async (
       where: {
         id: customerId,
       },
+      select: customerSelfSelect,
     });
 
-    if (!customer || customer.deleted_at) {
+    if (!customer || (customer as any).deleted_at) {
       res.status(404).json({
         success: false,
         message: "Customer not found",
@@ -187,7 +172,7 @@ export const getCurrentCustomer = async (
 
     res.status(200).json({
       success: true,
-      data: sanitizeCustomer(customer),
+      data: toCustomerSelfDTO(customer),
     });
   } catch (error: any) {
     console.error("Get current customer error:", error);

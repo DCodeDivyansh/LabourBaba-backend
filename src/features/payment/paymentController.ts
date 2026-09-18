@@ -17,6 +17,7 @@ import {
 } from "./paymentServices";
 import { RazorpayProviderError } from "../../providers/razorpay/razorpayProvider";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
+import { toPaymentDTO } from "../../shared/prismaSelects";
 
 // ── Helper: map domain errors to HTTP responses ────────────────────────────────
 
@@ -140,7 +141,7 @@ export const getPaymentStatusHandler = async (
     const { bookingId } = req.params as any;
 
     const payment = await getPaymentStatus(bookingId, customerId);
-    res.status(200).json({ success: true, data: payment });
+    res.status(200).json({ success: true, data: toPaymentDTO(payment) });
   } catch (error) {
     handlePaymentError(error, res);
   }

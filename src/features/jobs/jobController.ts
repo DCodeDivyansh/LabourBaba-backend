@@ -5,6 +5,11 @@ import { CreateJobReq, CreateJobRequirementReq } from "../../type/api_req.type";
 import prisma from "../../config/prisma";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
 import { AuthorizationError } from "../../policies";
+import {
+  toJobDTO,
+  toJobRequirementDTO,
+  toBookingDTO,
+} from "../../shared/prismaSelects";
 
 // Create job and initial requirements strictly scoped to the authenticated customer principal
 export const createJob = async (req: Request, res: Response): Promise<void> => {
@@ -16,7 +21,7 @@ export const createJob = async (req: Request, res: Response): Promise<void> => {
     }
     const payload: CreateJobReq = req.body;
     const job = await jobService.createJob(authCustomerId, payload);
-    res.status(201).json({ success: true, data: job });
+    res.status(201).json({ success: true, data: toJobDTO(job) });
   } catch (error: any) {
     console.error("[createJob] Error:", error);
     res.status(500).json({ success: false, message: "Failed to create job" });
@@ -32,7 +37,7 @@ export const getMyJobs = async (req: Request, res: Response): Promise<void> => {
       return;
     }
     const jobs = await jobService.getJobsByCustomer(customerId);
-    res.status(200).json({ success: true, data: jobs });
+    res.status(200).json({ success: true, data: jobs.map(toJobDTO).filter(Boolean) });
   } catch (error: any) {
     console.error("[getMyJobs] Error:", error);
     res.status(500).json({ success: false, message: "Failed to retrieve jobs" });
@@ -44,7 +49,7 @@ export const getJobDetail = async (req: Request, res: Response): Promise<void> =
     const { jobId } = req.params as any;
     const actor = (req as AuthenticatedRequest).user;
     const job = await jobService.getJobDetail(jobId, actor);
-    res.status(200).json({ success: true, data: job });
+    res.status(200).json({ success: true, data: toJobDTO(job) });
   } catch (error: any) {
     if (error instanceof AuthorizationError) {
       res.status(error.status).json({ success: false, message: error.message });
@@ -90,7 +95,7 @@ export const getJobRequirements = async (req: Request, res: Response): Promise<v
     const { jobId } = req.params as any;
     const actor = (req as AuthenticatedRequest).user;
     const requirements = await jobService.getJobRequirements(jobId, actor);
-    res.status(200).json({ success: true, data: requirements });
+    res.status(200).json({ success: true, data: requirements.map(toJobRequirementDTO).filter(Boolean) });
   } catch (error: any) {
     if (error instanceof AuthorizationError) {
       res.status(error.status).json({ success: false, message: error.message });
@@ -109,7 +114,7 @@ export const getJobBookings = async (req: Request, res: Response): Promise<void>
     const { jobId } = req.params as any;
     const actor = (req as AuthenticatedRequest).user;
     const bookings = await jobService.getJobBookings(jobId, actor);
-    res.status(200).json({ success: true, data: bookings });
+    res.status(200).json({ success: true, data: bookings.map(toBookingDTO).filter(Boolean) });
   } catch (error: any) {
     if (error instanceof AuthorizationError) {
       res.status(error.status).json({ success: false, message: error.message });
@@ -129,7 +134,7 @@ export const createJobRequirement = async (req: Request, res: Response): Promise
     const actor = (req as AuthenticatedRequest).user;
     const payload: CreateJobRequirementReq = req.body;
     const requirement = await jobReqService.createJobReq(jobId, payload, actor);
-    res.status(201).json({ success: true, data: requirement });
+    res.status(201).json({ success: true, data: toJobRequirementDTO(requirement) });
   } catch (error: any) {
     if (error instanceof AuthorizationError) {
       res.status(error.status).json({ success: false, message: error.message });
