@@ -56,7 +56,7 @@ model booking {
   worker          Worker          @relation(fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_worker")
   conversation    conversation?
   payment         payment?
-  review          review[]
+  review          review?
 
   @@unique([requirement_id, worker_id], map: "uniq_booking_requirement_worker")
   @@index([customer_id], map: "idx_booking_customer")
@@ -148,7 +148,7 @@ model PaymentWebhookEvent {
 
 model review {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  booking_id  String   @db.Uuid
+  booking_id  String   @unique @db.Uuid
   worker_id   String   @db.Uuid
   customer_id String   @db.Uuid
   rating      Decimal? @db.Decimal(2, 1)
@@ -156,6 +156,9 @@ model review {
   booking     booking  @relation(fields: [booking_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_review_booking")
   customer    customer @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_review_customer")
   worker      Worker   @relation(fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_review_worker")
+
+  @@index([customer_id], map: "idx_review_customer")
+  @@index([worker_id], map: "idx_review_worker")
 }
 
 /// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.

@@ -1,43 +1,108 @@
 import { Request, Response } from "express";
-import { reviewService } from "./reviewServices";
+import { reviewService, ReviewError } from "./reviewServices";
 import { CreateReviewReq } from "../../type/api_req.type";
+import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
 
-const getCustomerId = (req: Request) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader) return null;
-  return "a1b2c3d4-e5f6-7890-1234-56789abcdef0"; // Mock customer ID
-};
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function isValidUUID(val: unknown): boolean {
+  return typeof val === "string" && UUID_REGEX.test(val);
+}
+
+function handleReviewError(error: unknown, res: Response): void {
+  if (error instanceof ReviewError) {
+    res.status(error.statusCode).json({
+      success: false,
+      code: error.code,
+      message: error.message,
+    });
+    return;
+  }
+
+  // Unknown error — log server-side, never expose raw database or provider internals
+  console.error("[reviewController] Unexpected error:", error);
+  res.status(500).json({
+    success: false,
+    code: "REVIEW_INTERNAL_ERROR",
+    message: "An unexpected error occurred while processing the review.",
+  });
+}
+
+/**
+ * POST /api/reviews/:bookingId
+ * Creates a review for a completed booking.
+ *
+ * Security:
+ * - Requires authenticateJWT and requireRole(UserRole.CUSTOMER).
+ * - Authoritative customer identity is derived strictly from req.user.id.
+ * - Client-supplied identity fields (customer_id, worker_id, booking_id) are rejected.
+ */
 export const createReview = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { bookingId } = req.params as any;
-    const customerId = getCustomerId(req);
-    if (!customerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+    const authReq = req as AuthenticatedRequest;
+    const customerId = authReq.user?.id;
+    if (!customerId) {
+      res.status(401).json({
+        success: false,
+        code: "UNAUTHORIZED",
+        message: "Authentication required",
+      });
+      return;
+    }
+
+    const { bookingId } = req.params as { bookingId: string };
+    if (!isValidUUID(bookingId)) {
+      res.status(400).json({
+        success: false,
+        code: "INVALID_BOOKING_ID",
+        message: "Invalid booking ID format. Must be a valid UUID.",
+      });
+      return;
+    }
 
     const payload: CreateReviewReq = req.body;
     const review = await reviewService.createReview(bookingId, customerId, payload);
     res.status(201).json({ success: true, data: review });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error) {
+    handleReviewError(error, res);
   }
 };
 
 export const getWorkerReviews = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { workerId } = req.params as any;
+    const { workerId } = req.params as { workerId: string };
+    if (!isValidUUID(workerId)) {
+      res.status(400).json({
+        success: false,
+        code: "INVALID_WORKER_ID",
+        message: "Invalid worker ID format. Must be a valid UUID.",
+      });
+      return;
+    }
+
     const reviews = await reviewService.getWorkerReviews(workerId);
     res.status(200).json({ success: true, data: reviews });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error) {
+    handleReviewError(error, res);
   }
 };
 
 export const getBookingReview = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { bookingId } = req.params as any;
+    const { bookingId } = req.params as { bookingId: string };
+    if (!isValidUUID(bookingId)) {
+      res.status(400).json({
+        success: false,
+        code: "INVALID_BOOKING_ID",
+        message: "Invalid booking ID format. Must be a valid UUID.",
+      });
+      return;
+    }
+
     const review = await reviewService.getBookingReview(bookingId);
     res.status(200).json({ success: true, data: review });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+  } catch (error) {
+    handleReviewError(error, res);
   }
 };
+

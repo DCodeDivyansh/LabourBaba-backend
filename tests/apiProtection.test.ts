@@ -38,6 +38,25 @@ jest.mock("../src/config/bullmq", () => ({
   connection: {},
 }));
 
+jest.mock("../src/providers/razorpay/razorpayProvider", () => ({
+  createOrder: jest.fn().mockResolvedValue({
+    razorpayOrderId: "order_mock123456",
+    amount: 50000,
+    currency: "INR",
+  }),
+  verifyWebhookSignature: jest.fn().mockReturnValue(true),
+  RazorpayProviderError: class RazorpayProviderError extends Error {
+    public readonly code: string;
+    public readonly statusCode: number;
+    constructor(message: string, code: string, statusCode = 502) {
+      super(message);
+      this.name = "RazorpayProviderError";
+      this.code = code;
+      this.statusCode = statusCode;
+    }
+  },
+}));
+
 // Mock the prisma client fully
 jest.mock("../src/config/prisma", () => ({
   __esModule: true,
@@ -77,6 +96,7 @@ jest.mock("../src/config/prisma", () => ({
     },
     payment: {
       create: jest.fn(),
+      findUnique: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
@@ -85,6 +105,7 @@ jest.mock("../src/config/prisma", () => ({
     review: {
       create: jest.fn(),
       findMany: jest.fn(),
+      findFirst: jest.fn(),
     },
     skill_category: {
       create: jest.fn(),
@@ -105,6 +126,7 @@ import prisma from "../src/config/prisma";
 import { dispatchQueue, timeoutQueue } from "../src/config/bullmq";
 import { generateToken } from "../src/utils/authUtils";
 import { UserRole } from "../src/type/userRole";
+import * as razorpayProvider from "../src/providers/razorpay/razorpayProvider";
 
 const MOCK_CUSTOMER_ID = "a1b2c3d4-e5f6-4890-a234-56789abcdef0";
 const MOCK_WORKER_ID = "11b2c3d4-e5f6-4890-a234-56789abcdef1";
@@ -126,6 +148,11 @@ describe("API Protection and JWT Validation Tests", () => {
     // Re-apply mock implementations before each test to prevent resetMocks from discarding them
     (dispatchQueue.add as jest.Mock).mockResolvedValue({});
     (timeoutQueue.add as jest.Mock).mockResolvedValue({});
+    (razorpayProvider.createOrder as jest.Mock).mockResolvedValue({
+      razorpayOrderId: "order_mock123456",
+      amount: 50000,
+      currency: "INR",
+    });
 
     (prisma.$transaction as jest.Mock).mockImplementation((cb) => cb(prisma));
     (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
@@ -348,11 +375,26 @@ describe("API Protection and JWT Validation Tests", () => {
     });
 
     it("POST /api/payments/:bookingId/create-order should return 201 when authenticated", async () => {
-      (prisma.payment.create as jest.Mock).mockResolvedValue({ id: "payment-uuid", status: "CREATED" });
+      (prisma.booking.findFirst as jest.Mock).mockResolvedValue({
+        id: MOCK_BOOKING_ID,
+        customer_id: MOCK_CUSTOMER_ID,
+        worker_id: MOCK_WORKER_ID,
+        status: "confirmed",
+        job_requirement: { rate_per_day: 500 }
+      });
+      (prisma.payment.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.payment.create as jest.Mock).mockResolvedValue({
+        id: "payment-uuid",
+        razorpay_order_id: "order_mock123456",
+        status: "PENDING",
+        amount: 50000,
+        currency: "INR",
+        booking_id: MOCK_BOOKING_ID,
+      });
       const res = await request(app)
         .post(`/api/payments/${MOCK_BOOKING_ID}/create-order`)
         .set("Authorization", `Bearer ${customerToken}`)
-        .send({ booking_id: MOCK_BOOKING_ID, amount: 500 });
+        .send({});
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
     });
@@ -363,7 +405,17 @@ describe("API Protection and JWT Validation Tests", () => {
     });
 
     it("GET /api/payments/:bookingId should return 200 when authenticated", async () => {
-      (prisma.payment.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.booking.findFirst as jest.Mock).mockResolvedValue({
+        id: MOCK_BOOKING_ID,
+        customer_id: MOCK_CUSTOMER_ID,
+      });
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue({
+        id: "payment-uuid",
+        booking_id: MOCK_BOOKING_ID,
+        status: "CREATED",
+        amount: 50000,
+        currency: "INR"
+      });
       const res = await request(app)
         .get(`/api/payments/${MOCK_BOOKING_ID}`)
         .set("Authorization", `Bearer ${customerToken}`);
@@ -375,9 +427,6 @@ describe("API Protection and JWT Validation Tests", () => {
   describe("Review Endpoints (/api/reviews)", () => {
     it("POST /api/reviews/:bookingId should return 401 when unauthenticated", async () => {
       const res = await request(app).post(`/api/reviews/${MOCK_BOOKING_ID}`).send({
-        booking_id: MOCK_BOOKING_ID,
-        worker_id: MOCK_WORKER_ID,
-        customer_id: MOCK_CUSTOMER_ID,
         rating: 5,
         comment: "Great!"
       });
@@ -385,15 +434,25 @@ describe("API Protection and JWT Validation Tests", () => {
     });
 
     it("POST /api/reviews/:bookingId should return 201 when authenticated", async () => {
-      (prisma.booking.findFirst as jest.Mock).mockResolvedValue({ id: MOCK_BOOKING_ID, worker_id: MOCK_WORKER_ID });
-      (prisma.review.create as jest.Mock).mockResolvedValue({ id: "review-uuid" });
+      (prisma.booking.findFirst as jest.Mock).mockResolvedValue({
+        id: MOCK_BOOKING_ID,
+        customer_id: MOCK_CUSTOMER_ID,
+        worker_id: MOCK_WORKER_ID,
+        status: "COMPLETED"
+      });
+      (prisma.review.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.review.create as jest.Mock).mockResolvedValue({
+        id: "review-uuid",
+        booking_id: MOCK_BOOKING_ID,
+        customer_id: MOCK_CUSTOMER_ID,
+        worker_id: MOCK_WORKER_ID,
+        rating: 5,
+        comment: "Great!"
+      });
       const res = await request(app)
         .post(`/api/reviews/${MOCK_BOOKING_ID}`)
         .set("Authorization", `Bearer ${customerToken}`)
         .send({
-          booking_id: MOCK_BOOKING_ID,
-          worker_id: MOCK_WORKER_ID,
-          customer_id: MOCK_CUSTOMER_ID,
           rating: 5,
           comment: "Great!"
         });
