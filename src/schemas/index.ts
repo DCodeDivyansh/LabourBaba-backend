@@ -21,7 +21,7 @@ export const VerificationStatusSchema = z.enum(["PENDING", "VERIFIED", "REJECTED
   example: "PENDING",
 });
 
-export const DocumentTypeSchema = z.enum(["AADHAAR", "PAN", "SELFIE"]).openapi({
+export const DocumentTypeSchema = z.enum(["AADHAAR", "PAN", "SELFIE", "VOTER_ID", "DRIVING_LICENSE", "PASSPORT"]).openapi({
   description: "Type of worker verification document",
   example: "AADHAAR",
 });
@@ -261,9 +261,9 @@ export const LocateWorkerReqSchema = z.object({
 }).openapi("LocateWorkerReq");
 
 export const UploadWorkerDocumentReqSchema = z.object({
-  worker_id: z.string().uuid("Invalid worker UUID"),
+  worker_id: z.string().optional(),
   document_type: DocumentTypeSchema,
-  file_url: z.string().url("Invalid file URL"),
+  file_url: z.string().min(1, "file_url is required"),
 }).openapi("UploadWorkerDocumentReq");
 
 export const SignupCustomerReqSchema = z.object({
@@ -438,3 +438,41 @@ export const PaymentIdParamSchema = z.object({
 export const VerifyBookingOtpReqSchema = z.object({
   otp: z.string().regex(/^\d{6}$/, "OTP must be exactly 6 digits"),
 }).openapi("VerifyBookingOtpReq");
+
+export const WorkerIdParamSchema = z.object({
+  id: z.string().refine(
+    (val) => isValidIdentifier(val, "worker"),
+    { message: "Invalid worker id format: must be a valid UUID" }
+  ),
+}).strict().openapi("WorkerIdParam");
+
+export const DocumentIdParamSchema = z.object({
+  documentId: z.string().refine(
+    (val) => isValidIdentifier(val, "doc"),
+    { message: "Invalid documentId format: must be a valid UUID" }
+  ),
+}).strict().openapi("DocumentIdParam");
+
+export const WorkerIdAndDocumentIdParamSchema = z.object({
+  id: z.string().refine(
+    (val) => isValidIdentifier(val, "worker"),
+    { message: "Invalid worker id format: must be a valid UUID" }
+  ),
+  documentId: z.string().refine(
+    (val) => isValidIdentifier(val, "doc"),
+    { message: "Invalid documentId format: must be a valid UUID" }
+  ),
+}).strict().openapi("WorkerIdAndDocumentIdParam");
+
+export const RequestDocumentUploadUrlReqSchema = z.object({
+  document_type: DocumentTypeSchema,
+  file_extension: z.string().trim().max(10).optional(),
+}).strict().openapi("RequestDocumentUploadUrlReq");
+
+export const WorkerDocumentAccessResponseSchema = z.object({
+  document_id: z.string(),
+  worker_id: z.string(),
+  document_type: z.string().nullable(),
+  access_url: z.string().url(),
+  expires_in: z.number(),
+}).openapi("WorkerDocumentAccessResponse");

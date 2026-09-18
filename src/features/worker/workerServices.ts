@@ -9,8 +9,11 @@ import {
   bookingSafeSelect,
   toBookingDTO,
   toWorkerDocumentDTO,
+  toWorkerDocumentAccessDTO,
   toWorkerAnalyticsDTO,
 } from "../../shared/prismaSelects";
+import { storageService } from "../../providers/storage/storage.service";
+import { workerPolicy, assertPolicy, AuthorizationError, AuthenticatedUser } from "../../policies";
 
 export const workerService = {
   async register(payload: CreateWorkerReq) {
@@ -71,15 +74,53 @@ export const workerService = {
   },
 
   async uploadDocument(workerId: string, payload: UploadWorkerDocumentReq) {
+    if (payload.worker_id && payload.worker_id !== workerId) {
+      throw new AuthorizationError("Cannot upload documents for another worker", 403, "NOT_OWNER");
+    }
+
+    // Validate that client is not attaching another worker's private storage key
+    const normalizedKey = storageService.normalizeObjectKey(payload.file_url);
+    if (normalizedKey.startsWith("workers/") && !normalizedKey.startsWith(`workers/${workerId}/`)) {
+      throw new AuthorizationError("Cannot attach document key belonging to another worker", 403, "DOCUMENT_ATTACHMENT_FORBIDDEN");
+    }
+
     const doc = await prisma.worker_document.create({
       data: {
         worker_id: workerId,
         document_type: payload.document_type,
-        file_url: payload.file_url,
+        file_url: normalizedKey || payload.file_url,
         status: "PENDING"
       }
     });
     return toWorkerDocumentDTO(doc);
+  },
+
+  async requestUploadUrl(workerId: string, documentType: string, extension?: string) {
+    const key = storageService.generateDocumentKey(workerId, extension || "pdf");
+    const result = await storageService.getSignedUploadUrl(key, "application/octet-stream");
+    return {
+      upload_url: result.uploadUrl,
+      object_key: result.objectKey,
+      expires_in: result.expiresIn,
+      expires_at: result.expiresAt,
+    };
+  },
+
+  async getDocumentAccessUrl(actor: AuthenticatedUser, documentId: string) {
+    const doc = await prisma.worker_document.findUnique({
+      where: { id: documentId },
+    });
+
+    if (!doc) {
+      throw new AuthorizationError("Document not found", 404, "DOCUMENT_NOT_FOUND");
+    }
+
+    assertPolicy(workerPolicy.canReadDocument(actor, doc));
+
+    const key = doc.file_url || storageService.generateDocumentKey(doc.worker_id, "pdf");
+    const signed = await storageService.getSignedDownloadUrl(key);
+
+    return toWorkerDocumentAccessDTO(doc, signed.url, signed.expiresIn);
   },
 
   async getDocuments(workerId: string) {

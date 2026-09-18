@@ -1,8 +1,23 @@
 import express from "express";
-import { registerWorker, loginWorker, getMe, updateMe, updateLocation, updateOnline, uploadDocuments, getDocuments, getAnalytics, getBookings, getEarnings } from "../../features/worker/workerController";
-import { validateBody } from "../../middlewares/validationMiddleware";
+import { registerWorker, loginWorker, getMe, updateMe, updateLocation, updateOnline, uploadDocuments, requestUploadUrl, getDocuments, getDocumentAccess, getAnalytics, getBookings, getEarnings } from "../../features/worker/workerController";
+import { validateBody, validateParams } from "../../middlewares/validationMiddleware";
 import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
-import { CreateWorkerReqSchema, LoginWorkerReqSchema, UpdateWorkerProfileReqSchema, UpdateWorkerLocationReqSchema, UpdateWorkerOnlineStatusReqSchema, UploadWorkerDocumentReqSchema, WorkerSchema, WorkerLocationSchema, WorkerDocumentSchema, WorkerAnalyticsSchema, BookingSchema } from "../../schemas";
+import {
+  CreateWorkerReqSchema,
+  LoginWorkerReqSchema,
+  UpdateWorkerProfileReqSchema,
+  UpdateWorkerLocationReqSchema,
+  UpdateWorkerOnlineStatusReqSchema,
+  UploadWorkerDocumentReqSchema,
+  RequestDocumentUploadUrlReqSchema,
+  DocumentIdParamSchema,
+  WorkerDocumentAccessResponseSchema,
+  WorkerSchema,
+  WorkerLocationSchema,
+  WorkerDocumentSchema,
+  WorkerAnalyticsSchema,
+  BookingSchema,
+} from "../../schemas";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
 import { /* ...existing, */ updateDeviceToken } from "../../features/worker/workerController";
@@ -122,6 +137,35 @@ registry.registerPath({
   responses: { 200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: z.object({ earnings: z.number() }) }) } } } }
 });
 
+registry.registerPath({
+  method: "post",
+  path: "/api/workers/me/documents/upload-url",
+  summary: "Request a pre-signed short-lived upload URL for worker identity document",
+  tags: ["Workers"],
+  security: [{ bearerAuth: [] }],
+  request: { body: { content: { "application/json": { schema: RequestDocumentUploadUrlReqSchema } } } },
+  responses: {
+    200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: z.object({ upload_url: z.string(), object_key: z.string(), expires_in: z.number() }) }) } } },
+    401: { description: "Unauthorized" },
+    403: { description: "Forbidden" },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/workers/me/documents/{documentId}/access",
+  summary: "Get authorized short-lived download URL for own identity document",
+  tags: ["Workers"],
+  security: [{ bearerAuth: [] }],
+  parameters: [{ in: "path", name: "documentId", required: true, schema: { type: "string", format: "uuid" } }],
+  responses: {
+    200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: WorkerDocumentAccessResponseSchema }) } } },
+    401: { description: "Unauthorized" },
+    403: { description: "Forbidden" },
+    404: { description: "Document not found" },
+  },
+});
+
 router.post("/registerWorker", validateBody(CreateWorkerReqSchema), registerWorker);
 router.post("/login", validateBody(LoginWorkerReqSchema), loginWorker);
 router.get("/me", authenticateJWT, requireRole(UserRole.WORKER), getMe);
@@ -129,7 +173,9 @@ router.patch("/me", authenticateJWT, requireRole(UserRole.WORKER), validateBody(
 router.patch("/me/location", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UpdateWorkerLocationReqSchema), updateLocation);
 router.patch("/me/online", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UpdateWorkerOnlineStatusReqSchema), updateOnline);
 router.post("/me/documents", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UploadWorkerDocumentReqSchema), uploadDocuments);
+router.post("/me/documents/upload-url", authenticateJWT, requireRole(UserRole.WORKER), validateBody(RequestDocumentUploadUrlReqSchema), requestUploadUrl);
 router.get("/me/documents", authenticateJWT, requireRole(UserRole.WORKER), getDocuments);
+router.get("/me/documents/:documentId/access", authenticateJWT, requireRole(UserRole.WORKER), validateParams(DocumentIdParamSchema), getDocumentAccess);
 router.get("/me/analytics", authenticateJWT, requireRole(UserRole.WORKER), getAnalytics);
 router.get("/me/bookings", authenticateJWT, requireRole(UserRole.WORKER), getBookings);
 router.get("/me/earnings", authenticateJWT, requireRole(UserRole.WORKER), getEarnings);

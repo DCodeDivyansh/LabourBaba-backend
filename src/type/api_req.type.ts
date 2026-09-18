@@ -25,7 +25,9 @@ import {
   VerifyWorkerDocumentReqSchema,
   SuspendWorkerReqSchema,
   CreateJobRequirementReqSchema,
-  LoginWorkerReqSchema
+  LoginWorkerReqSchema,
+  RequestDocumentUploadUrlReqSchema,
+  WorkerDocumentAccessResponseSchema,
 } from "../schemas";
 
 export type CreateWorkerReq = z.infer<typeof CreateWorkerReqSchema>;
@@ -54,6 +56,8 @@ export type CancelBookingReq = z.infer<typeof CancelBookingReqSchema>;
 export type VerifyWorkerDocumentReq = z.infer<typeof VerifyWorkerDocumentReqSchema>;
 export type SuspendWorkerReq = z.infer<typeof SuspendWorkerReqSchema>;
 export type CreateJobRequirementReq = z.infer<typeof CreateJobRequirementReqSchema>;
+export type RequestDocumentUploadUrlReq = z.infer<typeof RequestDocumentUploadUrlReqSchema>;
+export type WorkerDocumentAccessResponse = z.infer<typeof WorkerDocumentAccessResponseSchema>;
 
 export enum JobStatus {
   OPEN = "OPEN",

@@ -5,7 +5,11 @@ import {
   toWorkerAdminDTO,
   customerSummarySelect,
   toJobDTO,
+  toWorkerDocumentDTO,
+  toWorkerDocumentAccessDTO,
 } from "../../shared/prismaSelects";
+import { storageService } from "../../providers/storage/storage.service";
+import { AuthorizationError } from "../../policies";
 
 export const adminService = {
   async getWorkers() {
@@ -75,6 +79,31 @@ export const adminService = {
       select: workerAdminSelect,
     });
     return toWorkerAdminDTO(updated);
+  },
+
+  async getWorkerDocuments(workerId: string) {
+    const docs = await prisma.worker_document.findMany({
+      where: { worker_id: workerId },
+    });
+    return docs.map(toWorkerDocumentDTO).filter(Boolean);
+  },
+
+  async getWorkerDocumentAccess(adminId: string, workerId: string, documentId: string) {
+    const doc = await prisma.worker_document.findFirst({
+      where: { id: documentId, worker_id: workerId },
+    });
+
+    if (!doc) {
+      throw new AuthorizationError("Document not found for this worker", 404, "DOCUMENT_NOT_FOUND");
+    }
+
+    const key = doc.file_url || storageService.generateDocumentKey(doc.worker_id, "pdf");
+    const signed = await storageService.getSignedDownloadUrl(key);
+
+    // Durable audit logging of privileged admin access without exposing the signed URL
+    console.log(`[AUDIT] Admin ${adminId} viewed document ${documentId} of worker ${workerId} at ${new Date().toISOString()}`);
+
+    return toWorkerDocumentAccessDTO(doc, signed.url, signed.expiresIn);
   }
 };
 

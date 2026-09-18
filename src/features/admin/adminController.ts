@@ -61,3 +61,25 @@ export const suspendWorker = async (req: Request, res: Response): Promise<void> 
   }
 };
 
+export const getWorkerDocuments = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params as any;
+    const documents = await adminService.getWorkerDocuments(id);
+    res.status(200).json({ success: true, data: documents });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getWorkerDocumentAccess = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id, documentId } = req.params as any;
+    const adminId = (req as AuthenticatedRequest).user?.id || "unknown-admin";
+    const accessDto = await adminService.getWorkerDocumentAccess(adminId, id, documentId);
+    res.status(200).json({ success: true, data: accessDto });
+  } catch (error: any) {
+    const statusCode = error.statusCode || error.status || 500;
+    res.status(statusCode).json({ success: false, message: error.message });
+  }
+};
+

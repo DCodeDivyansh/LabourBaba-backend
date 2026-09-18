@@ -59,17 +59,58 @@ export const workerPolicy = {
    * Customers are STRICTLY FORBIDDEN.
    */
   canReadDocuments(actor: AuthenticatedUser, targetWorkerId: string): PolicyDecision {
-    if (actor.role === UserRole.ADMIN) {
+    if (String(actor.role).toLowerCase() === UserRole.ADMIN) {
       return { allowed: true };
     }
 
-    if (actor.role === UserRole.WORKER && actor.id === targetWorkerId) {
+    if (String(actor.role).toLowerCase() === UserRole.WORKER && actor.id === targetWorkerId) {
       return { allowed: true };
     }
 
     return {
       allowed: false,
       reason: "Forbidden: Cannot access worker private documents",
+      statusCode: 403,
+      code: "DOCUMENT_ACCESS_DENIED",
+    };
+  },
+
+  /**
+   * Only the owning worker or an authorized admin can access a specific worker document.
+   * Customers or other workers are STRICTLY FORBIDDEN.
+   */
+  canReadDocument(actor: AuthenticatedUser, document: { id: string; worker_id: string }): PolicyDecision {
+    if (String(actor.role).toLowerCase() === UserRole.ADMIN) {
+      return { allowed: true };
+    }
+
+    if (String(actor.role).toLowerCase() === UserRole.WORKER && actor.id === document.worker_id) {
+      return { allowed: true };
+    }
+
+    return {
+      allowed: false,
+      reason: "Forbidden: Cannot access another worker's document",
+      statusCode: 403,
+      code: "DOCUMENT_ACCESS_DENIED",
+    };
+  },
+
+  /**
+   * Only the owning worker or an administrator can delete a worker document.
+   */
+  canDeleteDocument(actor: AuthenticatedUser, document: { id: string; worker_id: string }): PolicyDecision {
+    if (String(actor.role).toLowerCase() === UserRole.ADMIN) {
+      return { allowed: true };
+    }
+
+    if (String(actor.role).toLowerCase() === UserRole.WORKER && actor.id === document.worker_id) {
+      return { allowed: true };
+    }
+
+    return {
+      allowed: false,
+      reason: "Forbidden: Cannot delete another worker's document",
       statusCode: 403,
       code: "DOCUMENT_ACCESS_DENIED",
     };

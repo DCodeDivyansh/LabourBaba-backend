@@ -254,6 +254,46 @@ export function toWorkerDocumentDTO(doc: any): WorkerDocumentDTO | null {
   };
 }
 
+export interface WorkerDocumentMetadataDTO {
+  id: string;
+  worker_id: string;
+  document_type: string | null;
+  status: string | null;
+}
+
+export function toWorkerDocumentMetadataDTO(doc: any): WorkerDocumentMetadataDTO | null {
+  if (!doc) return null;
+  return {
+    id: doc.id,
+    worker_id: doc.worker_id,
+    document_type: doc.document_type !== undefined ? doc.document_type : null,
+    status: doc.status !== undefined ? doc.status : null,
+  };
+}
+
+export interface WorkerDocumentAccessDTO {
+  document_id: string;
+  worker_id: string;
+  document_type: string | null;
+  access_url: string;
+  expires_in: number;
+}
+
+export function toWorkerDocumentAccessDTO(
+  doc: any,
+  accessUrl: string,
+  expiresIn: number,
+): WorkerDocumentAccessDTO | null {
+  if (!doc) return null;
+  return {
+    document_id: doc.id,
+    worker_id: doc.worker_id,
+    document_type: doc.document_type !== undefined ? doc.document_type : null,
+    access_url: accessUrl,
+    expires_in: expiresIn,
+  };
+}
+
 export interface WorkerAnalyticsDTO {
   id: string;
   worker_id: string;
