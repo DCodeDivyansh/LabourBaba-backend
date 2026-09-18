@@ -234,9 +234,62 @@ export const updateDeviceToken = async (req: Request, res: Response): Promise<vo
   try {
     const workerId = (req as any).user?.id;
     if (!workerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
-    const { device_token } = req.body;
-    await workerService.updateDeviceToken(workerId, device_token);
+
+    if (req.body?.worker_id && req.body.worker_id !== workerId) {
+      res.status(400).json({ success: false, message: "Client-controlled worker identity is not permitted" });
+      return;
+    }
+
+    const { device_token, device_id, platform } = req.body;
+    await workerService.updateDeviceToken(workerId, device_token, device_id, platform);
     res.status(200).json({ success: true, message: "Device token updated" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const registerDevice = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const workerId = (req as any).user?.id;
+    if (!workerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+
+    if (req.body?.worker_id && req.body.worker_id !== workerId) {
+      res.status(400).json({ success: false, message: "Client-controlled worker identity is not permitted" });
+      return;
+    }
+
+    const device = await workerService.registerDevice(workerId, req.body);
+    res.status(201).json({ success: true, data: device });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const revokeDevice = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const workerId = (req as any).user?.id;
+    if (!workerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+
+    const deviceId = (req.params as any)?.deviceId || req.body?.device_id;
+    if (!deviceId) {
+      res.status(400).json({ success: false, message: "deviceId is required" });
+      return;
+    }
+
+    const result = await workerService.revokeDevice(workerId, deviceId);
+    res.status(200).json({ success: true, data: result, message: "Device revoked successfully" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getDevices = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const workerId = (req as any).user?.id;
+    if (!workerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+
+    const devices = await workerService.listDevices(workerId);
+    res.status(200).json({ success: true, data: devices });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }

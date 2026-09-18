@@ -1,6 +1,7 @@
 import prisma from "../../config/prisma";
-import { CreateWorkerReq, UpdateWorkerProfileReq, UpdateWorkerLocationReq, UpdateWorkerOnlineStatusReq, UploadWorkerDocumentReq } from "../../type/api_req.type";
+import { CreateWorkerReq, UpdateWorkerProfileReq, UpdateWorkerLocationReq, UpdateWorkerOnlineStatusReq, UploadWorkerDocumentReq, RegisterWorkerDeviceReq } from "../../type/api_req.type";
 import { workerLocationService } from "../worker_location/worker_location.service";
+import { workerDeviceService } from "../worker_device/worker_device.service";
 import { hashPassword } from "../../utils/authUtils";
 import {
   workerSelfSelect,
@@ -55,13 +56,25 @@ export const workerService = {
     return workerLocationService.updateLocation(workerId, payload.latitude, payload.longitude);
   },
 
-  async updateDeviceToken(workerId: string, deviceToken: string) {
-    await prisma.worker.update({
-      where: { id: workerId },
-      data: { device_token: deviceToken },
-      select: { id: true },
+  async updateDeviceToken(workerId: string, deviceToken: string, deviceId?: string, platform?: string) {
+    await workerDeviceService.registerDevice(workerId, {
+      device_token: deviceToken,
+      device_id: deviceId,
+      platform: platform as any,
     });
     return { success: true };
+  },
+
+  async registerDevice(workerId: string, payload: RegisterWorkerDeviceReq) {
+    return workerDeviceService.registerDevice(workerId, payload);
+  },
+
+  async revokeDevice(workerId: string, deviceId: string) {
+    return workerDeviceService.revokeDevice(workerId, deviceId);
+  },
+
+  async listDevices(workerId: string) {
+    return workerDeviceService.listDevices(workerId);
   },
 
   async updateOnlineStatus(workerId: string, payload: UpdateWorkerOnlineStatusReq) {

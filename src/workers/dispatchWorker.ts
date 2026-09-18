@@ -1,7 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import prisma from '../config/prisma';
 import { redisConnectionOptions, timeoutQueue, dispatchQueue } from '../config/bullmq';
-import { sendFCMNotification } from '../shared/fcm';
+import { sendFCMNotification, sendFCMToWorker } from '../shared/fcm';
 import { io } from '../server';
 import {
   getEligibleDispatchCandidates,
@@ -103,23 +103,21 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
     await Promise.all(
       waveWorkers.map(async (w) => {
         try {
-          if (w.device_token) {
-            await sendFCMNotification(w.device_token, {
+          await sendFCMToWorker(w.id, {
+            title: "New Job",
+            body: req.skill_type ?? "New Job",
+            data: {
+              type: "incoming_job",
+              jobId: req.job.id,
+              requirementId: req.id,
               title: "New Job",
-              body: req.skill_type ?? "New Job",
-              data: {
-                type: "incoming_job",
-                jobId: req.job.id,
-                requirementId: req.id,
-                title: "New Job",
-                body: req.skill_type ?? "",
-                ratePerDay: String(req.rate_per_day ?? 0),
-                customerName: req.job.customer.name,
-                location: req.job.location ?? "",
-                expiresAt: expiresAt.toISOString(),
-              },
-            });
-          }
+              body: req.skill_type ?? "",
+              ratePerDay: String(req.rate_per_day ?? 0),
+              customerName: req.job.customer.name,
+              location: req.job.location ?? "",
+              expiresAt: expiresAt.toISOString(),
+            },
+          });
         } catch (err) {
           console.error(`Failed to send FCM to worker ${w.id}:`, err);
         }
