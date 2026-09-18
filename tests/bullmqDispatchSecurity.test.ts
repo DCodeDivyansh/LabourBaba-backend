@@ -6,7 +6,7 @@ import {
   DEFAULT_LOCATION_FRESHNESS_HOURS,
 } from "../src/features/dispatch/dispatchCandidate.service";
 import { processDispatchJob, DispatchJobData } from "../src/workers/dispatchWorker";
-import { sendFCMNotification } from "../src/shared/fcm";
+import { sendFCMNotification, sendFCMToWorker } from "../src/shared/fcm";
 import { io } from "../src/server";
 
 // Mock dependencies
@@ -25,6 +25,10 @@ jest.mock("../src/config/prisma", () => ({
     job_dispatch: {
       createMany: jest.fn(),
     },
+    worker_device: {
+      findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
   },
 }));
 
@@ -40,6 +44,7 @@ jest.mock("../src/config/bullmq", () => ({
 
 jest.mock("../src/shared/fcm", () => ({
   sendFCMNotification: jest.fn().mockResolvedValue({}),
+  sendFCMToWorker: jest.fn().mockResolvedValue([{ success: true }]),
 }));
 
 jest.mock("../src/server", () => ({
@@ -989,9 +994,9 @@ describe("P0 Finding #8 Security Regression Suite: BullMQ Dispatch Geographic Fi
         offset: 0,
       });
 
-      // 1. Worker A inside radius receives FCM notification
-      expect(sendFCMNotification).toHaveBeenCalledWith(
-        "token-worker-A",
+      // 1. Worker A inside radius receives FCM notification via sendFCMToWorker
+      expect(sendFCMToWorker).toHaveBeenCalledWith(
+        "worker-A-inside",
         expect.objectContaining({
           data: expect.objectContaining({
             type: "incoming_job",
@@ -1002,8 +1007,8 @@ describe("P0 Finding #8 Security Regression Suite: BullMQ Dispatch Geographic Fi
       );
 
       // 2. Worker B outside radius NEVER receives FCM notification
-      expect(sendFCMNotification).not.toHaveBeenCalledWith(
-        "token-worker-B",
+      expect(sendFCMToWorker).not.toHaveBeenCalledWith(
+        "worker-B-outside",
         expect.anything(),
       );
 
@@ -1057,6 +1062,7 @@ describe("P0 Finding #8 Security Regression Suite: BullMQ Dispatch Geographic Fi
 
       // Zero workers notified
       expect(sendFCMNotification).not.toHaveBeenCalled();
+      expect(sendFCMToWorker).not.toHaveBeenCalled();
       expect(prisma.job_dispatch.createMany).not.toHaveBeenCalled();
     });
   });

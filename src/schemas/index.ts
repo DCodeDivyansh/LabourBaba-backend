@@ -312,8 +312,11 @@ export const WorkerDocumentSchema = z.object({
 export const WorkerDeviceSchema = z.object({
   id: z.string().uuid(),
   worker_id: z.string().uuid(),
-  device_id: z.string().nullable().optional(),
-  ip_address: z.string().nullable().optional(),
+  device_id: z.string(),
+  platform: z.string().nullable().optional(),
+  last_seen_at: z.date().nullable().optional(),
+  created_at: z.date().nullable().optional(),
+  is_active: z.boolean().optional(),
 }).openapi("WorkerDevice");
 
 export const WorkerAnalyticsSchema = z.object({
@@ -384,9 +387,21 @@ export const CreateJobRequirementReqSchema = z.object({
   wave_size: z.number().int().positive().optional().openapi({ example: 10 }),
 }).openapi("CreateJobRequirementReq");
 
-export const UpdateDeviceTokenReqSchema = z.object({
-  device_token: z.string().min(1),
-});
+export const RegisterWorkerDeviceReqSchema = z.object({
+  device_token: z.string().min(1, "device_token is required"),
+  device_id: z.string().trim().min(1).max(255).optional(),
+  platform: z.enum(["android", "ios", "web"]).optional(),
+}).openapi("RegisterWorkerDeviceReq");
+
+export const UpdateDeviceTokenReqSchema = RegisterWorkerDeviceReqSchema;
+
+export const RevokeWorkerDeviceReqSchema = z.object({
+  device_id: z.string().min(1, "device_id is required"),
+}).strict().openapi("RevokeWorkerDeviceReq");
+
+export const WorkerDeviceIdParamSchema = z.object({
+  deviceId: z.string().min(1, "deviceId is required"),
+}).strict().openapi("WorkerDeviceIdParam");
 
 const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 

@@ -15,7 +15,7 @@
  */
 
 import prisma from '../../config/prisma';
-import { sendFCMNotification } from '../../shared/fcm';
+import { sendFCMNotification, sendFCMToWorker } from '../../shared/fcm';
 import { io } from '../../server';
 import {
   getEligibleDispatchCandidates,
@@ -479,11 +479,9 @@ async function notifyWorkers(
   workers: NearbyWorker[],
   expiresAt: Date,
 ): Promise<void> {
-  const workersWithToken = workers.filter((w) => w.device_token);
-
   const fcmResults = await Promise.allSettled(
-    workersWithToken.map((w) =>
-      sendFCMNotification(w.device_token as string, {
+    workers.map((w) =>
+      sendFCMToWorker(w.id, {
         // title/body must NOT be top-level — that makes this a "notification"
         // message, which Android intercepts and auto-displays instead of
         // calling IncomingJobFirebaseService.onMessageReceived() while the
@@ -511,7 +509,7 @@ async function notifyWorkers(
     if (result.status === 'rejected') {
       logError(
         'dispatch.fcm_failed',
-        { requirementId: req.id, workerId: workersWithToken[i].id },
+        { requirementId: req.id, workerId: workers[i].id },
         result.reason,
       );
     }

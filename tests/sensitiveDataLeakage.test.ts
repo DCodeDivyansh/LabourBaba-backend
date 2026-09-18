@@ -97,6 +97,21 @@ jest.mock("../src/config/prisma", () => ({
       create: jest.fn(),
       findMany: jest.fn(),
     },
+    worker_device: {
+      upsert: jest.fn().mockResolvedValue({
+        id: "device-row-id",
+        worker_id: "mock-worker-id",
+        device_id: "mock-device-id",
+        fcm_token: "mock-fcm-token",
+        platform: "android",
+        last_seen_at: new Date(),
+        revoked_at: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      }),
+      findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     worker_document: {
       findMany: jest.fn(),
       updateMany: jest.fn(),

@@ -1,5 +1,23 @@
 import express from "express";
-import { registerWorker, loginWorker, getMe, updateMe, updateLocation, updateOnline, uploadDocuments, requestUploadUrl, getDocuments, getDocumentAccess, getAnalytics, getBookings, getEarnings } from "../../features/worker/workerController";
+import {
+  registerWorker,
+  loginWorker,
+  getMe,
+  updateMe,
+  updateLocation,
+  updateOnline,
+  uploadDocuments,
+  requestUploadUrl,
+  getDocuments,
+  getDocumentAccess,
+  getAnalytics,
+  getBookings,
+  getEarnings,
+  updateDeviceToken,
+  registerDevice,
+  revokeDevice,
+  getDevices,
+} from "../../features/worker/workerController";
 import { validateBody, validateParams } from "../../middlewares/validationMiddleware";
 import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
 import {
@@ -17,11 +35,14 @@ import {
   WorkerDocumentSchema,
   WorkerAnalyticsSchema,
   BookingSchema,
+  UpdateDeviceTokenReqSchema,
+  RegisterWorkerDeviceReqSchema,
+  RevokeWorkerDeviceReqSchema,
+  WorkerDeviceIdParamSchema,
+  WorkerDeviceSchema,
 } from "../../schemas";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
-import { /* ...existing, */ updateDeviceToken } from "../../features/worker/workerController";
-import { /* ...existing, */ UpdateDeviceTokenReqSchema } from "../../schemas/index";
 
 const router = express.Router();
 
@@ -166,6 +187,48 @@ registry.registerPath({
   },
 });
 
+registry.registerPath({
+  method: "post",
+  path: "/api/workers/me/devices",
+  summary: "Register or rotate worker push device token",
+  tags: ["Workers"],
+  security: [{ bearerAuth: [] }],
+  request: { body: { content: { "application/json": { schema: RegisterWorkerDeviceReqSchema } } } },
+  responses: {
+    201: { description: "Created", content: { "application/json": { schema: z.object({ success: z.boolean(), data: WorkerDeviceSchema }) } } },
+    400: { description: "Bad request" },
+    401: { description: "Unauthorized" },
+    403: { description: "Forbidden" },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/workers/me/devices",
+  summary: "List registered devices for authenticated worker",
+  tags: ["Workers"],
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: z.array(WorkerDeviceSchema) }) } } },
+    401: { description: "Unauthorized" },
+    403: { description: "Forbidden" },
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/workers/me/devices/{deviceId}",
+  summary: "Revoke a worker push device",
+  tags: ["Workers"],
+  security: [{ bearerAuth: [] }],
+  parameters: [{ in: "path", name: "deviceId", required: true, schema: { type: "string" } }],
+  responses: {
+    200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), message: z.string() }) } } },
+    401: { description: "Unauthorized" },
+    403: { description: "Forbidden" },
+  },
+});
+
 router.post("/registerWorker", validateBody(CreateWorkerReqSchema), registerWorker);
 router.post("/login", validateBody(LoginWorkerReqSchema), loginWorker);
 router.get("/me", authenticateJWT, requireRole(UserRole.WORKER), getMe);
@@ -180,5 +243,9 @@ router.get("/me/analytics", authenticateJWT, requireRole(UserRole.WORKER), getAn
 router.get("/me/bookings", authenticateJWT, requireRole(UserRole.WORKER), getBookings);
 router.get("/me/earnings", authenticateJWT, requireRole(UserRole.WORKER), getEarnings);
 router.patch("/me/device-token", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UpdateDeviceTokenReqSchema), updateDeviceToken);
+router.post("/me/devices", authenticateJWT, requireRole(UserRole.WORKER), validateBody(RegisterWorkerDeviceReqSchema), registerDevice);
+router.get("/me/devices", authenticateJWT, requireRole(UserRole.WORKER), getDevices);
+router.delete("/me/devices/:deviceId", authenticateJWT, requireRole(UserRole.WORKER), validateParams(WorkerDeviceIdParamSchema), revokeDevice);
+router.post("/me/devices/revoke", authenticateJWT, requireRole(UserRole.WORKER), validateBody(RevokeWorkerDeviceReqSchema), revokeDevice);
 
 export default router;
