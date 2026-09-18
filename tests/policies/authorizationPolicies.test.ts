@@ -97,6 +97,16 @@ describe("Authorization Policies Unit Tests", () => {
       expect(jobPolicy.canCancel(admin, jobA).allowed).toBe(true);
     });
 
+    it("canReadBookings: Customer A and assigned Worker A allowed; Customer B and unassigned Worker B denied", () => {
+      expect(jobPolicy.canReadBookings(customerA, jobA).allowed).toBe(true);
+      expect(jobPolicy.canReadBookings(customerB, jobA).allowed).toBe(false);
+      expect(jobPolicy.canReadBookings(customerB, jobA).statusCode).toBe(404);
+      expect(jobPolicy.canReadBookings(workerA, jobA).allowed).toBe(true);
+      expect(jobPolicy.canReadBookings(workerB, jobA).allowed).toBe(false);
+      expect(jobPolicy.canReadBookings(workerB, jobA).statusCode).toBe(404);
+      expect(jobPolicy.canReadBookings(admin, jobA).allowed).toBe(true);
+    });
+
     it("scopeRead: generates correct database predicates", () => {
       expect(jobPolicy.scopeRead(customerA, "job-1")).toEqual({
         id: "job-1",

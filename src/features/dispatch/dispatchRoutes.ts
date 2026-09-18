@@ -1,8 +1,9 @@
 import express from "express";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
-import { JobDispatchSchema, BookingSchema, DispatchWavesResponseSchema } from "../../schemas";
+import { JobDispatchSchema, BookingSchema, DispatchWavesResponseSchema, RequirementIdParamSchema } from "../../schemas";
 import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
+import { validateParams } from "../../middlewares/validationMiddleware";
 import { getIncoming, acceptJob, declineJob, getWaves, getDispatchDetail } from "./dispatchController";
 
 const router = express.Router();
@@ -70,9 +71,9 @@ registry.registerPath({
 });
 
 router.get("/incoming", authenticateJWT, requireRole(UserRole.WORKER), getIncoming);
-router.post("/:requirementId/accept", authenticateJWT, requireRole(UserRole.WORKER), acceptJob);
-router.post("/:requirementId/decline", authenticateJWT, requireRole(UserRole.WORKER), declineJob);
-router.get("/:requirementId/waves", authenticateJWT, getWaves);
-router.get("/:requirementId", authenticateJWT, requireRole(UserRole.WORKER), getDispatchDetail);
+router.post("/:requirementId/accept", authenticateJWT, requireRole(UserRole.WORKER), validateParams(RequirementIdParamSchema), acceptJob);
+router.post("/:requirementId/decline", authenticateJWT, requireRole(UserRole.WORKER), validateParams(RequirementIdParamSchema), declineJob);
+router.get("/:requirementId/waves", authenticateJWT, validateParams(RequirementIdParamSchema), getWaves);
+router.get("/:requirementId", authenticateJWT, requireRole(UserRole.WORKER), validateParams(RequirementIdParamSchema), getDispatchDetail);
 
 export default router;

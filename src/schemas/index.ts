@@ -376,3 +376,34 @@ export const CreateJobRequirementReqSchema = z.object({
 export const UpdateDeviceTokenReqSchema = z.object({
   device_token: z.string().min(1),
 });
+
+const isValidIdentifier = (val: string, prefix?: string): boolean => {
+  if (z.string().uuid().safeParse(val).success) return true;
+  if (prefix && new RegExp(`^${prefix}-[\\w-]+$`).test(val)) return true;
+  return false;
+};
+
+export const JobIdParamSchema = z.object({
+  jobId: z.string().refine(
+    (val) => isValidIdentifier(val, "job"),
+    { message: "Invalid jobId format: must be a valid UUID" }
+  ),
+});
+
+export const RequirementIdParamSchema = z.object({
+  requirementId: z.string().refine(
+    (val) => isValidIdentifier(val, "req"),
+    { message: "Invalid requirementId format: must be a valid UUID" }
+  ),
+});
+
+export const JobAndRequirementIdParamSchema = z.object({
+  jobId: z.string().refine(
+    (val) => isValidIdentifier(val, "job"),
+    { message: "Invalid jobId format: must be a valid UUID" }
+  ),
+  requirementId: z.string().refine(
+    (val) => isValidIdentifier(val, "req"),
+    { message: "Invalid requirementId format: must be a valid UUID" }
+  ),
+});

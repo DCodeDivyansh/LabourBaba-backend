@@ -158,6 +158,22 @@ export const jobPolicy = {
       };
     }
 
+    if (actor.role === UserRole.WORKER) {
+      const hasBooking = job.booking?.some((b) => b.worker_id === actor.id);
+      const hasDispatch = job.job_requirement?.some((req) =>
+        req.job_dispatch?.some((d) => d.worker_id === actor.id)
+      );
+      if (hasBooking || hasDispatch) {
+        return { allowed: true };
+      }
+      return {
+        allowed: false,
+        reason: "Job not found",
+        statusCode: 404,
+        code: "RESOURCE_NOT_FOUND",
+      };
+    }
+
     return {
       allowed: false,
       reason: "Forbidden: Insufficient permissions",
