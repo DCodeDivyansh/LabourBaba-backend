@@ -213,13 +213,18 @@ export const VerifyOtpReqSchema = z.object({
  */
 export const CreatePaymentReqSchema = z.object({}).openapi("CreatePaymentReq");
 
+/**
+ * CreateReviewReqSchema:
+ * The review is submitted for a specific booking via URL path parameter :bookingId.
+ * Authoritative customer identity is derived from req.user.id (JWT principal).
+ * Authoritative worker identity is derived server-side from booking.worker_id.
+ * Client supplies ONLY rating and optional comment.
+ * Rejects client-supplied customer_id, worker_id, booking_id.
+ */
 export const CreateReviewReqSchema = z.object({
-  booking_id: z.string().uuid("Invalid booking UUID"),
-  worker_id: z.string().uuid("Invalid worker UUID"),
-  customer_id: z.string().uuid("Invalid customer UUID"),
-  rating: z.number().min(1).max(5),
+  rating: z.number().min(1, "Rating must be between 1 and 5").max(5, "Rating must be between 1 and 5"),
   comment: z.string().optional(),
-}).openapi("CreateReviewReq");
+}).strict().openapi("CreateReviewReq");
 
 export const SendMessageReqSchema = z.object({
   conversation_id: z.string().uuid("Invalid conversation UUID"),

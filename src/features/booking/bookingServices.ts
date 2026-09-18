@@ -1,6 +1,7 @@
 import prisma from "../../config/prisma";
 import { comparePassword } from "../../utils/authUtils";
 import { CancelBookingReq, ConfirmBookingCompleteReq } from "../../type/api_req.type";
+import { isReviewUniqueConstraintError } from "../review/reviewServices";
 import {
   bookingSafeSelect,
   workerPublicSelect,
@@ -79,15 +80,28 @@ export const bookingService = {
       if (!booking) throw new Error("Booking not found");
 
       if (payload.rating) {
-        await tx.review.create({
-          data: {
-            booking_id: bookingId,
-            worker_id: booking.worker_id,
-            customer_id: customerId,
-            rating: payload.rating,
-            comment: payload.comment
+        if (booking.status !== "COMPLETED") {
+          throw new Error("Cannot review a booking that is not completed");
+        }
+
+        try {
+          await tx.review.create({
+            data: {
+              booking_id: bookingId,
+              worker_id: booking.worker_id,
+              customer_id: customerId,
+              rating: payload.rating,
+              comment: payload.comment
+            }
+          });
+        } catch (err: any) {
+          // If a review already exists (e.g. repeated confirmation request), do not fail the confirmation
+          if (isReviewUniqueConstraintError(err)) {
+            // Idempotent retry: review already exists for this booking, safely ignore
+          } else {
+            throw err;
           }
-        });
+        }
       }
 
       return { success: true, message: "Booking completion confirmed" };
