@@ -18,6 +18,7 @@ import {
   getAdminPersonalRoom,
 } from "./roomHelpers";
 import { isValidIdentifier } from "../schemas";
+import { setSocketServer } from "./socketLifecycle";
 
 /**
  * Registers secure Socket.IO event handlers.
@@ -33,6 +34,9 @@ import { isValidIdentifier } from "../schemas";
  * 7. HTTP and Socket.IO chat policies are identical.
  */
 export function registerSocketHandlers(io: Server): void {
+  // Register runtime server instance for targeted socket invalidation / suspension disconnects
+  setSocketServer(io);
+
   io.on("connection", (rawSocket: Socket) => {
     const socket = rawSocket as AuthenticatedSocket;
     const user = socket.data.user;

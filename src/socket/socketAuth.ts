@@ -58,12 +58,12 @@ export async function socketAuthMiddleware(
     if (decoded.role === UserRole.WORKER) {
       const worker = await prisma.worker.findUnique({
         where: { id: decoded.id },
-        select: { id: true, phone: true, deleted_at: true },
+        select: { id: true, phone: true, deleted_at: true, verification_status: true },
       });
 
-      if (!worker || worker.deleted_at) {
+      if (!worker || worker.deleted_at || worker.verification_status === "suspended") {
         console.warn(
-          `[SOCKET_AUTH] Connection rejected: Worker account ${decoded.id} not found or inactive`
+          `[SOCKET_AUTH] Connection rejected: Worker account ${decoded.id} not found, inactive, or suspended`
         );
         return next(new Error("Invalid authentication credentials"));
       }

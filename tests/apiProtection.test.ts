@@ -158,11 +158,11 @@ describe("API Protection and JWT Validation Tests", () => {
     (prisma.$executeRaw as jest.Mock).mockResolvedValue(1);
 
     (prisma.customer.findMany as jest.Mock).mockResolvedValue([]);
-    (prisma.customer.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.customer.findUnique as jest.Mock).mockResolvedValue({ id: MOCK_CUSTOMER_ID, deleted_at: null });
     (prisma.customer.create as jest.Mock).mockResolvedValue({});
 
     (prisma.worker.findMany as jest.Mock).mockResolvedValue([]);
-    (prisma.worker.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.worker.findUnique as jest.Mock).mockResolvedValue({ id: MOCK_WORKER_ID, deleted_at: null, verification_status: "verified" });
     (prisma.worker.create as jest.Mock).mockResolvedValue({});
     (prisma.worker.update as jest.Mock).mockResolvedValue({});
 

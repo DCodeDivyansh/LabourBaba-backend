@@ -174,6 +174,46 @@ export const sessionService = {
       throw err;
     }
 
+    // 4.5 Authoritative Account State Check (Issue #11)
+    // A suspended or deleted account MUST NOT be able to refresh tokens or extend access.
+    if (session.user_role === UserRole.WORKER && prisma.worker?.findUnique) {
+      const worker = await prisma.worker.findUnique({
+        where: { id: session.user_id },
+        select: { id: true, deleted_at: true, verification_status: true },
+      });
+
+      if (worker !== undefined) {
+        if (!worker || worker.deleted_at != null || worker.verification_status === "suspended") {
+          console.warn(
+            `[SESSION_AUDIT] Refresh rejected: Worker ${session.user_id} is suspended, inactive, or deleted. ` +
+            `Revoking family ${session.family_id}.`
+          );
+          await sessionService.revokeFamilyByFamilyId(session.family_id, REVOKE_REASON.SUSPENDED);
+          const err: any = new Error("Account has been suspended or deactivated");
+          err.code = "ACCOUNT_SUSPENDED";
+          throw err;
+        }
+      }
+    } else if (session.user_role === UserRole.CUSTOMER && prisma.customer?.findUnique) {
+      const customer = await prisma.customer.findUnique({
+        where: { id: session.user_id },
+        select: { id: true, deleted_at: true },
+      });
+
+      if (customer !== undefined) {
+        if (!customer || customer.deleted_at != null) {
+          console.warn(
+            `[SESSION_AUDIT] Refresh rejected: Customer ${session.user_id} is inactive or deleted. ` +
+            `Revoking family ${session.family_id}.`
+          );
+          await sessionService.revokeFamilyByFamilyId(session.family_id, REVOKE_REASON.SUSPENDED);
+          const err: any = new Error("Account is inactive or has been deactivated");
+          err.code = "ACCOUNT_INACTIVE";
+          throw err;
+        }
+      }
+    }
+
     // 5. Atomic status transition: ACTIVE → ROTATED
     //    This is the concurrency gate. Only one concurrent request can succeed.
     const updated = await prisma.refresh_session.updateMany({

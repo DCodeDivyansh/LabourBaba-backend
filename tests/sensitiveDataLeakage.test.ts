@@ -568,6 +568,17 @@ describe("P0 Security Regression: Sensitive Data & Password Hash Leakage", () =>
     });
 
     it("POST /api/admin/workers/:id/suspend must not return worker password in updated record", async () => {
+      // Issue #11: suspendWorker now uses $transaction. jest.clearAllMocks() in beforeEach
+      // wipes the module-level factory implementation, so we must restore it here.
+      ((prisma as any).$transaction as jest.Mock).mockImplementation(async (cb: any) =>
+        typeof cb === "function" ? await cb(prisma) : cb
+      );
+      // Issue #11: suspendWorker now calls findUnique first to validate worker exists.
+      (prisma.worker.findUnique as jest.Mock).mockResolvedValue({
+        id: MOCK_WORKER_ID,
+        verification_status: "verified",
+        deleted_at: null,
+      });
       (prisma.worker.update as jest.Mock).mockResolvedValue({
         id: MOCK_WORKER_ID,
         name: "Suspended Worker",
@@ -578,6 +589,8 @@ describe("P0 Security Regression: Sensitive Data & Password Hash Leakage", () =>
         password: SENTINEL_PASSWORD,
         device_token: SENTINEL_DEVICE_TOKEN,
       });
+      // Issue #11: suspendWorker atomically revokes refresh sessions inside the transaction
+      ((prisma as any).refresh_session.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
 
       const res = await request(app)
         .post(`/api/admin/workers/${MOCK_WORKER_ID}/suspend`)

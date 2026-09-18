@@ -17,7 +17,7 @@ export const loginWorker = async (req: Request, res: Response): Promise<void> =>
     const worker = await prisma.worker.findUnique({
       where: { phone },
     });
-    if (!worker || worker.deleted_at) {
+    if (!worker || worker.deleted_at || worker.verification_status === "suspended") {
       res.status(401).json({ success: false, message: "Invalid phone number or password" });
       return;
     }
