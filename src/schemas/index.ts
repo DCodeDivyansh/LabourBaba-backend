@@ -344,6 +344,23 @@ export const RefreshTokenReqSchema = z.object({
   token: z.string().min(1, "Refresh token is required"),
 }).openapi("RefreshTokenReq");
 
+export const LogoutReqSchema = z.object({
+  refresh_token: z.string().min(1, "Refresh token is required"),
+}).openapi("LogoutReq");
+
+export const SessionDTOSchema = z.object({
+  id: z.string(),
+  user_id: z.string(),
+  user_role: z.string(),
+  device_id: z.string().nullable().optional(),
+  user_agent: z.string().nullable().optional(),
+  ip_address: z.string().nullable().optional(),
+  created_at: z.date().or(z.string()),
+  last_used_at: z.date().or(z.string()).nullable().optional(),
+  expires_at: z.date().or(z.string()),
+  is_current: z.boolean().optional(),
+}).openapi("SessionDTO");
+
 export const UpdateWorkerProfileReqSchema = z.object({
   name: z.string().optional(),
   phone: z.string().min(10).optional(),

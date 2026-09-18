@@ -17,6 +17,7 @@ import {
 } from "../src/utils/authUtils";
 import { UserRole } from "../src/type/userRole";
 import { app } from "../src/server";
+import prisma from "../src/config/prisma";
 
 // Mock external dependencies that should not execute real network calls during tests
 jest.mock("../src/config/bullmq", () => ({
@@ -44,6 +45,20 @@ jest.mock("../src/config/prisma", () => {
       update: jest.fn(),
       updateMany: jest.fn(),
       deleteMany: jest.fn(),
+    },
+    refresh_session: {
+      create: jest.fn().mockImplementation(async (args: any) => {
+        console.log("MOCK CREATE CALLED WITH:", args);
+        return {
+          id: "a1b2c3d4-e5f6-4890-a234-56789abcdef0",
+          expires_at: args?.data?.expires_at || new Date(Date.now() + 30 * 86400000),
+          user_id: args?.data?.user_id,
+          user_role: args?.data?.user_role,
+        };
+      }),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
     },
     $connect: jest.fn().mockResolvedValue(undefined),
     $disconnect: jest.fn().mockResolvedValue(undefined),
@@ -398,6 +413,11 @@ describe("P0 Security Regression Tests — Issue #4: JWT Secrets Have Insecure F
     });
 
     it("MUST accept a valid refresh token on POST /api/auth/refresh and return a new access token", async () => {
+      ((prisma as any).refresh_session.create as jest.Mock).mockResolvedValue({
+        id: "a1b2c3d4-e5f6-4890-a234-56789abcdef0",
+        expires_at: new Date(Date.now() + 30 * 86400000),
+      });
+
       const refreshToken = signRefreshToken({
         id: "user-refresh-success",
         role: UserRole.CUSTOMER,

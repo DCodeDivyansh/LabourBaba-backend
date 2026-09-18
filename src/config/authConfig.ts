@@ -15,6 +15,10 @@ export interface AuthConfig {
   otpMaxAttempts: number;
   otpResendCooldownSeconds: number;
   otpCleanupRetentionDays: number;
+  /** Refresh session lifetime in days. Default: 30. */
+  refreshSessionTtlDays: number;
+  /** Revoked/expired sessions are retained for this many days for audit/reuse detection. Default: 90. */
+  refreshSessionCleanupRetentionDays: number;
   smsProvider: "mock" | "twilio" | "http";
   nodeEnv: string;
   twilio: {
@@ -131,6 +135,8 @@ export const authConfig: AuthConfig = {
   otpMaxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS || "5", 10),
   otpResendCooldownSeconds: parseInt(process.env.OTP_RESEND_COOLDOWN_SECONDS || "60", 10),
   otpCleanupRetentionDays: parseInt(process.env.OTP_CLEANUP_RETENTION_DAYS || "7", 10),
+  refreshSessionTtlDays: parseInt(process.env.REFRESH_SESSION_TTL_DAYS || "30", 10),
+  refreshSessionCleanupRetentionDays: parseInt(process.env.REFRESH_SESSION_CLEANUP_RETENTION_DAYS || "90", 10),
   smsProvider: (process.env.SMS_PROVIDER as "mock" | "twilio" | "http") || (nodeEnv === "production" ? "twilio" : "mock"),
   nodeEnv,
   twilio: {
@@ -177,4 +183,18 @@ export function assertProductionAuthConfig(): void {
       }
     }
   }
+}
+
+/**
+ * Returns refresh-session-specific configuration from authConfig.
+ * Used by session.service.ts to avoid circular dependency on the full authConfig.
+ */
+export function getRefreshSessionConfig(): {
+  refreshSessionTtlDays: number;
+  refreshSessionCleanupRetentionDays: number;
+} {
+  return {
+    refreshSessionTtlDays: authConfig.refreshSessionTtlDays,
+    refreshSessionCleanupRetentionDays: authConfig.refreshSessionCleanupRetentionDays,
+  };
 }

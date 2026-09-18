@@ -124,6 +124,19 @@ jest.mock("../src/config/prisma", () => ({
       updateMany: jest.fn(),
       deleteMany: jest.fn(),
     },
+    refresh_session: {
+      create: jest.fn().mockImplementation(async ({ data }: any) => ({
+        id: "a1b2c3d4-e5f6-4890-a234-56789abcdef0",
+        expires_at: data?.expires_at || new Date(Date.now() + 30 * 86400000),
+        user_id: data?.user_id,
+        user_role: data?.user_role,
+      })),
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
     $transaction: jest.fn(async (callback: any) => {
       if (typeof callback === "function") {
         return await callback(prisma);
@@ -204,6 +217,10 @@ describe("P0 Security Regression: Sensitive Data & Password Hash Leakage", () =>
 
   beforeEach(() => {
     jest.clearAllMocks();
+    ((prisma as any).refresh_session.create as jest.Mock).mockResolvedValue({
+      id: "a1b2c3d4-e5f6-4890-a234-56789abcdef0",
+      expires_at: new Date(Date.now() + 30 * 86400000),
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

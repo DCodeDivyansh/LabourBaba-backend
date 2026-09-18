@@ -8,11 +8,12 @@ import {
   normalizePhone,
   maskPhone,
   signAccessToken,
-  signRefreshToken,
   verifyRefreshToken,
 } from "../../utils/authUtils";
 import { authConfig } from "../../config/authConfig";
 import { getSmsProvider } from "../../providers/sms/smsProviderFactory";
+import { sessionService } from "./session.service";
+import { REVOKE_REASON } from "./session.types";
 
 export const authService = {
   /**
@@ -103,11 +104,18 @@ export const authService = {
   },
 
   /**
-   * Atomically verifies an OTP challenge and issues JWT credentials upon success.
+   * Atomically verifies an OTP challenge and issues JWT credentials + server-side
+   * refresh session upon success.
+   *
    * Guarantees single-use semantics under concurrency, bounds verification attempts,
    * and isolates authentication purposes.
    */
-  async verifyOtp(rawPhone: string, otp: string, type?: "login" | "register") {
+  async verifyOtp(
+    rawPhone: string,
+    otp: string,
+    type?: "login" | "register",
+    opts?: { deviceId?: string; userAgent?: string; ipAddress?: string }
+  ) {
     const phone = normalizePhone(rawPhone);
 
     return await prisma.$transaction(async (tx) => {
@@ -221,24 +229,102 @@ export const authService = {
         throw error;
       }
 
-      // 6. Issue JWT credentials
-      const token = signAccessToken({ id: user.id, role, phone: user.phone }, "1h");
-      const refreshToken = signRefreshToken({ id: user.id, role, phone: user.phone }, "7d");
+      // 6. Issue access token (short-lived JWT)
+      const token = signAccessToken({ id: user.id, role, phone: user.phone });
 
-      return { user: toAuthUserDTO(user), role, token, refreshToken };
+      // 7. Create server-side refresh session and return opaque token
+      //    (outside the OTP transaction to avoid long-running bcrypt inside tx)
+      const sessionResult = await sessionService.createSession({
+        userId: user.id,
+        userRole: role,
+        deviceId: opts?.deviceId,
+        userAgent: opts?.userAgent,
+        ipAddress: opts?.ipAddress,
+      });
+
+      return {
+        user: toAuthUserDTO(user),
+        role,
+        token,
+        refreshToken: sessionResult.rawToken,
+        sessionExpiresAt: sessionResult.expiresAt,
+      };
     });
   },
 
-  async refreshToken(token: string) {
-    const decoded = verifyRefreshToken(token);
-    if (!decoded || !decoded.id || !decoded.role) {
-      throw new Error("Invalid refresh token");
+  /**
+   * Atomically rotates a refresh session and returns a new access token +
+   * a new rotated refresh token.
+   *
+   * Reuse detection: presenting an already-rotated token revokes the entire
+   * token family and returns REFRESH_TOKEN_REUSE.
+   */
+  async refreshToken(rawToken: string) {
+    try {
+      const rotated = await sessionService.rotateSession(rawToken);
+
+      // Issue a fresh access token for the session owner
+      const newAccessToken = signAccessToken({
+        id: rotated.userId,
+        role: rotated.userRole,
+      });
+
+      return {
+        token: newAccessToken,
+        refreshToken: rotated.newRawToken,
+      };
+    } catch (sessionErr: any) {
+      // If it failed due to security events (reuse, expiration), rethrow immediately
+      if (
+        sessionErr.code === "REFRESH_TOKEN_REUSE" ||
+        sessionErr.code === "REFRESH_SESSION_EXPIRED"
+      ) {
+        throw sessionErr;
+      }
+
+      // Backward compatibility during migration: check if caller presented a valid legacy JWT refresh token
+      const decoded = verifyRefreshToken(rawToken);
+      if (decoded && decoded.id && decoded.role) {
+        // Upgrade legacy JWT into a server-side session
+        const sessionResult = await sessionService.createSession({
+          userId: decoded.id,
+          userRole: decoded.role,
+        });
+
+        const newAccessToken = signAccessToken({
+          id: decoded.id,
+          role: decoded.role,
+          phone: decoded.phone,
+        });
+
+        return {
+          token: newAccessToken,
+          refreshToken: sessionResult.rawToken,
+        };
+      }
+
+      // Neither a valid session token nor a valid legacy JWT
+      throw sessionErr;
     }
-    const newToken = signAccessToken({ id: decoded.id, role: decoded.role, phone: decoded.phone }, "1h");
-    return { token: newToken };
   },
 
-  async logout(token: string) {
+  /**
+   * Revokes the server-side refresh session identified by the opaque refresh token.
+   * Idempotent: already-revoked sessions return success silently.
+   *
+   * The caller must supply userId from the authenticated context (access token),
+   * so the client cannot revoke another user's session.
+   */
+  async logout(rawRefreshToken: string, userId: string) {
+    const { revokedCount } = await sessionService.revokeByRawToken(rawRefreshToken, userId);
+
+    if (revokedCount > 0) {
+      console.log(`[SESSION] Logout: revoked session for user ${userId}`);
+    } else {
+      // Token not found or already revoked — treat as idempotent success
+      console.log(`[SESSION] Logout: session already revoked or not found for user ${userId}`);
+    }
+
     return { success: true, message: "Logged out successfully" };
   },
 

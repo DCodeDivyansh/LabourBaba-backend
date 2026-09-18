@@ -11,6 +11,7 @@ import {
 } from "../../type/api_req.type";
 import { AuthenticatedRequest, UserRole } from "../../middlewares/authMiddleware";
 import { customerSelfSelect, toCustomerSelfDTO } from "../../shared/prismaSelects";
+import { sessionService } from "../auth/session.service";
 
 /**
  * Register a new customer.
@@ -108,11 +109,20 @@ export const loginCustomer = async (
       role: UserRole.CUSTOMER,
     });
 
+    // Create server-side refresh session
+    const sessionResult = await sessionService.createSession({
+      userId: customer.id,
+      userRole: UserRole.CUSTOMER,
+      userAgent: req.headers["user-agent"],
+      ipAddress: req.ip,
+    });
+
     res.status(200).json({
       success: true,
       message: "Customer logged in successfully",
       data: toCustomerSelfDTO(customer),
       token,
+      refreshToken: sessionResult.rawToken,
     });
   } catch (error: any) {
     console.error("Login error:", error);
