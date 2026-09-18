@@ -11,15 +11,17 @@ export const chatPolicy = {
    * Only the booking customer, assigned worker, or admin may read messages.
    */
   canReadConversation(actor: AuthenticatedUser, booking: ChatBookingResource): PolicyDecision {
-    if (actor.role === UserRole.ADMIN) {
+    const role = String(actor?.role || "").toLowerCase();
+
+    if (role === "admin") {
       return { allowed: true };
     }
 
-    if (actor.role === UserRole.CUSTOMER && booking.customer_id === actor.id) {
+    if (role === "customer" && booking.customer_id === actor.id) {
       return { allowed: true };
     }
 
-    if (actor.role === UserRole.WORKER && booking.worker_id === actor.id) {
+    if (role === "worker" && booking.worker_id === actor.id) {
       return { allowed: true };
     }
 
@@ -35,49 +37,41 @@ export const chatPolicy = {
    * Only the booking customer, assigned worker, or admin may send messages.
    */
   canSendMessage(actor: AuthenticatedUser, booking: ChatBookingResource): PolicyDecision {
-    if (actor.role === UserRole.ADMIN) {
-      return { allowed: true };
-    }
-
-    if (actor.role === UserRole.CUSTOMER && booking.customer_id === actor.id) {
-      return { allowed: true };
-    }
-
-    if (actor.role === UserRole.WORKER && booking.worker_id === actor.id) {
-      return { allowed: true };
-    }
-
-    return {
-      allowed: false,
-      reason: "Forbidden: Not an authorized participant of this conversation",
-      statusCode: 403,
-      code: "NOT_PARTICIPANT",
-    };
+    return this.canReadConversation(actor, booking);
   },
 
   /**
    * Only the booking customer, assigned worker, or admin may join a booking socket room.
    */
   canJoinRoom(actor: AuthenticatedUser, booking: ChatBookingResource): PolicyDecision {
-    return this.canReadConversation(actor, booking);
+    const decision = this.canReadConversation(actor, booking);
+    if (!decision.allowed) {
+      return {
+        ...decision,
+        reason: "Forbidden: Not an authorized participant of this booking",
+      };
+    }
+    return decision;
   },
 
   /**
    * Database-level Prisma query scope for reading conversation messages.
    */
   scopeBooking(actor: AuthenticatedUser, bookingId: string): Record<string, any> {
-    if (actor.role === UserRole.ADMIN) {
+    const role = String(actor?.role || "").toLowerCase();
+
+    if (role === "admin") {
       return { id: bookingId };
     }
 
-    if (actor.role === UserRole.CUSTOMER) {
+    if (role === "customer") {
       return {
         id: bookingId,
         customer_id: actor.id,
       };
     }
 
-    if (actor.role === UserRole.WORKER) {
+    if (role === "worker") {
       return {
         id: bookingId,
         worker_id: actor.id,

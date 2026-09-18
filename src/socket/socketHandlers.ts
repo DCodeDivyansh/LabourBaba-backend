@@ -11,6 +11,13 @@ import {
 import { chatService } from "../features/chat/chatServices";
 import { chatPolicy, AuthorizationError } from "../policies";
 import { toChatMessageDTO } from "../shared/prismaSelects";
+import {
+  getBookingChatRoom,
+  getWorkerPersonalRoom,
+  getCustomerPersonalRoom,
+  getAdminPersonalRoom,
+} from "./roomHelpers";
+import { isValidIdentifier } from "../schemas";
 
 /**
  * Registers secure Socket.IO event handlers.
@@ -21,7 +28,9 @@ import { toChatMessageDTO } from "../shared/prismaSelects";
  *    based exclusively on socket.data.user.id.
  * 3. Identity spoofing attempts in client payloads are strictly rejected (HTTP 403 / FORBIDDEN).
  * 4. Location broadcasts verify active assignment between the authenticated worker and customer.
- * 5. Booking and chat rooms strictly verify database-backed participant authorization.
+ * 5. Booking and chat rooms strictly verify database-backed participant authorization using chatPolicy.
+ * 6. Room names are ALWAYS server-derived and deterministic (zero client-controlled namespaces).
+ * 7. HTTP and Socket.IO chat policies are identical.
  */
 export function registerSocketHandlers(io: Server): void {
   io.on("connection", (rawSocket: Socket) => {
@@ -40,11 +49,11 @@ export function registerSocketHandlers(io: Server): void {
     // 1. Automatic Personal Room Membership
     // ========================================================================
     if (user.role === UserRole.WORKER) {
-      socket.join(`worker:${user.id}`);
+      socket.join(getWorkerPersonalRoom(user.id));
     } else if (user.role === UserRole.CUSTOMER) {
-      socket.join(`customer:${user.id}`);
+      socket.join(getCustomerPersonalRoom(user.id));
     } else if (user.role === UserRole.ADMIN) {
-      socket.join(`admin:${user.id}`);
+      socket.join(getAdminPersonalRoom(user.id));
       socket.join("admins");
     }
 
@@ -79,10 +88,10 @@ export function registerSocketHandlers(io: Server): void {
         return;
       }
 
-      socket.join(`worker:${user.id}`);
+      socket.join(getWorkerPersonalRoom(user.id));
       const response: SocketAckResponse = {
         success: true,
-        message: `Joined worker room: worker:${user.id}`,
+        message: `Joined worker room: ${getWorkerPersonalRoom(user.id)}`,
       };
       callback?.(response);
     });
@@ -118,10 +127,10 @@ export function registerSocketHandlers(io: Server): void {
         return;
       }
 
-      socket.join(`customer:${user.id}`);
+      socket.join(getCustomerPersonalRoom(user.id));
       const response: SocketAckResponse = {
         success: true,
-        message: `Joined customer room: customer:${user.id}`,
+        message: `Joined customer room: ${getCustomerPersonalRoom(user.id)}`,
       };
       callback?.(response);
     });
@@ -210,7 +219,7 @@ export function registerSocketHandlers(io: Server): void {
           }
 
           // Authoritative broadcast using trusted socket.data.user.id
-          io.to(`customer:${customerId}`).emit("worker:location", {
+          io.to(getCustomerPersonalRoom(customerId)).emit("worker:location", {
             workerId: user.id,
             lat,
             lng,
@@ -230,85 +239,90 @@ export function registerSocketHandlers(io: Server): void {
 
     // ========================================================================
     // 5. Secure "join:booking" / "join:chat" Handler
-    // Enforces database-backed participant authorization
+    // Enforces database-backed participant authorization using chatPolicy
     // ========================================================================
-    socket.on(
-      "join:booking",
-      async (payload: JoinBookingPayload, callback?: (res: SocketAckResponse) => void) => {
-        try {
-          const { bookingId } = payload || {};
+    const handleJoinBooking = async (
+      payload: JoinBookingPayload,
+      callback?: (res: SocketAckResponse) => void
+    ) => {
+      try {
+        const { bookingId } = payload || {};
 
-          if (!bookingId) {
-            const response: SocketAckResponse = {
-              success: false,
-              code: "INVALID_REQUEST",
-              message: "bookingId is required",
-            };
-            socket.emit("error", response);
-            callback?.(response);
-            return;
-          }
-
-          let booking: any = null;
-          if (prisma.booking.findFirst) {
-            const scopeWhere = user.role === UserRole.ADMIN
-              ? { id: bookingId }
-              : user.role === UserRole.CUSTOMER
-              ? { id: bookingId, customer_id: user.id }
-              : { id: bookingId, worker_id: user.id };
-            booking = await prisma.booking.findFirst({
-              where: scopeWhere,
-              select: { id: true, customer_id: true, worker_id: true },
-            });
-          }
-          if (!booking && prisma.booking.findUnique) {
-            booking = await prisma.booking.findUnique({
-              where: { id: bookingId },
-              select: { id: true, customer_id: true, worker_id: true },
-            });
-          }
-
-          if (!booking) {
-            const response: SocketAckResponse = {
-              success: false,
-              code: "RESOURCE_NOT_FOUND",
-              message: "Booking not found",
-            };
-            socket.emit("error", response);
-            callback?.(response);
-            return;
-          }
-
-          const decision = chatPolicy.canJoinRoom(user, booking);
-          if (!decision.allowed) {
-            console.warn(
-              `[SOCKET_SECURITY] Unauthorized room join: User ${user.id} (${user.role}) attempted to join booking ${bookingId}`
-            );
-            const response: SocketAckResponse = {
-              success: false,
-              code: "FORBIDDEN",
-              message: "Forbidden: Not an authorized participant of this booking",
-            };
-            socket.emit("error", response);
-            callback?.(response);
-            return;
-          }
-
-          socket.join(`booking:${bookingId}`);
-          callback?.({
-            success: true,
-            message: `Joined booking room: booking:${bookingId}`,
-          });
-        } catch (err: any) {
-          console.error(`[SOCKET] Error processing join:booking:`, err.message);
-          callback?.({
+        if (!bookingId || typeof bookingId !== "string" || !isValidIdentifier(bookingId)) {
+          const response: SocketAckResponse = {
             success: false,
-            code: "INTERNAL_ERROR",
-            message: "Failed to join booking room",
+            code: "INVALID_REQUEST",
+            message: "Valid bookingId is required",
+          };
+          socket.emit("error", response);
+          callback?.(response);
+          return;
+        }
+
+        let booking: any = null;
+
+        // 1. Query-level pushdown authorization
+        if (prisma.booking.findFirst) {
+          booking = await prisma.booking.findFirst({
+            where: chatPolicy.scopeBooking(user, bookingId),
+            select: { id: true, customer_id: true, worker_id: true },
           });
         }
+
+        // 2. Mock / fallback check with explicit policy evaluation
+        if (!booking && prisma.booking.findUnique) {
+          const rawBooking = await prisma.booking.findUnique({
+            where: { id: bookingId },
+            select: { id: true, customer_id: true, worker_id: true },
+          });
+          if (rawBooking) {
+            const decision = chatPolicy.canJoinRoom(user, rawBooking);
+            if (!decision.allowed) {
+              console.warn(
+                `[SOCKET_SECURITY] Unauthorized room join: User ${user.id} (${user.role}) attempted to join booking ${bookingId}`
+              );
+              const response: SocketAckResponse = {
+                success: false,
+                code: "FORBIDDEN",
+                message: decision.reason || "Forbidden: Not an authorized participant of this booking",
+              };
+              socket.emit("error", response);
+              callback?.(response);
+              return;
+            }
+            booking = rawBooking;
+          }
+        }
+
+        if (!booking) {
+          const response: SocketAckResponse = {
+            success: false,
+            code: "RESOURCE_NOT_FOUND",
+            message: "Booking not found",
+          };
+          socket.emit("error", response);
+          callback?.(response);
+          return;
+        }
+
+        const roomName = getBookingChatRoom(bookingId);
+        socket.join(roomName);
+        callback?.({
+          success: true,
+          message: `Joined booking room: ${roomName}`,
+        });
+      } catch (err: any) {
+        console.error(`[SOCKET] Error processing join:booking:`, err.message);
+        callback?.({
+          success: false,
+          code: "INTERNAL_ERROR",
+          message: "Failed to join booking room",
+        });
       }
-    );
+    };
+
+    socket.on("join:booking", handleJoinBooking);
+    socket.on("join:chat", handleJoinBooking);
 
     // ========================================================================
     // 6. Secure "chat:message" Handler
@@ -320,11 +334,29 @@ export function registerSocketHandlers(io: Server): void {
         try {
           const { bookingId, content } = payload || {};
 
-          if (!bookingId || !content || content.trim().length === 0) {
+          if (
+            !bookingId ||
+            typeof bookingId !== "string" ||
+            !isValidIdentifier(bookingId) ||
+            !content ||
+            typeof content !== "string" ||
+            content.trim().length === 0
+          ) {
             const response: SocketAckResponse = {
               success: false,
               code: "INVALID_REQUEST",
-              message: "bookingId and content are required",
+              message: "Valid bookingId and non-empty content are required",
+            };
+            socket.emit("error", response);
+            callback?.(response);
+            return;
+          }
+
+          if (content.trim().length > 2000) {
+            const response: SocketAckResponse = {
+              success: false,
+              code: "INVALID_REQUEST",
+              message: "Message content cannot exceed 2000 characters",
             };
             socket.emit("error", response);
             callback?.(response);
@@ -335,21 +367,28 @@ export function registerSocketHandlers(io: Server): void {
           const rawMessage = await chatService.sendMessage(bookingId, user.id, content.trim(), user);
           const message = toChatMessageDTO(rawMessage);
 
-          // Broadcast to authorized booking room
-          io.to(`booking:${bookingId}`).emit("chat:message", message);
+          // Broadcast to authorized canonical booking room
+          io.to(getBookingChatRoom(bookingId)).emit("chat:message", message);
 
           callback?.({ success: true, data: message });
         } catch (err: any) {
           console.warn(`[SOCKET] Chat message failed for user ${user.id}:`, err.message);
           const isForbidden =
-            err instanceof AuthorizationError ||
-            err.code === "NOT_PARTICIPANT" ||
-            err.message === "Unauthorized" ||
-            err.message?.includes("Forbidden");
+            err instanceof AuthorizationError
+              ? err.statusCode === 403
+              : err.code === "NOT_PARTICIPANT" ||
+                err.message === "Unauthorized" ||
+                err.message?.includes("Forbidden");
+
+          const isNotFound =
+            err instanceof AuthorizationError
+              ? err.statusCode === 404
+              : err.code === "RESOURCE_NOT_FOUND" ||
+                err.message === "Booking not found";
 
           const response: SocketAckResponse = {
             success: false,
-            code: isForbidden ? "FORBIDDEN" : (err.code || "INTERNAL_ERROR"),
+            code: isForbidden ? "FORBIDDEN" : (isNotFound ? "RESOURCE_NOT_FOUND" : (err.code || "INTERNAL_ERROR")),
             message: err.message || "Failed to send message",
           };
           socket.emit("error", response);

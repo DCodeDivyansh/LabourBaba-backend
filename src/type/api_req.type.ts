@@ -10,6 +10,7 @@ import {
   CreatePaymentReqSchema,
   CreateReviewReqSchema,
   SendMessageReqSchema,
+  SendChatMessageBodySchema,
   UpdateWorkerLocationReqSchema,
   UploadWorkerDocumentReqSchema,
   SignupCustomerReqSchema,
@@ -38,6 +39,7 @@ export type VerifyOtpReq = z.infer<typeof VerifyOtpReqSchema>;
 export type CreatePaymentReq = z.infer<typeof CreatePaymentReqSchema>;
 export type CreateReviewReq = z.infer<typeof CreateReviewReqSchema>;
 export type SendMessageReq = z.infer<typeof SendMessageReqSchema>;
+export type SendChatMessageBody = z.infer<typeof SendChatMessageBodySchema>;
 export type UpdateWorkerLocationReq = z.infer<typeof UpdateWorkerLocationReqSchema>;
 export type UploadWorkerDocumentReq = z.infer<typeof UploadWorkerDocumentReqSchema>;
 export type SignupCustomerReq = z.infer<typeof SignupCustomerReqSchema>;

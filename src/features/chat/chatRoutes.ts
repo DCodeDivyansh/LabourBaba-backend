@@ -2,8 +2,9 @@ import express from "express";
 import { getMessages, sendMessage } from "../../features/chat/chatController";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
-import { MessageSchema } from "../../schemas";
+import { MessageSchema, BookingIdParamSchema, SendChatMessageBodySchema } from "../../schemas";
 import { authenticateJWT } from "../../middlewares/authMiddleware";
+import { validateParams, validateBody } from "../../middlewares/validationMiddleware";
 
 const router = express.Router();
 
@@ -26,7 +27,19 @@ registry.registerPath({
   responses: { 201: { description: "Created", content: { "application/json": { schema: z.object({ success: z.boolean(), data: MessageSchema }) } } } }
 });
 
-router.get("/:bookingId/messages", authenticateJWT, getMessages);
-router.post("/:bookingId/messages", authenticateJWT, sendMessage);
+router.get(
+  "/:bookingId/messages",
+  authenticateJWT,
+  validateParams(BookingIdParamSchema),
+  getMessages
+);
+
+router.post(
+  "/:bookingId/messages",
+  authenticateJWT,
+  validateParams(BookingIdParamSchema),
+  validateBody(SendChatMessageBodySchema),
+  sendMessage
+);
 
 export default router;

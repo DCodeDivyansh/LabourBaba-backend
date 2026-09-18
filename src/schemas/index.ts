@@ -231,6 +231,17 @@ export const SendMessageReqSchema = z.object({
   content: z.string().min(1, "Message content cannot be empty"),
 }).openapi("SendMessageReq");
 
+/**
+ * SendChatMessageBodySchema:
+ * Used for POST /api/chat/:bookingId/messages.
+ * Authoritative sender identity is strictly derived server-side from req.user.id.
+ * Target booking identity is derived from the URL path parameter :bookingId.
+ * Client-supplied sender_id, customer_id, worker_id, booking_id, conversation_id are strictly rejected.
+ */
+export const SendChatMessageBodySchema = z.object({
+  content: z.string().trim().min(1, "Message content cannot be empty").max(2000, "Message content cannot exceed 2000 characters"),
+}).strict().openapi("SendChatMessageBody");
+
 export const UpdateWorkerLocationReqSchema = z.object({
   latitude: z.number({ message: "Latitude must be a valid number" })
     .finite("Latitude must be a finite number")
@@ -379,7 +390,7 @@ export const UpdateDeviceTokenReqSchema = z.object({
 
 const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-const isValidIdentifier = (val: string, prefix?: string): boolean => {
+export const isValidIdentifier = (val: string, prefix?: string): boolean => {
   if (uuidRegex.test(val)) return true;
   if (prefix && new RegExp(`^${prefix}-[\\w-]+$`).test(val)) return true;
   return false;

@@ -1,105 +1,142 @@
 import prisma from "../../config/prisma";
-import { SendMessageReq } from "../../type/api_req.type";
-import { chatPolicy, assertPolicy, AuthenticatedUser, UserRole } from "../../policies";
+import { chatPolicy, assertPolicy, AuthenticatedUser, AuthorizationError } from "../../policies";
+
+export interface BookingParticipantContext {
+  customer_id: string;
+  worker_id: string;
+}
 
 export const chatService = {
-  async getOrCreateConversation(bookingId: string) {
-    const booking = await prisma.booking.findUnique({
-      where: { id: bookingId }
-    });
-    if (!booking) throw new Error("Booking not found");
+  /**
+   * Resolves existing conversation or creates one for the booking.
+   * Accepts pre-authorized booking context to eliminate redundant database queries.
+   */
+  async getOrCreateConversation(bookingId: string, bookingContext?: BookingParticipantContext) {
+    let context = bookingContext;
+
+    if (!context) {
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        select: { customer_id: true, worker_id: true },
+      });
+      if (!booking) {
+        throw new AuthorizationError("Booking not found", 404, "RESOURCE_NOT_FOUND");
+      }
+      context = booking;
+    }
 
     let conversation = await prisma.conversation.findFirst({
-      where: { booking_id: bookingId }
+      where: { booking_id: bookingId },
     });
 
     if (!conversation) {
       conversation = await prisma.conversation.create({
         data: {
           booking_id: bookingId,
-          customer_id: booking.customer_id,
-          worker_id: booking.worker_id
-        }
+          customer_id: context.customer_id,
+          worker_id: context.worker_id,
+        },
       });
     }
 
     return conversation;
   },
 
+  /**
+   * Retrieves chat message history for an authorized participant.
+   * Pushes down participant query scoping to PostgreSQL and evaluates chatPolicy.
+   */
   async getMessages(bookingId: string, actor?: AuthenticatedUser) {
+    if (!actor) {
+      throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
+    }
+
     let booking: any = null;
-    if (actor && prisma.booking.findFirst) {
-      const scopeWhere = actor.role === UserRole.ADMIN
-        ? { id: bookingId }
-        : actor.role === UserRole.CUSTOMER
-        ? { id: bookingId, customer_id: actor.id }
-        : { id: bookingId, worker_id: actor.id };
+
+    // 1. Query-level pushdown authorization
+    if (prisma.booking.findFirst) {
       booking = await prisma.booking.findFirst({
-        where: scopeWhere,
+        where: chatPolicy.scopeBooking(actor, bookingId),
         select: { id: true, customer_id: true, worker_id: true },
       });
     }
 
+    // 2. Mock / fallback resolution with explicit policy assertion
     if (!booking && prisma.booking.findUnique) {
-      booking = await prisma.booking.findUnique({
+      const rawBooking = await prisma.booking.findUnique({
         where: { id: bookingId },
         select: { id: true, customer_id: true, worker_id: true },
       });
-      if (booking && actor) {
-        assertPolicy(chatPolicy.canReadConversation(actor, booking));
+      if (rawBooking) {
+        assertPolicy(chatPolicy.canReadConversation(actor, rawBooking));
+        booking = rawBooking;
       }
     }
 
-    if (!booking) throw new Error("Booking not found");
+    if (!booking) {
+      throw new AuthorizationError("Booking not found", 404, "RESOURCE_NOT_FOUND");
+    }
 
-    const conversation = await this.getOrCreateConversation(bookingId);
+    const conversation = await this.getOrCreateConversation(bookingId, booking);
+
     return await prisma.message.findMany({
       where: { conversation_id: conversation.id },
-      orderBy: { sent_at: "asc" }
+      orderBy: { sent_at: "asc" },
     });
   },
 
-  async sendMessage(bookingId: string, senderId: string, content: string, actor?: AuthenticatedUser) {
+  /**
+   * Sends a chat message to an authorized booking conversation.
+   * Enforces server-derived authoritative sender identity from actor.id.
+   * Client-supplied sender IDs are strictly ignored and cannot override actor.id.
+   */
+  async sendMessage(
+    bookingId: string,
+    senderId: string,
+    content: string,
+    actor?: AuthenticatedUser
+  ) {
+    if (!actor) {
+      throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
+    }
+
     let booking: any = null;
-    if (actor && prisma.booking.findFirst) {
-      const scopeWhere = actor.role === UserRole.ADMIN
-        ? { id: bookingId }
-        : actor.role === UserRole.CUSTOMER
-        ? { id: bookingId, customer_id: actor.id }
-        : { id: bookingId, worker_id: actor.id };
+
+    // 1. Query-level pushdown authorization
+    if (prisma.booking.findFirst) {
       booking = await prisma.booking.findFirst({
-        where: scopeWhere,
+        where: chatPolicy.scopeBooking(actor, bookingId),
         select: { id: true, customer_id: true, worker_id: true },
       });
     }
 
+    // 2. Mock / fallback resolution with explicit policy assertion
     if (!booking && prisma.booking.findUnique) {
-      booking = await prisma.booking.findUnique({
+      const rawBooking = await prisma.booking.findUnique({
         where: { id: bookingId },
         select: { id: true, customer_id: true, worker_id: true },
       });
-      if (booking && actor) {
-        assertPolicy(chatPolicy.canSendMessage(actor, booking));
+      if (rawBooking) {
+        assertPolicy(chatPolicy.canSendMessage(actor, rawBooking));
+        booking = rawBooking;
       }
     }
 
-    if (!booking) throw new Error("Booking not found");
-
-    if (!actor) {
-      if (booking.worker_id !== senderId && booking.customer_id !== senderId) {
-        throw new Error("Forbidden: Not an authorized participant of this conversation");
-      }
+    if (!booking) {
+      throw new AuthorizationError("Booking not found", 404, "RESOURCE_NOT_FOUND");
     }
 
-    const conversation = await this.getOrCreateConversation(bookingId);
+    const conversation = await this.getOrCreateConversation(bookingId, booking);
+
+    // NON-NEGOTIABLE: Authoritative sender identity is ALWAYS actor.id
     const message = await prisma.message.create({
       data: {
         conversation_id: conversation.id,
-        sender_id: senderId,
-        content: content
-      }
+        sender_id: actor.id,
+        content: content.trim(),
+      },
     });
 
     return message;
-  }
+  },
 };
