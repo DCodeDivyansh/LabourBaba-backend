@@ -58,6 +58,7 @@ model booking {
   payment         payment?
   review          review[]
 
+  @@unique([requirement_id, worker_id], map: "uniq_booking_requirement_worker")
   @@index([customer_id], map: "idx_booking_customer")
   @@index([job_id], map: "idx_booking_job")
   @@index([worker_id], map: "idx_booking_worker")
@@ -85,12 +86,20 @@ model job {
 }
 
 model payment {
-  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  booking_id        String  @unique @db.Uuid
-  razorpay_order_id String? @unique @db.VarChar(255)
-  status            String? @db.VarChar(30)
-  amount            Int?
-  booking           booking @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payment_booking")
+  id                  String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  booking_id          String  @unique @db.Uuid
+  razorpay_order_id   String? @unique @db.VarChar(255)
+  /// Razorpay payment entity ID — populated by webhook after payment capture.
+  /// Null until provider confirms actual money movement.
+  razorpay_payment_id String? @db.VarChar(255)
+  status              String? @db.VarChar(30)
+  /// Amount in paise (Indian smallest currency unit). rate_per_day (rupees) × 100.
+  amount              Int?
+  /// ISO 4217 currency code. Always INR for LabourBaba.
+  currency            String  @default("INR") @db.VarChar(10)
+  /// Idempotency key = booking_id. Enforces one payment order per booking.
+  idempotency_key     String? @unique @db.VarChar(255)
+  booking             booking @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payment_booking")
 }
 
 model review {
@@ -264,3 +273,20 @@ model spatial_ref_sys {
   srtext    String? @db.VarChar(2048)
   proj4text String? @db.VarChar(2048)
 }
+
+model otp_challenge {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone         String    @db.VarChar(20)
+  purpose       String    @db.VarChar(50)
+  otp_hash      String    @db.VarChar(255)
+  expires_at    DateTime  @db.Timestamptz(6)
+  attempt_count Int       @default(0)
+  status        String    @default("ACTIVE") @db.VarChar(20)
+  consumed_at   DateTime? @db.Timestamptz(6)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([phone, purpose], map: "idx_otp_challenge_phone_purpose")
+  @@index([expires_at], map: "idx_otp_challenge_expires_at")
+  @@map("otp_challenge")
+}
+

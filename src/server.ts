@@ -68,9 +68,27 @@ app.use(
   })
 );
 
-// these are the midewares that are used in the app, they are used to parse the request body and log the requests
-app.use(express.json());
+
+// Extend Express Request to carry the raw body buffer for webhook signature verification.
+// This is set by the express.json verify callback below.
+declare global {
+  namespace Express {
+    interface Request {
+      rawBody?: Buffer;
+    }
+  }
+}
+
+// these are the middlewares that are used in the app, they are used to parse the request body and log the requests.
+// The `verify` callback captures the exact raw bytes before JSON parsing — required for
+// Razorpay webhook HMAC-SHA256 verification (see paymentRoutes.ts and paymentServices.ts).
+app.use(express.json({
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  },
+}));
 app.use(logs());
+
 
 app.use((req, res, next) => {
   if (req.url.startsWith("/socket.io")) {
@@ -112,57 +130,14 @@ io.engine.on("connection_error", (err) => {
   console.log(err.context);
 });
 
-io.on("connection", (socket) => {
-  console.log(`Socket Connected: ${socket.id}`);
+import { socketAuthMiddleware } from "./socket/socketAuth";
+import { registerSocketHandlers } from "./socket/socketHandlers";
 
-  socket.on("join:worker", (workerId: string) => {
-    socket.join(`worker:${workerId}`);
-    console.log(`Worker ${workerId} joined room`);
-  });
+// Authenticate handshake using JWT access token & database principal resolution
+io.use(socketAuthMiddleware);
 
-  socket.on("join:customer", (customerId: string) => {
-    socket.join(`customer:${customerId}`);
-    console.log(`Customer ${customerId} joined room`);
-  });
-
-  socket.on(
-    "worker:location_update",
-    async ({
-      workerId,
-      customerId,
-      lat,
-      lng,
-    }: {
-      workerId: string;
-      customerId: string;
-      lat: number;
-      lng: number;
-    }) => {
-      // BUG FIX: this previously emitted to the literal room name
-      // "customer:CUSTOMER_ID" (a hardcoded string, not a variable),
-      // so the location update never reached any real customer.
-      // The worker app now needs to send `customerId` in this event's
-      // payload (the active job's customer) so we can target the
-      // correct room.
-      if (!customerId) {
-        console.warn(
-          `worker:location_update from worker ${workerId} missing customerId; dropping event`
-        );
-        return;
-      }
-
-      io.to(`customer:${customerId}`).emit("worker:location", {
-        workerId,
-        lat,
-        lng,
-      });
-    }
-  );
-
-  socket.on("disconnect", () => {
-    console.log(`Socket Disconnected: ${socket.id}`);
-  });
-});
+// Register authoritative, role-guarded socket event handlers
+registerSocketHandlers(io);
 
 /**
  * Routes
@@ -217,8 +192,17 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
+import { assertJwtConfig, assertProductionAuthConfig } from "./config/authConfig";
+import { assertProductionPaymentConfig } from "./config/paymentConfig";
+
 async function startServer() {
   try {
+    // 1. Fail-fast configuration gatekeepers (JWT security & production provider checks)
+    assertJwtConfig();
+    assertProductionAuthConfig();
+    assertProductionPaymentConfig();
+
+
     await prisma.$connect();
 
     console.log("Database Connected");
@@ -228,8 +212,8 @@ async function startServer() {
       console.log("Allowed Origins:");
       console.table(allowedOrigins);
     });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    console.error("[STARTUP ERROR]", err.message || err);
     await prisma.$disconnect();
     process.exit(1);
   }
@@ -245,4 +229,4 @@ process.on("SIGTERM", async () => {
   httpServer.close(() => process.exit(0));
 });
 
-export { app, io };
+export { app, io, httpServer };

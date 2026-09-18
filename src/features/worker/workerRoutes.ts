@@ -1,7 +1,7 @@
 import express from "express";
 import { registerWorker, loginWorker, getMe, updateMe, updateLocation, updateOnline, uploadDocuments, getDocuments, getAnalytics, getBookings, getEarnings } from "../../features/worker/workerController";
 import { validateBody } from "../../middlewares/validationMiddleware";
-import { authenticateJWT } from "../../middlewares/authMiddleware";
+import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
 import { CreateWorkerReqSchema, LoginWorkerReqSchema, UpdateWorkerProfileReqSchema, UpdateWorkerLocationReqSchema, UpdateWorkerOnlineStatusReqSchema, UploadWorkerDocumentReqSchema, WorkerSchema, WorkerLocationSchema, WorkerDocumentSchema, WorkerAnalyticsSchema, BookingSchema } from "../../schemas";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
@@ -31,36 +31,16 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/workers/login",
-  summary: "Worker login with phone and password",
+  summary: "Login with phone + password",
   tags: ["Workers"],
   request: { body: { content: { "application/json": { schema: LoginWorkerReqSchema } } } },
-  responses: {
-    200: {
-      description: "Success",
-      content: {
-        "application/json": {
-          schema: z.object({
-            success: z.boolean(),
-            message: z.string(),
-            data: z.object({
-              id: z.string().uuid(),
-              phone: z.string(),
-              name: z.string(),
-              skill_type: z.string(),
-              verification_status: z.string().nullable().optional(),
-            }),
-            token: z.string(),
-          }),
-        },
-      },
-    },
-  },
+  responses: { 200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), token: z.string(), data: z.any() }) } } } }
 });
 
 registry.registerPath({
   method: "get",
   path: "/api/workers/me",
-  summary: "Get own profile",
+  summary: "Own profile",
   tags: ["Workers"],
   responses: { 200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: WorkerSchema }) } } } }
 });
@@ -77,10 +57,19 @@ registry.registerPath({
 registry.registerPath({
   method: "patch",
   path: "/api/workers/me/location",
-  summary: "Update GPS coordinates",
+  summary: "Update worker GPS coordinates (worker self-service)",
+  description: "Updates current geographic coordinates and location history for the authenticated worker. Identity is derived exclusively from the authenticated access token.",
   tags: ["Workers"],
+  security: [{ bearerAuth: [] }],
   request: { body: { content: { "application/json": { schema: UpdateWorkerLocationReqSchema } } } },
-  responses: { 200: { description: "Success" } }
+  responses: {
+    200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: z.any() }) } } },
+    400: { description: "Validation error, invalid coordinate bounds, or client-supplied identity rejected" },
+    401: { description: "Unauthorized: Missing or invalid token" },
+    403: { description: "Forbidden: Worker role required" },
+    404: { description: "Worker not found or deactivated" },
+    500: { description: "Internal server error" },
+  },
 });
 
 registry.registerPath({
@@ -137,7 +126,7 @@ router.post("/registerWorker", validateBody(CreateWorkerReqSchema), registerWork
 router.post("/login", validateBody(LoginWorkerReqSchema), loginWorker);
 router.get("/me", authenticateJWT, getMe);
 router.patch("/me", authenticateJWT, validateBody(UpdateWorkerProfileReqSchema), updateMe);
-router.patch("/me/location", authenticateJWT, validateBody(UpdateWorkerLocationReqSchema), updateLocation);
+router.patch("/me/location", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UpdateWorkerLocationReqSchema), updateLocation);
 router.patch("/me/online", authenticateJWT, validateBody(UpdateWorkerOnlineStatusReqSchema), updateOnline);
 router.post("/me/documents", authenticateJWT, validateBody(UploadWorkerDocumentReqSchema), uploadDocuments);
 router.get("/me/documents", authenticateJWT, getDocuments);

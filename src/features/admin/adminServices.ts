@@ -1,17 +1,21 @@
 import prisma from "../../config/prisma";
 import { VerifyWorkerDocumentReq, SuspendWorkerReq } from "../../type/api_req.type";
+import {
+  workerAdminSelect,
+  toWorkerAdminDTO,
+  customerSummarySelect,
+  toCustomerSummaryDTO,
+} from "../../shared/prismaSelects";
 
 export const adminService = {
   async getWorkers() {
-    return await prisma.worker.findMany({
-      include: {
-        worker_document: true
-      }
+    const workers = await prisma.worker.findMany({
+      select: workerAdminSelect,
     });
+    return workers.map(toWorkerAdminDTO);
   },
 
   async verifyWorkerDocument(workerId: string, payload: VerifyWorkerDocumentReq) {
-    // Mock updating the worker verification status based on the document
     return await prisma.$transaction(async (tx) => {
       // Find pending documents
       const docs = await tx.worker_document.findMany({
@@ -27,37 +31,54 @@ export const adminService = {
 
       // Update worker overall status
       const workerStatus = payload.status === "VERIFIED" ? "verified" : "rejected";
-      return await tx.worker.update({
+      const updated = await tx.worker.update({
         where: { id: workerId },
-        data: { verification_status: workerStatus }
+        data: { verification_status: workerStatus },
+        select: workerAdminSelect,
       });
+      return toWorkerAdminDTO(updated);
     });
   },
 
   async getAllJobs() {
-    return await prisma.job.findMany({
-      include: { customer: true, category: true, job_requirement: true }
+    const jobs = await prisma.job.findMany({
+      include: {
+        customer: {
+          select: customerSummarySelect,
+        },
+        job_requirement: true,
+      }
+    });
+    return jobs.map((job: any) => {
+      const j = { ...job };
+      if (j.customer) {
+        j.customer = toCustomerSummaryDTO(j.customer);
+      }
+      return j;
     });
   },
 
   async getFlaggedWorkers() {
     // High decline or timeout count logic
-    return await prisma.worker.findMany({
+    const workers = await prisma.worker.findMany({
       where: {
         OR: [
           { decline_count: { gt: 5 } },
           { timeout_count: { gt: 5 } }
         ]
-      }
+      },
+      select: workerAdminSelect,
     });
+    return workers.map(toWorkerAdminDTO);
   },
 
   async suspendWorker(workerId: string, payload: SuspendWorkerReq) {
-    // Implementation of suspension might just be setting verification_status or a new status column
-    // For this mock, we use a deleted_at soft delete, or we can just return success
-    return await prisma.worker.update({
+    const updated = await prisma.worker.update({
       where: { id: workerId },
-      data: { verification_status: "suspended", deleted_at: new Date() }
+      data: { verification_status: "suspended", deleted_at: new Date() },
+      select: workerAdminSelect,
     });
+    return toWorkerAdminDTO(updated);
   }
 };
+

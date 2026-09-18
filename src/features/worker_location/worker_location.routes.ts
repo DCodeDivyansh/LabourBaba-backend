@@ -2,15 +2,18 @@ import express from "express";
 import { UpdateWorkerLocationReqSchema } from "../../schemas";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
-import { authenticateJWT } from "../../middlewares/authMiddleware";
+import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
+import { validateBody } from "../../middlewares/validationMiddleware";
 import { addLocation } from "./worker_location.controller";
 
 // Register POST /api/worker_location/add
 registry.registerPath({
   method: "post",
   path: "/api/worker_location/add",
-  summary: "Update/Add worker location",
+  summary: "Update/Add worker location (worker self-service)",
+  description: "Updates current geographic location and historical log for the authenticated worker. Identity is derived exclusively from req.user.id. Client-supplied identity fields are rejected.",
   tags: ["Worker Location"],
+  security: [{ bearerAuth: [] }],
   request: {
     body: {
       content: {
@@ -32,6 +35,18 @@ registry.registerPath({
         },
       },
     },
+    400: {
+      description: "Validation error, invalid coordinate bounds, or client-supplied identity field rejected",
+    },
+    401: {
+      description: "Unauthorized: Missing or invalid JWT",
+    },
+    403: {
+      description: "Forbidden: Only workers can update worker location",
+    },
+    404: {
+      description: "Worker not found or account is deactivated",
+    },
     500: {
       description: "Internal server error",
     },
@@ -39,5 +54,12 @@ registry.registerPath({
 });
 
 const workerLocationRoute = express.Router();
-workerLocationRoute.post("/add", authenticateJWT, addLocation)
+workerLocationRoute.post(
+  "/add",
+  authenticateJWT,
+  requireRole(UserRole.WORKER),
+  validateBody(UpdateWorkerLocationReqSchema),
+  addLocation
+);
+
 export default workerLocationRoute;

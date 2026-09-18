@@ -3,117 +3,93 @@ import prisma from '../config/prisma';
 import { redisConnectionOptions, timeoutQueue, dispatchQueue } from '../config/bullmq';
 import { sendFCMNotification } from '../shared/fcm';
 import { io } from '../server';
+import {
+  getEligibleDispatchCandidates,
+  getWaveRadiusMeters,
+  validateDispatchCoordinates,
+  EligibleWorkerCandidate,
+} from '../features/dispatch/dispatchCandidate.service';
+
 const WAVE_TIMEOUT_MS = 30_000; // 30 seconds
 
-interface DispatchJobData {
+export interface DispatchJobData {
   requirementId: string;
   jobId: string;
   waveNumber?: number;
   offset?: number;
 }
 
-interface NearbyWorker {
-  id: string;
-  name: string | null;
-  device_token: string | null;
-  worker_score: number;
-  dist_m: number;
-}
+export type NearbyWorker = EligibleWorkerCandidate;
 
-const dispatchWorker = new Worker<DispatchJobData>(
-  'dispatch',
-  async (job: Job<DispatchJobData>) => {
-    const { requirementId, jobId, waveNumber = 1, offset = 0 } = job.data;
-    console.log(requirementId)
-    console.log(
-      `[dispatchWorker] Processing requirement=${requirementId} wave=${waveNumber} offset=${offset}`,
-    );
+export async function processDispatchJob(data: DispatchJobData): Promise<void> {
+  const { requirementId, jobId, waveNumber = 1, offset = 0 } = data;
+  console.log(
+    `[dispatchWorker] Processing requirement=${requirementId} wave=${waveNumber} offset=${offset}`,
+  );
 
-    // 1. Fetch requirement + parent job for coordinates
-    const req = await prisma.job_requirement.findUnique({
-      where: { id: requirementId },
-      include: {
-        job: {
-          include: {
-            customer: true,
+  // 1. Fetch requirement + parent job for coordinates
+  const req = await prisma.job_requirement.findUnique({
+    where: { id: requirementId },
+    include: {
+      job: {
+        include: {
+          customer: {
+            select: { name: true },
           },
         },
       },
+    },
+  });
+  if (!req) {
+    console.warn(`[dispatchWorker] Requirement ${requirementId} not found — skipping`);
+    return;
+  }
+  const tag = `[dispatch][${req.skill_type}][wave${waveNumber}]`;
+  console.log(`${tag} START — requirementId: ${requirementId}`);
+
+  // Already filled — nothing to do
+  if (req.status === 'filled') {
+    console.log(`[dispatchWorker] Requirement ${requirementId} already filled — skipping`);
+    return;
+  }
+
+  // Explicit coordinate validation (reject null, undefined, NaN, Infinity, out of bounds; allow 0,0)
+  if (!validateDispatchCoordinates(req.job.latitude, req.job.longitude)) {
+    console.warn(`[dispatchWorker] Job ${jobId} missing or invalid coordinates — cannot dispatch`, {
+      latitude: req.job.latitude,
+      longitude: req.job.longitude,
     });
-    console.log("req", req)
-    if (!req) {
-      console.warn(`[dispatchWorker] Requirement ${requirementId} not found — skipping`);
-      return;
-    }
-    const tag = `[dispatch][${req.skill_type}][wave${waveNumber}]`;
-    // console.log(tag)
-    console.log(`${tag} START — requirementId: ${requirementId}`);
-    // Already filled — nothing to do
-    if (req.status === 'filled') {
-      console.log(`[dispatchWorker] Requirement ${requirementId} already filled — skipping`);
-      return;
-    }
+    await prisma.job_requirement.update({
+      where: { id: requirementId },
+      data: { status: 'no_workers_available' },
+    });
+    return;
+  }
 
-    if (!req.job.latitude || !req.job.longitude) {
-      console.warn(`[dispatchWorker] Job ${jobId} missing coordinates — cannot dispatch`);
-      await prisma.job_requirement.update({
-        where: { id: requirementId },
-        data: { status: 'no_workers_available' },
-      });
-      return;
-    }
+  // 2. Authoritative PostGIS query — nearby online, verified, fresh workers matching skill within wave radius
+  const radiusMeters = getWaveRadiusMeters(waveNumber);
+  const workers = await getEligibleDispatchCandidates({
+    requirementId,
+    latitude: req.job.latitude,
+    longitude: req.job.longitude,
+    radiusMeters,
+    skillType: req.skill_type,
+    limit: 30,
+    offset,
+    excludeDispatched: true,
+  });
 
-    // 2. PostGIS query — nearby online workers matching skill, with offset for wave 2+
-    // const workers = await prisma.$queryRaw<NearbyWorker[]>`
-    //   SELECT w.id, w.name, w.device_token, w.worker_score::float,
-    //          ST_Distance(
-    //            w.location_geo,
-    //            ST_MakePoint(${req.job.longitude}, ${req.job.latitude})::geography
-    //          ) AS dist_m
-    //   FROM worker w
-    //   WHERE w.is_online = true
-    //     AND w.deleted_at IS NULL
-    //     AND w.skill_category_id = (
-    //           SELECT id FROM skill_category
-    //           WHERE name ILIKE ${req.skill_type ?? ''} LIMIT 1
-    //         )
-    //     AND ST_DWithin(
-    //           w.location_geo,
-    //           ST_MakePoint(${req.job.longitude}, ${req.job.latitude})::geography,
-    //           10000
-    //         )
-    //   ORDER BY w.worker_score DESC
-    //   LIMIT 30 OFFSET ${offset}
-    // `;
-    const workers = await prisma.$queryRaw<NearbyWorker[]>`
-      SELECT
-        w.id,
-        w.name,
-        w.device_token,
-        w.worker_score::float
-      FROM worker w
-      WHERE w.is_online = true
-        AND w.skill_category_id = (
-          SELECT id
-          FROM skill_category
-          WHERE name ILIKE ${req.skill_type}
-          LIMIT 1
-        )
-      ORDER BY w.worker_score DESC
-      LIMIT 30 OFFSET ${offset};
-    `;
-
-    console.log(workers);
-    console.log()
-    const totalWorkersFound = workers.length;
-    if (totalWorkersFound === 0) {
-      console.log(`[dispatchWorker] No workers found for requirement ${requirementId} at offset ${offset}`);
-      await prisma.job_requirement.update({
-        where: { id: requirementId },
-        data: { status: 'no_workers_available' },
-      });
-      return;
-    }
+  const totalWorkersFound = workers.length;
+  if (totalWorkersFound === 0) {
+    console.log(
+      `[dispatchWorker] No eligible workers found for requirement ${requirementId} in wave ${waveNumber} (radius: ${radiusMeters}m) at offset ${offset}`,
+    );
+    await prisma.job_requirement.update({
+      where: { id: requirementId },
+      data: { status: 'no_workers_available' },
+    });
+    return;
+  }
 
     // 3. Wave slice — up to (worker_count_needed * 2) workers per wave
     const waveSize = Math.min(req.worker_count_needed * 2, totalWorkersFound);
@@ -148,13 +124,18 @@ const dispatchWorker = new Worker<DispatchJobData>(
           console.error(`Failed to send FCM to worker ${w.id}:`, err);
         }
         try {
-          io.to(`worker:${w.id}`).emit('job:incoming', {
-            requirementId,
-            jobId,
-            skillType: req.skill_type,
-            ratePerDay: req.rate_per_day,
-            expiresAt,
-          });
+          if (io && typeof io.to === 'function') {
+            const socketRoom = io.to(`worker:${w.id}`);
+            if (socketRoom && typeof socketRoom.emit === 'function') {
+              socketRoom.emit('job:incoming', {
+                requirementId,
+                jobId,
+                skillType: req.skill_type,
+                ratePerDay: req.rate_per_day,
+                expiresAt,
+              });
+            }
+          }
         } catch (err) {
           console.error(`Failed to send socket event to worker ${w.id}:`, err);
         }
@@ -206,6 +187,12 @@ const dispatchWorker = new Worker<DispatchJobData>(
     console.log(
       `[dispatchWorker] Wave ${waveNumber} dispatched for requirement ${requirementId}. Timeout queued.`,
     );
+}
+
+const dispatchWorker = new Worker<DispatchJobData>(
+  'dispatch',
+  async (job: Job<DispatchJobData>) => {
+    await processDispatchJob(job.data);
   },
   {
     connection: redisConnectionOptions,

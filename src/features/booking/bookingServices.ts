@@ -1,15 +1,36 @@
 import prisma from "../../config/prisma";
 import { comparePassword } from "../../utils/authUtils";
 import { CancelBookingReq, ConfirmBookingCompleteReq } from "../../type/api_req.type";
+import {
+  bookingSafeSelect,
+  workerPublicSelect,
+  customerSummarySelect,
+  paymentSafeSelect,
+  toBookingDTO,
+} from "../../shared/prismaSelects";
 
 export const bookingService = {
   async getBookingDetail(bookingId: string) {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
-      include: { job: true, worker: true, customer: true, review: true, payment: true, job_requirement: true }
+      select: {
+        ...bookingSafeSelect,
+        job: true,
+        worker: {
+          select: workerPublicSelect,
+        },
+        customer: {
+          select: customerSummarySelect,
+        },
+        review: true,
+        payment: {
+          select: paymentSafeSelect,
+        },
+        job_requirement: true,
+      },
     });
     if (!booking) throw new Error("Booking not found");
-    return booking;
+    return toBookingDTO(booking);
   },
 
   async verifyOtp(bookingId: string, workerId: string, otp: string) {

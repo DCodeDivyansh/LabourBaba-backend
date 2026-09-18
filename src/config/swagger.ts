@@ -6,6 +6,14 @@ import { z } from "zod";
 // Create global OpenAPI registry
 export const registry = new OpenAPIRegistry();
 
+// Register Bearer Auth Security Scheme
+registry.registerComponent("securitySchemes", "bearerAuth", {
+  type: "http",
+  scheme: "bearer",
+  bearerFormat: "JWT",
+  description: "Enter JWT Bearer token in the format: Bearer <token>",
+});
+
 // Register the global Health Check endpoint
 registry.registerPath({
   method: "get",

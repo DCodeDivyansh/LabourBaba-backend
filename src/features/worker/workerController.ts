@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { workerService } from "./workerServices";
 import { CreateWorkerReq, LoginWorkerReq, UpdateWorkerProfileReq, UpdateWorkerLocationReq, UpdateWorkerOnlineStatusReq, UploadWorkerDocumentReq } from "../../type/api_req.type";
-import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
+import { AuthenticatedRequest, UserRole } from "../../middlewares/authMiddleware";
 import { comparePassword, generateToken } from "../../utils/authUtils";
 import prisma from "../../config/prisma";
 
@@ -27,7 +27,7 @@ export const loginWorker = async (req: Request, res: Response): Promise<void> =>
     const token = generateToken({
       id: worker.id,
       phone: worker.phone,
-      role: "worker",
+      role: UserRole.WORKER,
     });
     res.status(200).json({
       success: true,
@@ -41,7 +41,6 @@ export const loginWorker = async (req: Request, res: Response): Promise<void> =>
       },
       token,
     });
-    console.log(token)
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -83,14 +82,33 @@ export const updateMe = async (req: Request, res: Response): Promise<void> => {
 export const updateLocation = async (req: Request, res: Response): Promise<void> => {
   try {
     const workerId = getWorkerId(req);
-    if (!workerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
-    console.log(req.body)
+    if (!workerId) {
+      res.status(401).json({ success: false, message: "Unauthorized" });
+      return;
+    }
+
+    // Defense-in-depth: reject client-supplied identity in body, query, or params
+    if (
+      (req.body as any)?.worker_id ||
+      (req.body as any)?.workerId ||
+      (req.query as any)?.worker_id ||
+      (req.query as any)?.workerId ||
+      (req.params as any)?.worker_id ||
+      (req.params as any)?.workerId
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Client-controlled worker identity is not permitted",
+      });
+      return;
+    }
+
     const payload: UpdateWorkerLocationReq = req.body;
     const location = await workerService.updateLocation(workerId, payload);
     res.status(200).json({ success: true, data: location });
   } catch (error: any) {
-    console.log(error.message)
-    res.status(500).json({ success: false, message: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ success: false, message: error.message });
   }
 };
 

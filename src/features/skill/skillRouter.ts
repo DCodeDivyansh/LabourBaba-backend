@@ -2,7 +2,7 @@ import express from "express";
 import { getSkills, addSkills } from "./skillControllers"
 import { SkillCategorySchema, SkillCategorySchemaReqSchema } from "../../schemas";
 import { validateBody } from "../../middlewares/validationMiddleware";
-import { authenticateJWT } from "../../middlewares/authMiddleware";
+import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
 
@@ -32,8 +32,9 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/api/skill/add",
-  summary: "Create a new skill category",
+  summary: "Create a new skill category (Admin only)",
   tags: ["Skills"],
+  security: [{ bearerAuth: [] }],
   request: {
     body: {
       content: {
@@ -58,6 +59,12 @@ registry.registerPath({
     400: {
       description: "Validation failed",
     },
+    401: {
+      description: "Unauthorized",
+    },
+    403: {
+      description: "Forbidden - Admin role required",
+    },
     500: {
       description: "Internal server error",
     },
@@ -67,6 +74,6 @@ registry.registerPath({
 
 const skillRoute = express.Router();
 skillRoute.get("/", getSkills)
-skillRoute.post("/add", authenticateJWT, validateBody(SkillCategorySchemaReqSchema), addSkills)
+skillRoute.post("/add", authenticateJWT, requireRole(UserRole.ADMIN), validateBody(SkillCategorySchemaReqSchema), addSkills)
 
 export default skillRoute
