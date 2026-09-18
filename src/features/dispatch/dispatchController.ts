@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { dispatchService } from "./dispatchServices";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
 import { UserRole } from "../../type/userRole";
+import { AuthorizationError } from "../../policies";
 
 const getWorkerId = (req: Request): string | null => {
   const authReq = req as AuthenticatedRequest;
@@ -119,9 +120,18 @@ export const declineJob = async (req: Request, res: Response): Promise<void> => 
 export const getWaves = async (req: Request, res: Response): Promise<void> => {
   try {
     const { requirementId } = req.params as any;
-    const waves = await dispatchService.getWaves(requirementId);
+    const actor = (req as AuthenticatedRequest).user;
+    const waves = await dispatchService.getWaves(requirementId, actor);
     res.status(200).json({ success: true, data: waves });
   } catch (error: any) {
+    if (error instanceof AuthorizationError) {
+      res.status(error.status).json({ success: false, message: error.message });
+      return;
+    }
+    if (error.message === "Requirement not found") {
+      res.status(404).json({ success: false, message: "Requirement not found" });
+      return;
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };

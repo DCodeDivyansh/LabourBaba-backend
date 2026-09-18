@@ -5,6 +5,7 @@ import { generateOTP, hashOTP } from '../../utils/authUtils';
 import { Prisma } from '@prisma/client';
 import { io } from '../../server';
 import { customerSummarySelect, bookingSafeSelect, toDispatchDTO, toWorkerPublicDTO, toDispatchWaveDTO } from '../../shared/prismaSelects';
+import { PolicyActor, AuthorizationError, UserRole } from '../../policies';
 
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
@@ -424,8 +425,24 @@ export const getDispatchDetail = async (requirementId: string, workerId: string)
 };
 
 // ── Get Waves (for a requirement) ────────────────────────────────────────────
+export const getWaves = async (requirementId: string, actor?: PolicyActor) => {
+  if (actor) {
+    const req = await prisma.job_requirement.findUnique({
+      where: { id: requirementId },
+      include: {
+        job: { select: { customer_id: true } },
+      },
+    });
+    if (!req) throw new Error("Requirement not found");
+    if (actor.role === UserRole.CUSTOMER) {
+      if (req.job?.customer_id !== actor.id) {
+        throw new AuthorizationError("Requirement not found", 404, "RESOURCE_NOT_FOUND");
+      }
+    } else if (actor.role !== UserRole.ADMIN) {
+      throw new AuthorizationError("Requirement not found", 404, "RESOURCE_NOT_FOUND");
+    }
+  }
 
-export const getWaves = async (requirementId: string) => {
   const waves = await prisma.dispatch_wave.findMany({
     where: { requirement_id: requirementId },
     orderBy: { wave_number: 'asc' },
@@ -448,7 +465,7 @@ export const dispatchService = {
     acceptDispatch(requirementId, workerId),
   declineJob: (requirementId: string, workerId: string) =>
     declineDispatch(requirementId, workerId),
-  getWaves: (requirementId: string) => getWaves(requirementId),
+  getWaves: (requirementId: string, actor?: PolicyActor) => getWaves(requirementId, actor),
   getDispatchDetail: (requirementId: string, workerId: string) =>
     getDispatchDetail(requirementId, workerId), // ⬅ NEW
 };

@@ -2,7 +2,7 @@ import prisma from '../../config/prisma';
 import { CreateJobReq } from '../../type/api_req.type';
 import { dispatchJobSimple } from '../dispatch/simpleDispatch';
 import { bookingSafeSelect } from '../../shared/prismaSelects';
-import { jobPolicy, assertPolicy, AuthenticatedUser, PolicyActor } from '../../policies';
+import { jobPolicy, assertPolicy, AuthenticatedUser, PolicyActor, AuthorizationError, UserRole } from '../../policies';
 // BullMQ import kept for reference — uncomment to switch back:
 // import { dispatchQueue } from '../config/bullmq'
 
@@ -72,39 +72,45 @@ export const jobService = {
   },
 
   async getJobDetail(jobId: string, actor?: AuthenticatedUser) {
+    if (!actor) {
+      throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
+    }
     const job = await prisma.job.findUnique({
       where: { id: jobId },
       include: {
         booking: { select: { worker_id: true } },
-        job_requirement: { include: { job_dispatch: true } }
-      }
+        job_requirement: { include: { job_dispatch: true } },
+      },
     });
     if (!job) throw new Error("Job not found");
-    if (actor) {
-      assertPolicy(jobPolicy.canRead(actor, job));
-    }
+    assertPolicy(jobPolicy.canRead(actor, job));
     return job;
   },
 
   async cancelJob(jobId: string, customerId: string, actor?: PolicyActor) {
+    const effectiveActor: PolicyActor = actor || (customerId ? {
+      id: customerId,
+      role: UserRole.CUSTOMER,
+      phone: "",
+    } : undefined as any);
+
+    if (!effectiveActor) {
+      throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
+    }
     return await prisma.$transaction(async (tx) => {
       const job = await tx.job.findUnique({ where: { id: jobId } });
       if (!job) throw new Error("Job not found");
-      if (actor) {
-        assertPolicy(jobPolicy.canCancel(actor, job));
-      } else {
-        if (job.customer_id !== customerId) throw new Error("Forbidden: You do not own this job");
-      }
+      assertPolicy(jobPolicy.canCancel(effectiveActor, job));
       if (job.status === "COMPLETED") throw new Error("Cannot cancel a completed job");
 
       await tx.job.update({
         where: { id: jobId },
-        data: { status: "CANCELLED" }
+        data: { status: "CANCELLED" },
       });
 
       await tx.job_requirement.updateMany({
         where: { job_id: jobId },
-        data: { status: "CANCELLED" }
+        data: { status: "CANCELLED" },
       });
 
       // Also cancel pending dispatches
@@ -112,7 +118,7 @@ export const jobService = {
       for (const r of reqs) {
         await tx.job_dispatch.updateMany({
           where: { requirement_id: r.id, status: "PENDING" },
-          data: { status: "CANCELLED" }
+          data: { status: "CANCELLED" },
         });
       }
 
@@ -121,27 +127,49 @@ export const jobService = {
   },
 
   async getJobRequirements(jobId: string, actor?: PolicyActor) {
-    if (actor) {
-      const job = await prisma.job.findUnique({ where: { id: jobId } });
-      if (!job) throw new Error("Job not found");
-      assertPolicy(jobPolicy.canRead(actor, job));
+    if (!actor) {
+      throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
     }
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      include: {
+        booking: { select: { worker_id: true } },
+        job_requirement: { include: { job_dispatch: true } },
+      },
+    });
+    if (!job) throw new Error("Job not found");
+    assertPolicy(jobPolicy.canRead(actor, job));
+
     return await prisma.job_requirement.findMany({
-      where: { job_id: jobId }
+      where: { job_id: jobId },
     });
   },
 
   async getJobBookings(jobId: string, actor?: PolicyActor) {
-    if (actor) {
-      const job = await prisma.job.findUnique({ where: { id: jobId } });
-      if (!job) throw new Error("Job not found");
-      assertPolicy(jobPolicy.canReadBookings(actor, job));
+    if (!actor) {
+      throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
     }
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      include: {
+        booking: { select: { worker_id: true } },
+        job_requirement: { include: { job_dispatch: true } },
+      },
+    });
+    if (!job) throw new Error("Job not found");
+    assertPolicy(jobPolicy.canReadBookings(actor, job));
+
     // Only select safe, displayable worker fields — never the password
     // hash or other sensitive data — since this is what the customer's
     // website renders directly as "worker details" once a booking exists.
+    // If called by a worker, scope strictly to their own booking.
+    const whereClause: any = { job_id: jobId };
+    if (actor.role === UserRole.WORKER) {
+      whereClause.worker_id = actor.id;
+    }
+
     const bookings = await prisma.booking.findMany({
-      where: { job_id: jobId },
+      where: whereClause,
       select: {
         ...bookingSafeSelect,
         worker: {

@@ -147,3 +147,22 @@ export const createJobRequirement = async (req: Request, res: Response): Promise
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+export const getRequirementDetail = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { jobId, requirementId } = req.params as any;
+    const actor = (req as AuthenticatedRequest).user;
+    const requirement = await jobReqService.getRequirementDetail(jobId, requirementId, actor);
+    res.status(200).json({ success: true, data: toJobRequirementDTO(requirement) });
+  } catch (error: any) {
+    if (error instanceof AuthorizationError) {
+      res.status(error.status).json({ success: false, message: error.message });
+      return;
+    }
+    if (error.message === "Job not found" || error.message === "Requirement not found") {
+      res.status(404).json({ success: false, message: "Requirement not found" });
+      return;
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
