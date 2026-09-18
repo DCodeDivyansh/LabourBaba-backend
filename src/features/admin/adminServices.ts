@@ -40,8 +40,10 @@ export const adminService = {
     });
   },
 
-  async getAllJobs() {
+  async getAllJobs(customerId?: string) {
+    const whereClause = customerId ? { customer_id: customerId } : undefined;
     const jobs = await prisma.job.findMany({
+      where: whereClause,
       include: {
         customer: {
           select: customerSummarySelect,

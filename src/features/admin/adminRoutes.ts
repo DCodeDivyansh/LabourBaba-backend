@@ -42,9 +42,10 @@ registry.registerPath({
 registry.registerPath({
   method: "get",
   path: "/api/admin/jobs",
-  summary: "All jobs across platform (Admin only)",
+  summary: "All jobs across platform with optional customer search filter (Admin only)",
   tags: ["Admin"],
   security: [{ bearerAuth: [] }],
+  parameters: [{ in: "query", name: "customer_id", required: false, schema: { type: "string", format: "uuid" }, description: "Optional filter by customer ID" }],
   responses: {
     200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: z.array(JobSchema) }) } } },
     401: { description: "Unauthorized - Missing or invalid token" },

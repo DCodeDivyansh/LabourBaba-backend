@@ -29,10 +29,11 @@ export const verifyWorker = async (req: Request, res: Response): Promise<void> =
 
 export const getAllJobs = async (req: Request, res: Response): Promise<void> => {
   try {
-    const jobs = await adminService.getAllJobs();
+    const customerId = typeof req.query.customer_id === "string" ? req.query.customer_id : undefined;
+    const jobs = await adminService.getAllJobs(customerId);
     res.status(200).json({ success: true, data: jobs });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
 
