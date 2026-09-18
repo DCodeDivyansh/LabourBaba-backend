@@ -17,11 +17,21 @@ import {
 } from "./paymentServices";
 import { RazorpayProviderError } from "../../providers/razorpay/razorpayProvider";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
+import { AuthorizationError } from "../../policies";
 import { toPaymentDTO } from "../../shared/prismaSelects";
 
 // ── Helper: map domain errors to HTTP responses ────────────────────────────────
 
 function handlePaymentError(error: unknown, res: Response): void {
+  if (error instanceof AuthorizationError) {
+    res.status(error.status).json({
+      success: false,
+      code: error.code || "PAYMENT_NOT_AUTHORIZED",
+      message: error.message,
+    });
+    return;
+  }
+
   if (error instanceof PaymentError) {
     res.status(error.statusCode).json({
       success: false,
@@ -130,17 +140,17 @@ export const handleWebhookHandler = async (
 
 /**
  * GET /api/payments/:bookingId
- * Requires: CUSTOMER role
+ * Requires: CUSTOMER or ADMIN role
  */
 export const getPaymentStatusHandler = async (
   req: AuthenticatedRequest,
   res: Response,
 ): Promise<void> => {
   try {
-    const customerId = req.user!.id;
+    const actor = req.user!;
     const { bookingId } = req.params as any;
 
-    const payment = await getPaymentStatus(bookingId, customerId);
+    const payment = await getPaymentStatus(bookingId, actor);
     res.status(200).json({ success: true, data: toPaymentDTO(payment) });
   } catch (error) {
     handlePaymentError(error, res);
@@ -151,17 +161,17 @@ export const getPaymentStatusHandler = async (
 
 /**
  * POST /api/payments/:bookingId/refund
- * Requires: CUSTOMER role
+ * Requires: CUSTOMER or ADMIN role
  */
 export const refundPaymentHandler = async (
   req: AuthenticatedRequest,
   res: Response,
 ): Promise<void> => {
   try {
-    const customerId = req.user!.id;
+    const actor = req.user!;
     const { bookingId } = req.params as any;
 
-    const result = await refundPayment(bookingId, customerId);
+    const result = await refundPayment(bookingId, actor);
     res.status(200).json(result);
   } catch (error) {
     handlePaymentError(error, res);

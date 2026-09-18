@@ -604,8 +604,12 @@ export interface BookingSafeDTO {
   job_requirement?: JobRequirementDTO | null;
 }
 
-export function toBookingDTO(b: any): BookingSafeDTO | null {
+export function toBookingDTO(b: any, actor?: any): BookingSafeDTO | null {
   if (!b) return null;
+  const isWorker =
+    typeof actor === "object" &&
+    actor !== null &&
+    (String(actor.role).toLowerCase() === "worker");
   return {
     id: b.id,
     job_id: b.job_id,
@@ -620,7 +624,7 @@ export function toBookingDTO(b: any): BookingSafeDTO | null {
     worker: b.worker ? toWorkerPublicDTO(b.worker) : undefined,
     customer: b.customer ? toCustomerSummaryDTO(b.customer) : undefined,
     review: b.review ? toReviewDTO(b.review) : undefined,
-    payment: b.payment ? toPaymentDTO(b.payment) : undefined,
+    payment: isWorker || !b.payment ? undefined : toPaymentDTO(b.payment),
     job_requirement: b.job_requirement ? toJobRequirementDTO(b.job_requirement) : undefined,
   };
 }

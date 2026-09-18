@@ -377,8 +377,10 @@ export const UpdateDeviceTokenReqSchema = z.object({
   device_token: z.string().min(1),
 });
 
+const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 const isValidIdentifier = (val: string, prefix?: string): boolean => {
-  if (z.string().uuid().safeParse(val).success) return true;
+  if (uuidRegex.test(val)) return true;
   if (prefix && new RegExp(`^${prefix}-[\\w-]+$`).test(val)) return true;
   return false;
 };
@@ -407,3 +409,21 @@ export const JobAndRequirementIdParamSchema = z.object({
     { message: "Invalid requirementId format: must be a valid UUID" }
   ),
 });
+
+export const BookingIdParamSchema = z.object({
+  bookingId: z.string().refine(
+    (val) => isValidIdentifier(val, "booking"),
+    { message: "Invalid bookingId format: must be a valid UUID" }
+  ),
+});
+
+export const PaymentIdParamSchema = z.object({
+  paymentId: z.string().refine(
+    (val) => isValidIdentifier(val, "pay"),
+    { message: "Invalid paymentId format: must be a valid UUID" }
+  ),
+});
+
+export const VerifyBookingOtpReqSchema = z.object({
+  otp: z.string().regex(/^\d{6}$/, "OTP must be exactly 6 digits"),
+}).openapi("VerifyBookingOtpReq");

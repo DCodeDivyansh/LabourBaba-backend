@@ -10,10 +10,15 @@ import {
   toBookingDTO,
   toWorkerLocationDTO,
 } from "../../shared/prismaSelects";
-import { bookingPolicy, assertPolicy, AuthenticatedUser } from "../../policies";
+import { bookingPolicy, assertPolicy, AuthenticatedUser, AuthorizationError, UserRole } from "../../policies";
 
 export const bookingService = {
   async getBookingDetail(bookingId: string, actor?: AuthenticatedUser) {
+    if (!actor) {
+      throw new AuthorizationError("Authentication required to view booking", 401);
+    }
+
+    const isWorker = actor.role === UserRole.WORKER;
     const selectClause = {
       ...bookingSafeSelect,
       job: true,
@@ -24,7 +29,7 @@ export const bookingService = {
         select: customerSummarySelect,
       },
       review: true,
-      payment: {
+      payment: isWorker ? false : {
         select: paymentSafeSelect,
       },
       job_requirement: true,
@@ -33,38 +38,56 @@ export const bookingService = {
     let booking: any = null;
 
     // Direct database-level scoped query
-    if (actor && prisma.booking.findFirst) {
+    if (prisma.booking.findFirst) {
       booking = await prisma.booking.findFirst({
         where: bookingPolicy.scopeRead(actor, bookingId),
         select: selectClause,
       });
     }
 
-    // Fallback for mock setups or direct lookups
+    // Fallback for mock setups where test specifically mocked findUnique instead of findFirst
     if (!booking && prisma.booking.findUnique) {
-      booking = await prisma.booking.findUnique({
+      const candidate = await prisma.booking.findUnique({
         where: { id: bookingId },
         select: selectClause,
       });
-      if (booking && actor) {
-        assertPolicy(bookingPolicy.canRead(actor, booking));
+      if (candidate) {
+        const decision = bookingPolicy.canRead(actor, candidate);
+        if (!decision.allowed) {
+          throw new AuthorizationError(
+            decision.reason || "Booking not found",
+            decision.statusCode || 404,
+            decision.code
+          );
+        }
+        booking = candidate;
       }
     }
 
-    if (!booking) throw new Error("Booking not found");
-    return toBookingDTO(booking);
+    if (!booking) throw new AuthorizationError("Booking not found", 404);
+    return toBookingDTO(booking, actor);
   },
 
   async verifyOtp(bookingId: string, workerId: string, otp: string, actor?: AuthenticatedUser) {
     return await prisma.$transaction(async (tx) => {
-      const booking = tx.booking.findUnique
-        ? await tx.booking.findUnique({ where: { id: bookingId } })
-        : await tx.booking.findFirst({ where: { id: bookingId } });
-      if (!booking) throw new Error("Booking not found");
+      const effectiveWorkerId = actor?.role === UserRole.WORKER ? actor.id : workerId;
+      const scopeWhere = actor?.role === UserRole.ADMIN
+        ? { id: bookingId }
+        : { id: bookingId, worker_id: effectiveWorkerId };
+
+      let booking = tx.booking.findFirst
+        ? await tx.booking.findFirst({ where: scopeWhere })
+        : null;
+
+      if (!booking && tx.booking.findUnique) {
+        booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      }
+
+      if (!booking) throw new AuthorizationError("Booking not found", 404);
       if (actor) {
         assertPolicy(bookingPolicy.canVerifyOtp(actor, booking));
       } else {
-        if (booking.worker_id !== workerId) throw new Error("Booking not found for this worker");
+        if (booking.worker_id !== workerId) throw new AuthorizationError("Forbidden: You are not assigned to this booking", 403);
       }
       if (!booking.otp_hash || !(await comparePassword(otp, booking.otp_hash))) {
         throw new Error("Invalid OTP");
@@ -81,19 +104,27 @@ export const bookingService = {
 
   async completeBooking(bookingId: string, workerId: string, actor?: AuthenticatedUser) {
     return await prisma.$transaction(async (tx) => {
-      const booking = tx.booking.findUnique
-        ? await tx.booking.findUnique({ where: { id: bookingId } })
-        : await tx.booking.findFirst({ where: { id: bookingId } });
-      if (!booking) throw new Error("Booking not found");
+      const effectiveWorkerId = actor?.role === UserRole.WORKER ? actor.id : workerId;
+      const scopeWhere = actor?.role === UserRole.ADMIN
+        ? { id: bookingId }
+        : { id: bookingId, worker_id: effectiveWorkerId };
+
+      let booking = tx.booking.findFirst
+        ? await tx.booking.findFirst({ where: scopeWhere })
+        : null;
+
+      if (!booking && tx.booking.findUnique) {
+        booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      }
+
+      if (!booking) throw new AuthorizationError("Booking not found", 404);
       if (actor) {
         assertPolicy(bookingPolicy.canComplete(actor, booking));
       } else {
-        if (booking.worker_id !== workerId) throw new Error("Booking not found for this worker");
+        if (booking.worker_id !== workerId) throw new AuthorizationError("Forbidden: You are not assigned to this booking", 403);
       }
       if (booking.status !== "IN_PROGRESS") throw new Error("Booking is not in progress");
 
-      // In real scenario, wait for customer confirmation. We mark it as COMPLETED here or AWAITING_CONFIRM
-      // For this spec, we just set it to COMPLETED
       await tx.booking.update({
         where: { id: bookingId },
         data: { status: "COMPLETED" }
@@ -105,14 +136,24 @@ export const bookingService = {
 
   async confirmComplete(bookingId: string, customerId: string, payload: ConfirmBookingCompleteReq, actor?: AuthenticatedUser) {
     return await prisma.$transaction(async (tx) => {
-      const booking = tx.booking.findUnique
-        ? await tx.booking.findUnique({ where: { id: bookingId } })
-        : await tx.booking.findFirst({ where: { id: bookingId } });
-      if (!booking) throw new Error("Booking not found");
+      const effectiveCustomerId = actor?.role === UserRole.CUSTOMER ? actor.id : customerId;
+      const scopeWhere = actor?.role === UserRole.ADMIN
+        ? { id: bookingId }
+        : { id: bookingId, customer_id: effectiveCustomerId };
+
+      let booking = tx.booking.findFirst
+        ? await tx.booking.findFirst({ where: scopeWhere })
+        : null;
+
+      if (!booking && tx.booking.findUnique) {
+        booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      }
+
+      if (!booking) throw new AuthorizationError("Booking not found", 404);
       if (actor) {
         assertPolicy(bookingPolicy.canConfirmCompletion(actor, booking));
       } else {
-        if (booking.customer_id !== customerId) throw new Error("Booking not found");
+        if (booking.customer_id !== customerId) throw new AuthorizationError("Forbidden: You do not own this booking", 403);
       }
 
       if (payload.rating) {
@@ -125,13 +166,12 @@ export const bookingService = {
             data: {
               booking_id: bookingId,
               worker_id: booking.worker_id,
-              customer_id: customerId,
+              customer_id: effectiveCustomerId,
               rating: payload.rating,
               comment: payload.comment
             }
           });
         } catch (err: any) {
-          // If a review already exists (e.g. repeated confirmation request), do not fail the confirmation
           if (isReviewUniqueConstraintError(err)) {
             // Idempotent retry: review already exists for this booking, safely ignore
           } else {
@@ -146,15 +186,29 @@ export const bookingService = {
 
   async cancelBooking(bookingId: string, userId: string, payload: CancelBookingReq, actor?: AuthenticatedUser) {
     return await prisma.$transaction(async (tx) => {
-      const booking = tx.booking.findUnique
-        ? await tx.booking.findUnique({ where: { id: bookingId } })
-        : await tx.booking.findFirst({ where: { id: bookingId } });
-      if (!booking) throw new Error("Booking not found");
+      const scopeWhere = actor
+        ? (actor.role === UserRole.ADMIN
+            ? { id: bookingId }
+            : actor.role === UserRole.CUSTOMER
+            ? { id: bookingId, customer_id: actor.id }
+            : { id: bookingId, worker_id: actor.id })
+        : { id: bookingId };
+
+      let booking = tx.booking.findFirst
+        ? await tx.booking.findFirst({ where: scopeWhere })
+        : null;
+
+      if (!booking && tx.booking.findUnique) {
+        booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      }
+
+      if (!booking) throw new AuthorizationError("Booking not found", 404);
+
       if (actor) {
         assertPolicy(bookingPolicy.canCancel(actor, booking));
       } else {
         if (booking.customer_id !== userId && booking.worker_id !== userId) {
-          throw new Error("Forbidden: Not an authorized participant of this booking");
+          throw new AuthorizationError("Forbidden: Not an authorized participant of this booking", 403);
         }
       }
 
@@ -163,16 +217,38 @@ export const bookingService = {
         data: { status: "CANCELLED" }
       });
 
-      // Optionally re-open requirement or penalize worker based on who canceled
       return { success: true, message: "Booking cancelled" };
     });
   },
 
-  async getWorkerLocation(bookingId: string, customerId: string) {
+  async getWorkerLocation(bookingId: string, actor: AuthenticatedUser) {
+    if (!actor) {
+      throw new AuthorizationError("Unauthorized", 401);
+    }
+
+    const scopeWhere = actor.role === UserRole.ADMIN
+      ? { id: bookingId }
+      : { id: bookingId, customer_id: actor.id };
+
     const booking = await prisma.booking.findFirst({
-      where: { id: bookingId, customer_id: customerId }
+      where: scopeWhere,
     });
-    if (!booking) throw new Error("Booking not found");
+
+    if (!booking) {
+      // Check if booking exists under another user to distinguish 403 from 404
+      const anyBooking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+      });
+      if (anyBooking) {
+        throw new AuthorizationError(
+          "Forbidden: Only the booking customer can track worker location",
+          403
+        );
+      }
+      throw new AuthorizationError("Booking not found", 404);
+    }
+
+    assertPolicy(bookingPolicy.canGetWorkerLocation(actor, booking));
 
     const location = await prisma.worker_location.findFirst({
       where: { worker_id: booking.worker_id },

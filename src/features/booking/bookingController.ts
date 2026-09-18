@@ -137,11 +137,23 @@ export const cancelBooking = async (req: Request, res: Response): Promise<void> 
 export const getWorkerLocation = async (req: Request, res: Response): Promise<void> => {
   try {
     const { bookingId } = req.params as any;
-    const customerId = getUserId(req);
-    if (!customerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
-    const location = await bookingService.getWorkerLocation(bookingId, customerId);
+    const actor = (req as AuthenticatedRequest).user;
+    if (!actor) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+    const location = await bookingService.getWorkerLocation(bookingId, actor);
     res.status(200).json({ success: true, data: location });
   } catch (error: any) {
+    if (error instanceof AuthorizationError) {
+      res.status(error.status).json({ success: false, message: error.message });
+      return;
+    }
+    if (error.message?.includes("Forbidden") || error.message === "Unauthorized") {
+      res.status(403).json({ success: false, message: error.message });
+      return;
+    }
+    if (error.message === "Booking not found" || error.statusCode === 404) {
+      res.status(404).json({ success: false, message: "Booking not found" });
+      return;
+    }
     res.status(400).json({ success: false, message: error.message });
   }
 };

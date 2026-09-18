@@ -114,7 +114,7 @@ export const getJobBookings = async (req: Request, res: Response): Promise<void>
     const { jobId } = req.params as any;
     const actor = (req as AuthenticatedRequest).user;
     const bookings = await jobService.getJobBookings(jobId, actor);
-    res.status(200).json({ success: true, data: bookings.map(toBookingDTO).filter(Boolean) });
+    res.status(200).json({ success: true, data: bookings.map((b) => toBookingDTO(b, actor)).filter(Boolean) });
   } catch (error: any) {
     if (error instanceof AuthorizationError) {
       res.status(error.status).json({ success: false, message: error.message });

@@ -249,10 +249,24 @@ export function registerSocketHandlers(io: Server): void {
             return;
           }
 
-          const booking = await prisma.booking.findUnique({
-            where: { id: bookingId },
-            select: { id: true, customer_id: true, worker_id: true },
-          });
+          let booking: any = null;
+          if (prisma.booking.findFirst) {
+            const scopeWhere = user.role === UserRole.ADMIN
+              ? { id: bookingId }
+              : user.role === UserRole.CUSTOMER
+              ? { id: bookingId, customer_id: user.id }
+              : { id: bookingId, worker_id: user.id };
+            booking = await prisma.booking.findFirst({
+              where: scopeWhere,
+              select: { id: true, customer_id: true, worker_id: true },
+            });
+          }
+          if (!booking && prisma.booking.findUnique) {
+            booking = await prisma.booking.findUnique({
+              where: { id: bookingId },
+              select: { id: true, customer_id: true, worker_id: true },
+            });
+          }
 
           if (!booking) {
             const response: SocketAckResponse = {

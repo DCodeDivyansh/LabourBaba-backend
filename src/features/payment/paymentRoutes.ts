@@ -23,8 +23,8 @@ import {
   refundPaymentHandler,
 } from "./paymentController";
 import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
-import { validateBody } from "../../middlewares/validationMiddleware";
-import { CreatePaymentReqSchema, PaymentSchema } from "../../schemas";
+import { validateBody, validateParams } from "../../middlewares/validationMiddleware";
+import { CreatePaymentReqSchema, PaymentSchema, BookingIdParamSchema } from "../../schemas";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
 
@@ -167,27 +167,30 @@ router.post(
   "/:bookingId/create-order",
   authenticateJWT,
   requireRole(UserRole.CUSTOMER),
+  validateParams(BookingIdParamSchema),
   validateBody(CreatePaymentReqSchema),
   createOrderHandler,
 );
 
 /**
- * Get payment status — CUSTOMER only. Ownership enforced in service layer.
+ * Get payment status — CUSTOMER or ADMIN. Ownership enforced in service layer.
  */
 router.get(
   "/:bookingId",
   authenticateJWT,
-  requireRole(UserRole.CUSTOMER),
+  requireRole(UserRole.CUSTOMER, UserRole.ADMIN),
+  validateParams(BookingIdParamSchema),
   getPaymentStatusHandler,
 );
 
 /**
- * Refund — CUSTOMER only. Ownership + lifecycle enforced in service layer.
+ * Refund — CUSTOMER or ADMIN. Ownership + lifecycle enforced in service layer.
  */
 router.post(
   "/:bookingId/refund",
   authenticateJWT,
-  requireRole(UserRole.CUSTOMER),
+  requireRole(UserRole.CUSTOMER, UserRole.ADMIN),
+  validateParams(BookingIdParamSchema),
   refundPaymentHandler,
 );
 
