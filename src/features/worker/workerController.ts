@@ -5,6 +5,7 @@ import { AuthenticatedRequest, UserRole } from "../../middlewares/authMiddleware
 import { comparePassword, generateToken } from "../../utils/authUtils";
 import prisma from "../../config/prisma";
 import { workerPolicy, assertPolicy, AuthorizationError } from "../../policies";
+import { sessionService } from "../auth/session.service";
 
 const getWorkerId = (req: Request) => {
   return (req as AuthenticatedRequest).user?.id || null;
@@ -16,7 +17,7 @@ export const loginWorker = async (req: Request, res: Response): Promise<void> =>
     const worker = await prisma.worker.findUnique({
       where: { phone },
     });
-    if (!worker) {
+    if (!worker || worker.deleted_at) {
       res.status(401).json({ success: false, message: "Invalid phone number or password" });
       return;
     }
@@ -30,6 +31,15 @@ export const loginWorker = async (req: Request, res: Response): Promise<void> =>
       phone: worker.phone,
       role: UserRole.WORKER,
     });
+
+    // Create server-side refresh session
+    const sessionResult = await sessionService.createSession({
+      userId: worker.id,
+      userRole: UserRole.WORKER,
+      userAgent: req.headers["user-agent"],
+      ipAddress: req.ip,
+    });
+
     res.status(200).json({
       success: true,
       message: "Worker logged in successfully",
@@ -41,6 +51,7 @@ export const loginWorker = async (req: Request, res: Response): Promise<void> =>
         verification_status: worker.verification_status,
       },
       token,
+      refreshToken: sessionResult.rawToken,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });

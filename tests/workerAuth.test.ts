@@ -11,10 +11,25 @@ jest.mock("../src/config/prisma", () => ({
       create: jest.fn(),
       findUnique: jest.fn(),
     },
+    refresh_session: {
+      create: jest.fn().mockResolvedValue({
+        id: "mock-session-id",
+        family_id: "mock-family-id",
+        expires_at: new Date(Date.now() + 30 * 86400000),
+      }),
+    },
   },
 }));
 
 describe("Worker Authentication API Tests", () => {
+  beforeEach(() => {
+    ((prisma as any).refresh_session.create as jest.Mock).mockResolvedValue({
+      id: "c1b2c3d4-e5f6-4890-a234-56789abcdef0",
+      family_id: "family-uuid",
+      expires_at: new Date(Date.now() + 30 * 86400000),
+    });
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -101,6 +116,7 @@ describe("Worker Authentication API Tests", () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.token).toBeDefined();
+      expect(res.body.refreshToken).toBeDefined();
       expect(res.body.data).toEqual({
         id: mockWorker.id,
         phone: mockWorker.phone,

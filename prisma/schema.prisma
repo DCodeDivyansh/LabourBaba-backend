@@ -346,3 +346,49 @@ model otp_challenge {
   @@map("otp_challenge")
 }
 
+/// Server-side refresh session for authenticated users (workers, customers, admins).
+/// Enables stateful logout, token rotation with reuse detection, and multi-device management.
+///
+/// Token format returned to client (NEVER stored): <session_id>.<64-char-hex-secret>
+/// Only a bcrypt hash of the secret portion is persisted.
+///
+/// Status lifecycle:
+///   ACTIVE  → created on login; valid for use
+///   ROTATED → replaced by a new session via rotation; must never be reused
+///   REVOKED → invalidated by logout, admin action, or reuse detection
+///
+/// Concurrency guarantee:
+///   Rotation uses atomic UPDATE ... WHERE status='ACTIVE' RETURNING *
+///   so exactly one concurrent request can successfully rotate a given token.
+model refresh_session {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Polymorphic: points to Worker.id or customer.id depending on user_role.
+  user_id        String    @db.Uuid
+  /// Role of the session owner: worker | customer | admin
+  user_role      String    @db.VarChar(20)
+  /// bcrypt hash of the secret (right half of the opaque token). NEVER the raw secret.
+  token_hash     String    @db.VarChar(255)
+  /// Shared across all rotations of this session chain. Used for family revocation.
+  family_id      String    @db.Uuid
+  /// Physical device identifier, if supplied by the client.
+  device_id      String?   @db.VarChar(255)
+  /// HTTP User-Agent string for session management display.
+  user_agent     String?   @db.Text
+  /// Client IP address at session creation time.
+  ip_address     String?   @db.VarChar(50)
+  /// ACTIVE | ROTATED | REVOKED
+  status         String    @default("ACTIVE") @db.VarChar(20)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at     DateTime  @db.Timestamptz(6)
+  last_used_at   DateTime? @db.Timestamptz(6)
+  rotated_at     DateTime? @db.Timestamptz(6)
+  revoked_at     DateTime? @db.Timestamptz(6)
+  /// LOGOUT | REUSE | ADMIN | SUSPENDED
+  revoked_reason String?   @db.VarChar(50)
+
+  @@index([user_id, status], map: "idx_refresh_session_user_status")
+  @@index([family_id], map: "idx_refresh_session_family")
+  @@index([expires_at], map: "idx_refresh_session_expires_at")
+  @@index([status, expires_at], map: "idx_refresh_session_status_expires")
+  @@map("refresh_session")
+}

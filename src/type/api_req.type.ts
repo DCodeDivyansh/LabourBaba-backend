@@ -18,6 +18,8 @@ import {
   SendOtpReqSchema,
   AuthVerifyOtpReqSchema,
   RefreshTokenReqSchema,
+  LogoutReqSchema,
+  SessionDTOSchema,
   UpdateWorkerProfileReqSchema,
   UpdateWorkerOnlineStatusReqSchema,
   ConfirmBookingCompleteReqSchema,
@@ -54,6 +56,8 @@ export type LoginCustomerReq = z.infer<typeof LoginCustomerReqSchema>;
 export type SendOtpReq = z.infer<typeof SendOtpReqSchema>;
 export type AuthVerifyOtpReq = z.infer<typeof AuthVerifyOtpReqSchema>;
 export type RefreshTokenReq = z.infer<typeof RefreshTokenReqSchema>;
+export type LogoutReq = z.infer<typeof LogoutReqSchema>;
+export type SessionDTO = z.infer<typeof SessionDTOSchema>;
 export type UpdateWorkerProfileReq = z.infer<typeof UpdateWorkerProfileReqSchema>;
 export type UpdateWorkerOnlineStatusReq = z.infer<typeof UpdateWorkerOnlineStatusReqSchema>;
 export type ConfirmBookingCompleteReq = z.infer<typeof ConfirmBookingCompleteReqSchema>;

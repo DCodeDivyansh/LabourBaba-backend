@@ -43,6 +43,17 @@ jest.mock("../src/config/prisma", () => {
         updateMany: jest.fn(),
         deleteMany: jest.fn(),
       },
+      refresh_session: {
+        create: jest.fn().mockImplementation(async ({ data }: any) => ({
+          id: "a1b2c3d4-e5f6-4890-a234-56789abcdef0",
+          expires_at: data.expires_at || new Date(Date.now() + 30 * 86400000),
+          user_id: data.user_id,
+          user_role: data.user_role,
+        })),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
       $transaction: jest.fn(),
     },
   };
@@ -133,6 +144,12 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
 
     (prisma.customer.findUnique as jest.Mock).mockResolvedValue(TEST_CUSTOMER);
     (prisma.worker.findUnique as jest.Mock).mockResolvedValue(null);
+    ((prisma as any).refresh_session.create as jest.Mock).mockImplementation(async ({ data }: any) => ({
+      id: "a1b2c3d4-e5f6-4890-a234-56789abcdef0",
+      expires_at: data?.expires_at || new Date(Date.now() + 30 * 86400000),
+      user_id: data?.user_id,
+      user_role: data?.user_role,
+    }));
   }
 
   beforeEach(() => {
