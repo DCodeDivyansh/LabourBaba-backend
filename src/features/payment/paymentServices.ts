@@ -299,50 +299,158 @@ export async function createOrder(
 // ── handleWebhook ───────────────────────────────────────────────────────────────
 
 /**
+ * Webhook event lifecycle statuses for PaymentWebhookEvent.
+ * PROCESSING: Event has been atomically claimed; business transition is in progress.
+ * PROCESSED:  Business transition committed successfully.
+ * FAILED:     Processing failed after claim; event can be investigated/retried.
+ */
+const WebhookEventStatus = {
+  PROCESSING: "PROCESSING",
+  PROCESSED: "PROCESSED",
+  FAILED: "FAILED",
+} as const;
+
+/**
+ * Derives a stable, deterministic idempotency identity for a Razorpay webhook event.
+ *
+ * Identity scheme (documented in PaymentWebhookEvent schema model):
+ *   payment.captured → paymentEntityId (pay_xxx)
+ *     Razorpay reuses the same payment entity ID on retries of the same capture.
+ *   payment.failed   → orderId + ":failed"
+ *     Avoids colliding with a later successful capture on the same order (which
+ *     would have a different identity: pay_xxx from the captured event).
+ *   other events     → orderId + ":" + eventType
+ *     Deterministic fallback; orderId + type together uniquely identify the event.
+ *
+ * NOTE: This function must NOT use random values, request timestamps, or payload
+ * hashes as the primary identity — those are not stable across provider retries.
+ *
+ * @param eventType        Razorpay event string, e.g. "payment.captured"
+ * @param paymentEntityId  Razorpay payment ID (pay_xxx), may be absent on some events
+ * @param orderId          Razorpay order ID (order_xxx)
+ * @returns A non-empty deterministic string unique to this logical provider event.
+ */
+function deriveWebhookEventId(
+  eventType: string,
+  paymentEntityId: string | undefined,
+  orderId: string | undefined,
+): string | null {
+  if (eventType === "payment.captured" && paymentEntityId) {
+    // pay_xxx is stable: Razorpay retries reuse the same payment entity ID.
+    return paymentEntityId;
+  }
+  if (eventType === "payment.failed" && orderId) {
+    // Suffix ":failed" prevents collision with a later pay_xxx on the same order.
+    return `${orderId}:failed`;
+  }
+  if (orderId) {
+    // Generic fallback for other event types.
+    return `${orderId}:${eventType}`;
+  }
+  // No stable identity can be derived — cannot safely claim this event.
+  return null;
+}
+
+/**
+ * Returns true if the Prisma error is a unique-constraint violation (P2002).
+ * Used to detect that a concurrent or replayed webhook already claimed the event.
+ */
+function isPrismaUniqueConstraintError(err: unknown): boolean {
+  return (
+    (err as any)?.code === "P2002" ||
+    (err instanceof Error && err.message.includes("Unique constraint"))
+  );
+}
+
+/**
  * Processes a Razorpay webhook event.
  *
- * Security:
- * 1. Verifies HMAC-SHA256 signature on the raw body before JSON parsing.
- * 2. Associates the provider order/payment with the correct local payment record.
- * 3. Only COMPLETED after confirming local payment record and order ID match.
- * 4. Idempotent: repeated events with the same outcome produce no side effects.
+ * Security model:
  *
- * @param rawBody  Raw body string as received by Express (before JSON parsing).
- * @param signature  Value of X-Razorpay-Signature header.
+ * 1. FAIL-CLOSED on missing secret:
+ *    If RAZORPAY_WEBHOOK_SECRET is not configured, the event is acknowledged but
+ *    NO payment state is mutated. This is safe even in staging/development because
+ *    a missing secret could indicate misconfiguration rather than a legitimate
+ *    test environment. We never allow unauthenticated mutation of payment state.
+ *
+ * 2. Signature verification before parsing:
+ *    HMAC-SHA256 is verified against the exact raw request bytes (req.rawBody)
+ *    BEFORE the body is JSON-parsed or any field is read for business logic.
+ *    This enforces Invariants A–D from the Issue #12 remediation spec.
+ *
+ * 3. Database-backed idempotency (Invariant E, F):
+ *    A PaymentWebhookEvent row is atomically INSERTed with a unique constraint on
+ *    (provider, providerEventId). The INSERT and the payment update run inside a
+ *    single Prisma transaction, so either both commit or neither does. If the
+ *    INSERT fails with P2002 (duplicate), the event was already claimed — return 200
+ *    immediately without touching payment state.
+ *
+ * 4. Concurrency-safe payment transition (Invariant G):
+ *    payment.updateMany({ where: { id, status: PENDING } }) is used instead of
+ *    payment.update(). The affected-row count tells us definitively whether THIS
+ *    request performed the transition (1) or another request already did (0).
+ *    This eliminates the TOCTOU race between reading payment.status and updating it.
+ *
+ * 5. Atomic transaction boundary:
+ *    Both the webhook event claim and the payment status update are wrapped in a
+ *    single $transaction. A process crash before commit leaves no stale
+ *    PROCESSING record (the transaction rolls back automatically) and Razorpay
+ *    will redeliver the webhook, which will succeed on retry.
+ *
+ * @param rawBody   Buffer of exact request bytes — MUST NOT be JSON-parsed before calling.
+ * @param signature Value of the X-Razorpay-Signature header.
  */
 export async function handleWebhook(
   rawBody: string | Buffer,
   signature: string,
 ): Promise<{ success: boolean; message: string }> {
-  // ── Step 1: Verify signature ─────────────────────────────────────────────────
-  // Read at call time (not from cached paymentConfig) so test-time env overrides work.
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET ?? paymentConfig.razorpay.webhookSecret;
+  // ── Step 1: Obtain webhook secret ──────────────────────────────────────────
+  // Re-read from process.env at call time so test-time env overrides work.
+  const webhookSecret =
+    process.env.RAZORPAY_WEBHOOK_SECRET ?? paymentConfig.razorpay.webhookSecret;
 
   if (!webhookSecret) {
-    // In production this should never happen (assertProductionPaymentConfig blocks startup).
-    // In development, skip signature verification with a clear warning.
-    if (process.env.NODE_ENV === "production") {
-      console.error("[paymentService] RAZORPAY_WEBHOOK_SECRET is not set in production.");
-      return { success: false, message: "Webhook configuration error" };
-    }
+    // FAIL-CLOSED: Missing secret → acknowledge but do NOT mutate any state.
+    //
+    // Rationale: A missing secret in non-production is most likely a configuration
+    // error (e.g. staging not provisioned with the secret).  Silently processing
+    // webhooks without verification would leave a permanent unauthenticated
+    // payment-mutation endpoint.  The safer choice is to log and return 200 so
+    // Razorpay does not retry infinitely, while writing NO payment state.
+    //
+    // In production, server startup (assertProductionPaymentConfig) would have
+    // already blocked the process from starting with a missing secret.
     console.warn(
-      "[paymentService] RAZORPAY_WEBHOOK_SECRET is not set. Skipping signature verification (non-production only).",
+      "[paymentService][SECURITY] RAZORPAY_WEBHOOK_SECRET is not configured. " +
+        "Webhook acknowledged but NOT processed. No payment state was mutated. " +
+        "Configure RAZORPAY_WEBHOOK_SECRET to enable webhook processing.",
     );
-  } else {
-    const isValid = verifyWebhookSignature(rawBody, signature, webhookSecret);
-    if (!isValid) {
-      console.warn(
-        "[paymentService] Razorpay webhook signature verification failed.",
-      );
-      throw new PaymentError(
-        "Webhook signature verification failed.",
-        "WEBHOOK_INVALID_SIGNATURE",
-        401,
-      );
-    }
+    return { success: true, message: "Webhook acknowledged (not processed — secret not configured)" };
   }
 
-  // ── Step 2: Parse event ──────────────────────────────────────────────────────
+  // ── Step 2: Verify signature against raw body ────────────────────────────
+  // IMPORTANT: Verify the provider signature against the exact raw request bytes.
+  // Never reconstruct the signed payload from req.body because JSON parsing can
+  // alter whitespace, key ordering, or encoding — changing the byte representation
+  // used by Razorpay's HMAC-SHA256 signature scheme.
+  const isValid = verifyWebhookSignature(rawBody, signature, webhookSecret);
+  if (!isValid) {
+    // Log security event — do NOT log the secret, signature value, or payload.
+    console.warn(
+      "[paymentService][SECURITY] Razorpay webhook signature verification failed. " +
+        "Possible forged, tampered, or replayed request. " +
+        "No payment state was mutated.",
+    );
+    throw new PaymentError(
+      "Webhook signature verification failed.",
+      "WEBHOOK_INVALID_SIGNATURE",
+      401,
+    );
+  }
+
+  // ── Step 3: Parse verified payload ──────────────────────────────────────
+  // Parse only AFTER signature is confirmed valid. The payload is now trustworthy
+  // (authentic Razorpay bytes), though we still validate its structure.
   let event: any;
   try {
     const bodyStr =
@@ -358,137 +466,343 @@ export async function handleWebhook(
 
   const eventType: string = event?.event ?? "";
   const paymentEntity = event?.payload?.payment?.entity;
+  const razorpayOrderId: string | undefined = paymentEntity?.order_id;
+  const razorpayPaymentId: string | undefined = paymentEntity?.id;
+  const capturedAmount: number | undefined = paymentEntity?.amount;
+  const capturedCurrency: string | undefined = paymentEntity?.currency;
 
-  // ── Step 3: Dispatch event ───────────────────────────────────────────────────
+  // ── Step 4: Derive stable provider event identity ────────────────────────
+  // This identity is used as the idempotency key in the database.
+  // See deriveWebhookEventId() for the full identity scheme.
+  const providerEventId = deriveWebhookEventId(
+    eventType,
+    razorpayPaymentId,
+    razorpayOrderId,
+  );
+
+  if (!providerEventId) {
+    // Cannot derive a stable identity — acknowledge without state change.
+    console.warn(
+      `[paymentService] Webhook event '${eventType}' has no stable identity. ` +
+        "Acknowledged without state change.",
+    );
+    return { success: true, message: `Event '${eventType}' acknowledged (no stable identity)` };
+  }
+
+  // ── Step 5: Dispatch by event type ──────────────────────────────────────
 
   if (eventType === "payment.captured") {
-    const razorpayOrderId: string | undefined = paymentEntity?.order_id;
-    const razorpayPaymentId: string | undefined = paymentEntity?.id;
-    const capturedAmount: number | undefined = paymentEntity?.amount;
-    const capturedCurrency: string | undefined = paymentEntity?.currency;
-
-    if (!razorpayOrderId || !razorpayPaymentId) {
-      console.error(
-        "[paymentService] payment.captured event missing order_id or payment id.",
-        { eventType },
-      );
-      // Acknowledge to prevent Razorpay retrying, but do not mutate state
-      return { success: true, message: "Event acknowledged (missing identifiers)" };
-    }
-
-    // Find local payment by the provider order ID
-    const localPayment = await prisma.payment.findUnique({
-      where: { razorpay_order_id: razorpayOrderId },
+    return await processPaymentCaptured({
+      providerEventId,
+      eventType,
+      razorpayOrderId,
+      razorpayPaymentId,
+      capturedAmount,
+      capturedCurrency,
     });
-
-    if (!localPayment) {
-      console.error(
-        `[paymentService] payment.captured: no local payment found for Razorpay order ${razorpayOrderId}`,
-      );
-      return { success: true, message: "Event acknowledged (no matching payment)" };
-    }
-
-    // Validate amount and currency match ─────────────────────────────────────
-    if (
-      capturedAmount !== undefined &&
-      localPayment.amount !== null &&
-      capturedAmount !== localPayment.amount
-    ) {
-      console.error(
-        `[paymentService] AMOUNT MISMATCH on payment.captured: ` +
-          `local=${localPayment.amount}, provider=${capturedAmount}. ` +
-          `payment=${localPayment.id}, order=${razorpayOrderId}`,
-      );
-      // Do NOT mark as COMPLETED — flag for manual review
-      return {
-        success: true,
-        message: "Event acknowledged (amount mismatch — flagged for review)",
-      };
-    }
-
-    if (
-      capturedCurrency &&
-      localPayment.currency &&
-      capturedCurrency.toUpperCase() !== localPayment.currency.toUpperCase()
-    ) {
-      console.error(
-        `[paymentService] CURRENCY MISMATCH on payment.captured: ` +
-          `local=${localPayment.currency}, provider=${capturedCurrency}. ` +
-          `payment=${localPayment.id}`,
-      );
-      return {
-        success: true,
-        message: "Event acknowledged (currency mismatch — flagged for review)",
-      };
-    }
-
-    // Idempotency: if already COMPLETED, skip
-    if (localPayment.status === PaymentStatus.COMPLETED) {
-      console.info(
-        `[paymentService] payment.captured: payment ${localPayment.id} already COMPLETED — skipping.`,
-      );
-      return { success: true, message: "Payment already completed" };
-    }
-
-    // Persist COMPLETED + razorpay_payment_id
-    await prisma.payment.update({
-      where: { id: localPayment.id },
-      data: {
-        status: PaymentStatus.COMPLETED,
-        razorpay_payment_id: razorpayPaymentId,
-      },
-    });
-
-    console.info(
-      `[paymentService] Payment ${localPayment.id} marked COMPLETED. ` +
-        `razorpayPaymentId=${razorpayPaymentId}`,
-    );
-
-    return { success: true, message: "Payment captured" };
   }
 
   if (eventType === "payment.failed") {
-    const razorpayOrderId: string | undefined = paymentEntity?.order_id;
-
-    if (!razorpayOrderId) {
-      return { success: true, message: "Event acknowledged (missing order_id)" };
-    }
-
-    const localPayment = await prisma.payment.findUnique({
-      where: { razorpay_order_id: razorpayOrderId },
+    return await processPaymentFailed({
+      providerEventId,
+      eventType,
+      razorpayOrderId,
     });
-
-    if (!localPayment) {
-      return { success: true, message: "Event acknowledged (no matching payment)" };
-    }
-
-    // Idempotency: already in a terminal non-pending state
-    if (
-      localPayment.status === PaymentStatus.COMPLETED ||
-      localPayment.status === PaymentStatus.FAILED
-    ) {
-      console.info(
-        `[paymentService] payment.failed: payment ${localPayment.id} already in state '${localPayment.status}' — skipping.`,
-      );
-      return { success: true, message: `Payment already in state: ${localPayment.status}` };
-    }
-
-    await prisma.payment.update({
-      where: { id: localPayment.id },
-      data: { status: PaymentStatus.FAILED },
-    });
-
-    console.info(`[paymentService] Payment ${localPayment.id} marked FAILED.`);
-
-    return { success: true, message: "Payment failed" };
   }
 
-  // Unknown event — acknowledge safely without mutating any state
+  // Unknown event — acknowledge safely without mutating any state.
+  // We do NOT create a webhook event row for unknown events to avoid
+  // table pollution from unexpected Razorpay event types.
   console.info(
-    `[paymentService] Webhook received unknown event type: '${eventType}'. Acknowledged without state change.`,
+    `[paymentService] Webhook received unknown event type: '${eventType}'. ` +
+      "Acknowledged without state change.",
   );
   return { success: true, message: `Event '${eventType}' acknowledged` };
 }
+
+// ── processPaymentCaptured ───────────────────────────────────────────────────
+
+interface CapturedParams {
+  providerEventId: string;
+  eventType: string;
+  razorpayOrderId: string | undefined;
+  razorpayPaymentId: string | undefined;
+  capturedAmount: number | undefined;
+  capturedCurrency: string | undefined;
+}
+
+/**
+ * Handles payment.captured events with full idempotency and concurrency safety.
+ *
+ * Transaction boundary:
+ *   CREATE webhook event (PROCESSING)
+ *   → findUnique payment
+ *   → validate amount/currency
+ *   → updateMany payment WHERE status=PENDING
+ *   → UPDATE webhook event to PROCESSED/FAILED
+ *   COMMIT (atomic)
+ *
+ * If this process crashes before COMMIT, the transaction rolls back and Razorpay
+ * will redeliver the webhook.  The retry INSERT will succeed (no stale row),
+ * and processing begins again from scratch.
+ */
+async function processPaymentCaptured(params: CapturedParams): Promise<{ success: boolean; message: string }> {
+  const {
+    providerEventId,
+    eventType,
+    razorpayOrderId,
+    razorpayPaymentId,
+    capturedAmount,
+    capturedCurrency,
+  } = params;
+
+  if (!razorpayOrderId || !razorpayPaymentId) {
+    console.error(
+      "[paymentService] payment.captured event missing order_id or payment id.",
+      { eventType },
+    );
+    // Acknowledge to prevent Razorpay retrying, but do not mutate state.
+    return { success: true, message: "Event acknowledged (missing identifiers)" };
+  }
+
+  try {
+    // ── Atomic transaction: claim + validate + transition + mark processed ──
+    const result = await prisma.$transaction(async (tx) => {
+      // Step A: Atomically claim the webhook event.
+      // If P2002 fires, the catch block below handles it — never reaches here.
+      const webhookEvent = await tx.paymentWebhookEvent.create({
+        data: {
+          provider: "razorpay",
+          providerEventId,
+          eventType,
+          status: WebhookEventStatus.PROCESSING,
+        },
+      });
+
+      // Step B: Find local payment by provider order ID.
+      // Invariant G: A valid signature does not mean the event belongs to a known payment.
+      const localPayment = await tx.payment.findUnique({
+        where: { razorpay_order_id: razorpayOrderId },
+      });
+
+      if (!localPayment) {
+        // Unknown order — update event to FAILED and acknowledge.
+        await tx.paymentWebhookEvent.update({
+          where: { id: webhookEvent.id },
+          data: { status: WebhookEventStatus.FAILED, failureReason: "No matching local payment" },
+        });
+        console.error(
+          `[paymentService][SECURITY] payment.captured: no local payment found ` +
+            `for Razorpay order ${razorpayOrderId}. Event acknowledged without state change.`,
+        );
+        return { outcome: "no_match" as const, message: "Event acknowledged (no matching payment)" };
+      }
+
+      // Step C: Validate amount reconciliation (Invariant — amount safety).
+      if (
+        capturedAmount !== undefined &&
+        localPayment.amount !== null &&
+        capturedAmount !== localPayment.amount
+      ) {
+        await tx.paymentWebhookEvent.update({
+          where: { id: webhookEvent.id },
+          data: {
+            status: WebhookEventStatus.FAILED,
+            failureReason: `Amount mismatch: local=${localPayment.amount}, provider=${capturedAmount}`,
+          },
+        });
+        // Log a payment-integrity security event — do NOT include secrets or tokens.
+        console.error(
+          `[paymentService][SECURITY] AMOUNT MISMATCH on payment.captured: ` +
+            `local=${localPayment.amount}p, provider=${capturedAmount}p. ` +
+            `payment=${localPayment.id}, order=${razorpayOrderId}. ` +
+            "Payment NOT marked COMPLETED. Manual review required.",
+        );
+        return {
+          outcome: "amount_mismatch" as const,
+          message: "Event acknowledged (amount mismatch — flagged for review)",
+        };
+      }
+
+      // Step D: Validate currency reconciliation.
+      if (
+        capturedCurrency &&
+        localPayment.currency &&
+        capturedCurrency.toUpperCase() !== localPayment.currency.toUpperCase()
+      ) {
+        await tx.paymentWebhookEvent.update({
+          where: { id: webhookEvent.id },
+          data: {
+            status: WebhookEventStatus.FAILED,
+            failureReason: `Currency mismatch: local=${localPayment.currency}, provider=${capturedCurrency}`,
+          },
+        });
+        console.error(
+          `[paymentService][SECURITY] CURRENCY MISMATCH on payment.captured: ` +
+            `local=${localPayment.currency}, provider=${capturedCurrency}. ` +
+            `payment=${localPayment.id}. Payment NOT marked COMPLETED.`,
+        );
+        return {
+          outcome: "currency_mismatch" as const,
+          message: "Event acknowledged (currency mismatch — flagged for review)",
+        };
+      }
+
+      // Step E: Conditional atomic payment state transition.
+      // updateMany with WHERE status=PENDING is concurrency-safe:
+      //   count=1 → this transaction won the race and performed the transition.
+      //   count=0 → another request already transitioned; this is an idempotent duplicate.
+      // This eliminates the TOCTOU race between reading status and updating it.
+      const transitionResult = await tx.payment.updateMany({
+        where: {
+          id: localPayment.id,
+          status: PaymentStatus.PENDING,
+        },
+        data: {
+          status: PaymentStatus.COMPLETED,
+          razorpay_payment_id: razorpayPaymentId,
+        },
+      });
+
+      const transitioned = transitionResult.count > 0;
+
+      // Step F: Mark webhook event as PROCESSED within the same transaction.
+      await tx.paymentWebhookEvent.update({
+        where: { id: webhookEvent.id },
+        data: {
+          status: WebhookEventStatus.PROCESSED,
+          processedAt: new Date(),
+        },
+      });
+
+      if (transitioned) {
+        console.info(
+          `[paymentService] Payment ${localPayment.id} marked COMPLETED. ` +
+            `razorpayPaymentId=${razorpayPaymentId}`,
+        );
+        return { outcome: "completed" as const, message: "Payment captured" };
+      } else {
+        // Payment was already in a non-PENDING state (COMPLETED, FAILED, REFUNDED).
+        // This is idempotent: log and acknowledge.
+        console.info(
+          `[paymentService] payment.captured: payment ${localPayment.id} ` +
+            `is not in PENDING state — already transitioned. Idempotent acknowledge.`,
+        );
+        return { outcome: "already_transitioned" as const, message: "Payment already completed" };
+      }
+    });
+
+    return { success: true, message: result.message };
+  } catch (error) {
+    if (isPrismaUniqueConstraintError(error)) {
+      // P2002: The (provider, providerEventId) unique constraint fired.
+      // This exact provider event was already claimed — safe duplicate delivery.
+      console.info(
+        `[paymentService] Duplicate webhook event received: ` +
+          `provider=razorpay, eventId=${providerEventId}. ` +
+          "Returning idempotent 200 without state change.",
+      );
+      return { success: true, message: "Duplicate event — already processed" };
+    }
+    // Unexpected error — rethrow to surface as 500.
+    throw error;
+  }
+}
+
+// ── processPaymentFailed ─────────────────────────────────────────────────────
+
+interface FailedParams {
+  providerEventId: string;
+  eventType: string;
+  razorpayOrderId: string | undefined;
+}
+
+/**
+ * Handles payment.failed events with idempotency and concurrency safety.
+ * Same atomic transaction pattern as processPaymentCaptured.
+ */
+async function processPaymentFailed(params: FailedParams): Promise<{ success: boolean; message: string }> {
+  const { providerEventId, eventType, razorpayOrderId } = params;
+
+  if (!razorpayOrderId) {
+    return { success: true, message: "Event acknowledged (missing order_id)" };
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // Atomically claim the webhook event.
+      const webhookEvent = await tx.paymentWebhookEvent.create({
+        data: {
+          provider: "razorpay",
+          providerEventId,
+          eventType,
+          status: WebhookEventStatus.PROCESSING,
+        },
+      });
+
+      const localPayment = await tx.payment.findUnique({
+        where: { razorpay_order_id: razorpayOrderId },
+      });
+
+      if (!localPayment) {
+        await tx.paymentWebhookEvent.update({
+          where: { id: webhookEvent.id },
+          data: { status: WebhookEventStatus.FAILED, failureReason: "No matching local payment" },
+        });
+        return { outcome: "no_match" as const, message: "Event acknowledged (no matching payment)" };
+      }
+
+      // Conditional transition: only PENDING → FAILED is legal.
+      // COMPLETED → FAILED is intentionally blocked: a completed payment should
+      // not be reverted to failed by a late-arriving failed event.
+      const transitionResult = await tx.payment.updateMany({
+        where: {
+          id: localPayment.id,
+          status: PaymentStatus.PENDING,
+        },
+        data: { status: PaymentStatus.FAILED },
+      });
+
+      const transitioned = transitionResult.count > 0;
+
+      await tx.paymentWebhookEvent.update({
+        where: { id: webhookEvent.id },
+        data: {
+          status: WebhookEventStatus.PROCESSED,
+          processedAt: new Date(),
+        },
+      });
+
+      if (transitioned) {
+        console.info(`[paymentService] Payment ${localPayment.id} marked FAILED.`);
+        return { outcome: "failed" as const, message: "Payment failed" };
+      } else {
+        console.info(
+          `[paymentService] payment.failed: payment ${localPayment.id} ` +
+            `is not in PENDING state — already transitioned. Idempotent acknowledge.`,
+        );
+        return {
+          outcome: "already_transitioned" as const,
+          message: `Payment already in state: ${localPayment.status}`,
+        };
+      }
+    });
+
+    return { success: true, message: result.message };
+  } catch (error) {
+    if (isPrismaUniqueConstraintError(error)) {
+      console.info(
+        `[paymentService] Duplicate webhook event received: ` +
+          `provider=razorpay, eventId=${providerEventId}. ` +
+          "Returning idempotent 200 without state change.",
+      );
+      return { success: true, message: "Duplicate event — already processed" };
+    }
+    throw error;
+  }
+}
+
+
 
 // ── getPaymentStatus ────────────────────────────────────────────────────────────
 
