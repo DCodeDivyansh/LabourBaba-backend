@@ -9,7 +9,7 @@ import {
   SignupCustomerReq,
   LoginCustomerReq,
 } from "../../type/api_req.type";
-import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
+import { AuthenticatedRequest, UserRole } from "../../middlewares/authMiddleware";
 
 /**
  * Remove sensitive fields before sending customer data to the frontend.
@@ -26,7 +26,6 @@ function sanitizeCustomer(customer: {
     phone: customer.phone,
     name: customer.name,
     created_at: customer.created_at,
-    deleted_at: customer.deleted_at,
   };
 }
 
@@ -65,7 +64,7 @@ export const signupCustomer = async (
     const token = generateToken({
       id: customer.id,
       phone: customer.phone,
-      role: "customer",
+      role: UserRole.CUSTOMER,
     });
 
     res.status(201).json({
@@ -122,7 +121,7 @@ export const loginCustomer = async (
     const token = generateToken({
       id: customer.id,
       phone: customer.phone,
-      role: "customer",
+      role: UserRole.CUSTOMER,
     });
 
     res.status(200).json({
@@ -164,7 +163,7 @@ export const getCurrentCustomer = async (
       return;
     }
 
-    if (req.user?.role !== "customer") {
+    if (req.user?.role !== UserRole.CUSTOMER) {
       res.status(403).json({
         success: false,
         message: "Customer access required",

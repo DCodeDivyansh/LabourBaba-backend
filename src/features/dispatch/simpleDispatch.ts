@@ -17,6 +17,10 @@
 import prisma from '../../config/prisma';
 import { sendFCMNotification } from '../../shared/fcm';
 import { io } from '../../server';
+import {
+  getEligibleDispatchCandidates,
+  validateDispatchCoordinates,
+} from './dispatchCandidate.service';
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -63,14 +67,12 @@ export interface JobForDispatch {
   longitude: number | null;
 }
 
-interface RequirementForDispatch {
+export interface RequirementForDispatch {
   id: string;
   skill_type?: string | null;
   rate_per_day?: number | null;
-  // NOTE: assuming this is the column name for "how many workers this
-  // requirement needs" — correct me if the real column is named
-  // differently (e.g. `quantity`, `count`, `num_workers`).
   workers_needed?: number | null;
+  worker_count_needed?: number | null;
 }
 
 // ── Structured logging ───────────────────────────────────────────────────────
@@ -242,7 +244,7 @@ async function dispatchRequirementSimple(
   job: JobForDispatch,
   req: RequirementForDispatch,
 ): Promise<void> {
-  if (!job.latitude || !job.longitude) {
+  if (!validateDispatchCoordinates(job.latitude, job.longitude)) {
     log('dispatch.no_coordinates', { jobId: job.id, requirementId: req.id });
     await prisma.job_requirement.update({
       where: { id: req.id },
@@ -391,50 +393,39 @@ async function dispatchRequirementSimple(
  * The SQL `LIMIT` naturally caps this at whatever's actually available —
  * if only 2 online workers match, you get 2, never more than exist.
  */
-async function findAvailableWorkers(
+export async function findAvailableWorkers(
   job: JobForDispatch,
   req: RequirementForDispatch,
   radiusMeters: number,
 ): Promise<NearbyWorker[]> {
+  // Validate coordinates and radius before executing spatial query
+  if (
+    !validateDispatchCoordinates(job.latitude, job.longitude) ||
+    !Number.isFinite(radiusMeters) ||
+    radiusMeters <= 0
+  ) {
+    return [];
+  }
+
+  const needed = req.worker_count_needed ?? req.workers_needed;
   const poolLimit =
-    req.workers_needed && req.workers_needed > 0
-      ? req.workers_needed * 2
+    needed && needed > 0
+      ? needed * 2
       : DISPATCH_CONFIG.workersPerWave;
 
-  return prisma.$queryRaw<NearbyWorker[]>`
-    SELECT w.id,
-           w.device_token,
-           ST_Distance(
-             w.location_geo,
-             ST_MakePoint(${job.longitude}, ${job.latitude})::geography
-           ) AS dist_m
-    FROM worker w
-    WHERE w.is_online = true
-      AND (
-            ${req.skill_type ?? null}::text IS NULL
-            OR LOWER(TRIM(w.skill_type)) = LOWER(TRIM(${req.skill_type ?? ''}))
-            OR EXISTS (
-                 SELECT 1 FROM skill_category sc
-                 WHERE sc.id = w.skill_category_id
-                   AND LOWER(TRIM(sc.name)) = LOWER(TRIM(${req.skill_type ?? ''}))
-               )
-          )
-      AND NOT EXISTS (
-            SELECT 1 FROM job_dispatch jd
-            WHERE jd.requirement_id = ${req.id}
-              AND jd.worker_id = w.id
-          )
-    ORDER BY dist_m ASC NULLS LAST
-    LIMIT ${poolLimit}
-  `.then((workers) => {
-    log('dispatch.pool_limit_used', { requirementId: req.id, workersNeeded: req.workers_needed ?? null, poolLimit });
-    return workers;
+  const workers = await getEligibleDispatchCandidates({
+    requirementId: req.id,
+    latitude: job.latitude,
+    longitude: job.longitude,
+    radiusMeters,
+    skillType: req.skill_type,
+    limit: poolLimit,
+    offset: 0,
+    excludeDispatched: true,
   });
 
-  // AND w.deleted_at IS NULL
-  // Left out: unconfirmed whether `worker` has a soft-delete column.
-  // Add back in if it does — an inactive worker slipping through here
-  // wouldn't be caught by anything else in this query.
+  log('dispatch.pool_limit_used', { requirementId: req.id, workersNeeded: needed ?? null, poolLimit });
+  return workers;
 }
 
 // ── Transactional write of dispatch rows ─────────────────────────────────────

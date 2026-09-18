@@ -2,7 +2,7 @@ import express from "express";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
 import { JobDispatchSchema, BookingSchema, DispatchWavesResponseSchema } from "../../schemas";
-import { authenticateJWT } from "../../middlewares/authMiddleware";
+import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
 import { getIncoming, acceptJob, declineJob, getWaves, getDispatchDetail } from "./dispatchController";
 
 const router = express.Router();
@@ -19,18 +19,36 @@ registry.registerPath({
   method: "post",
   path: "/api/dispatch/{requirementId}/accept",
   summary: "Accept job slot",
+  description: "Atomically accepts a pending, non-expired dispatch for the authenticated worker. Worker identity is strictly derived from JWT bearer token (req.user.id). Client-supplied worker_id is rejected.",
   tags: ["Dispatch"],
+  security: [{ bearerAuth: [] }],
   parameters: [{ in: "path", name: "requirementId", required: true, schema: { type: "string", format: "uuid" } }],
-  responses: { 200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: BookingSchema }) } } } }
+  responses: {
+    200: { description: "Dispatch accepted and booking created", content: { "application/json": { schema: z.object({ success: z.boolean(), data: BookingSchema }) } } },
+    400: { description: "Invalid requirementId or client attempted to supply worker_id" },
+    401: { description: "Unauthorized: Valid JWT required" },
+    403: { description: "Forbidden: Worker role required" },
+    404: { description: "Requirement not found or worker has no dispatch row for this requirement" },
+    409: { description: "Requirement slots are full, dispatch already accepted, or worker has active booking" },
+    410: { description: "Dispatch has expired" },
+  },
 });
 
 registry.registerPath({
   method: "post",
   path: "/api/dispatch/{requirementId}/decline",
   summary: "Decline job slot",
+  description: "Declines a pending dispatch for the authenticated worker. Worker identity is strictly derived from JWT bearer token (req.user.id). Client-supplied worker_id is rejected.",
   tags: ["Dispatch"],
+  security: [{ bearerAuth: [] }],
   parameters: [{ in: "path", name: "requirementId", required: true, schema: { type: "string", format: "uuid" } }],
-  responses: { 200: { description: "Success" } }
+  responses: {
+    200: { description: "Dispatch declined" },
+    400: { description: "Invalid requirementId or client attempted to supply worker_id" },
+    401: { description: "Unauthorized: Valid JWT required" },
+    403: { description: "Forbidden: Worker role required" },
+    404: { description: "Requirement not found or worker has no dispatch row" },
+  },
 });
 
 registry.registerPath({
@@ -51,10 +69,10 @@ registry.registerPath({
   responses: { 200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: JobDispatchSchema }) } } } }
 });
 
-router.get("/incoming", authenticateJWT, getIncoming);
-router.post("/:requirementId/accept", authenticateJWT, acceptJob);
-router.post("/:requirementId/decline", authenticateJWT, declineJob);
+router.get("/incoming", authenticateJWT, requireRole(UserRole.WORKER), getIncoming);
+router.post("/:requirementId/accept", authenticateJWT, requireRole(UserRole.WORKER), acceptJob);
+router.post("/:requirementId/decline", authenticateJWT, requireRole(UserRole.WORKER), declineJob);
 router.get("/:requirementId/waves", authenticateJWT, getWaves);
-router.get("/:requirementId", authenticateJWT, getDispatchDetail);
+router.get("/:requirementId", authenticateJWT, requireRole(UserRole.WORKER), getDispatchDetail);
 
 export default router;

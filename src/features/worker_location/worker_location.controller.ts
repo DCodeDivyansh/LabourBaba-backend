@@ -1,54 +1,53 @@
 import { Request, Response } from "express";
-import prisma from "../../config/prisma";
+import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
+import { workerLocationService } from "./worker_location.service";
 
 export const addLocation = async (req: Request, res: Response): Promise<void> => {
   try {
-    const worker_id = (req as any).user?.id || req.body.worker_id;
-    const { latitude, longitude } = req.body;
+    const authReq = req as AuthenticatedRequest;
+    const workerId = authReq.user?.id;
 
-    if (!worker_id) {
-      res.status(400).json({
+    if (!workerId) {
+      res.status(401).json({
         success: false,
-        message: "Worker ID is required",
+        message: "Authentication required",
       });
       return;
     }
 
-    // Create worker location record (history)
-    const workerLocation = await prisma.worker_location.create({
-      data: {
-        worker_id,
-      },
-    });
+    // Defense-in-depth: explicitly reject client-supplied identity if present in body, query, or params
+    if (
+      (req.body as any)?.worker_id ||
+      (req.body as any)?.workerId ||
+      (req.query as any)?.worker_id ||
+      (req.query as any)?.workerId ||
+      (req.params as any)?.worker_id ||
+      (req.params as any)?.workerId
+    ) {
+      res.status(400).json({
+        success: false,
+        message: "Client-controlled worker identity is not permitted",
+      });
+      return;
+    }
 
-    // Update worker_location geography
-    await prisma.$executeRaw`
-      UPDATE worker_location
-      SET location_geo = ST_SetSRID(
-        ST_MakePoint(${longitude}, ${latitude}),
-        4326
-      )::geography
-      WHERE id = ${workerLocation.id}::uuid;
-    `;
+    const { latitude, longitude } = req.body;
 
-    // Update worker's current geography location
-    await prisma.$executeRaw`
-      UPDATE worker
-      SET location_geo = ST_SetSRID(
-        ST_MakePoint(${longitude}, ${latitude}),
-        4326
-      )::geography
-      WHERE id = ${worker_id}::uuid;
-    `;
+    const workerLocation = await workerLocationService.updateLocation(
+      workerId,
+      latitude,
+      longitude
+    );
 
     res.status(200).json({
       success: true,
       data: workerLocation,
     });
   } catch (error: any) {
-    res.status(500).json({
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({
       success: false,
-      message: error.message,
+      message: error.message || "Internal server error",
     });
   }
 };

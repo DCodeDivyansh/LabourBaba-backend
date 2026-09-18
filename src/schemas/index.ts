@@ -33,7 +33,6 @@ export const CustomerSchema = z.object({
   phone: z.string().openapi({ example: "+919876543210" }),
   name: z.string().openapi({ example: "John Doe" }),
   created_at: z.date().nullable().optional().openapi({ example: "2026-06-25T00:00:00Z" }),
-  deleted_at: z.date().nullable().optional(),
 }).openapi("Customer");
 
 export const WorkerSchema = z.object({
@@ -48,8 +47,6 @@ export const WorkerSchema = z.object({
   verification_status: z.string().nullable().optional().openapi({ example: "pending" }),
   decline_count: z.number().int().nullable().optional(),
   timeout_count: z.number().int().nullable().optional(),
-  device_token: z.string().nullable().optional(),
-  deleted_at: z.date().nullable().optional(),
 }).openapi("Worker");
 
 export const SkillCategorySchema = z.object({
@@ -70,7 +67,6 @@ export const JobSchema = z.object({
   status: z.string().nullable().optional(),
   dispatch_status: z.string().nullable().optional(),
   created_at: z.date().nullable().optional(),
-  deleted_at: z.date().nullable().optional(),
 }).openapi("Job");
 
 export const JobRequirementSchema = z.object({
@@ -126,7 +122,6 @@ export const BookingSchema = z.object({
   worker_id: z.string().uuid(),
   customer_id: z.string().uuid(),
   status: z.string().nullable().optional(),
-  otp_hash: z.string().nullable().optional(),
   otp_verified: z.boolean().nullable().optional(),
   created_at: z.date().nullable().optional(),
   updated_at: z.date().nullable().optional(),
@@ -135,9 +130,11 @@ export const BookingSchema = z.object({
 export const PaymentSchema = z.object({
   id: z.string().uuid(),
   booking_id: z.string().uuid(),
-  razorpay_order_id: z.string().nullable().optional(),
+  razorpay_order_id: z.string().nullable().optional().openapi({ description: "Razorpay provider order ID. Null until order is created." }),
+  razorpay_payment_id: z.string().nullable().optional().openapi({ description: "Razorpay provider payment ID. Null until payment is captured." }),
   status: z.string().nullable().optional(),
-  amount: z.number().int().nullable().optional(),
+  amount: z.number().int().nullable().optional().openapi({ description: "Amount in paise (1 rupee = 100 paise)." }),
+  currency: z.string().default("INR").openapi({ description: "ISO 4217 currency code." }),
 }).openapi("Payment");
 
 export const ReviewSchema = z.object({
@@ -208,10 +205,13 @@ export const VerifyOtpReqSchema = z.object({
   otp: z.string().length(6, "OTP must be exactly 6 characters"),
 }).openapi("VerifyOtpReq");
 
-export const CreatePaymentReqSchema = z.object({
-  booking_id: z.string().uuid("Invalid booking UUID"),
-  amount: z.number().int().positive("Amount must be a positive integer"),
-}).openapi("CreatePaymentReq");
+/**
+ * CreatePaymentReqSchema — Issue #11 remediation:
+ * The authoritative payment amount is derived SERVER-SIDE from job_requirement.rate_per_day.
+ * The client supplies only the bookingId (as a URL path parameter, not body).
+ * No amount is accepted from the client.
+ */
+export const CreatePaymentReqSchema = z.object({}).openapi("CreatePaymentReq");
 
 export const CreateReviewReqSchema = z.object({
   booking_id: z.string().uuid("Invalid booking UUID"),
@@ -228,11 +228,16 @@ export const SendMessageReqSchema = z.object({
 }).openapi("SendMessageReq");
 
 export const UpdateWorkerLocationReqSchema = z.object({
-  worker_id: z.string().uuid("Invalid worker UUID"),
-  latitude: z.number().min(-90).max(90),
-  longitude: z.number().min(-180).max(180),
+  latitude: z.number({ message: "Latitude must be a valid number" })
+    .finite("Latitude must be a finite number")
+    .min(-90, "Latitude must be between -90 and 90")
+    .max(90, "Latitude must be between -90 and 90"),
+  longitude: z.number({ message: "Longitude must be a valid number" })
+    .finite("Longitude must be a finite number")
+    .min(-180, "Longitude must be between -180 and 180")
+    .max(180, "Longitude must be between -180 and 180"),
   location: z.string().optional(),
-}).openapi("UpdateWorkerLocationReq");
+}).strict().openapi("UpdateWorkerLocationReq");
 
 export const LocateWorkerReqSchema = z.object({
   id: z.string().uuid("Invalid worker UUID").openapi({ example: "123e4567-e89b-12d3-a456-426614174000" }),
@@ -306,14 +311,16 @@ export const WorkerAnalyticsSchema = z.object({
 }).openapi("WorkerAnalytics");
 
 export const SendOtpReqSchema = z.object({
-  phone: z.string().min(10, "Phone number must be at least 10 digits").openapi({ example: "+919876543210" }),
+  phone: z.string().min(10, "Phone number must be at least 10 digits").max(15, "Phone number cannot exceed 15 digits").regex(/^\+?[1-9]\d{9,14}$/, "Invalid phone number format").openapi({ example: "+919876543210" }),
   type: z.enum(["login", "register"]).openapi({ example: "login" }),
 }).openapi("SendOtpReq");
 
 export const AuthVerifyOtpReqSchema = z.object({
-  phone: z.string().min(10, "Phone number must be at least 10 digits").openapi({ example: "+919876543210" }),
-  otp: z.string().length(6, "OTP must be 6 digits").openapi({ example: "123456" }),
+  phone: z.string().min(10, "Phone number must be at least 10 digits").max(15, "Phone number cannot exceed 15 digits").regex(/^\+?[1-9]\d{9,14}$/, "Invalid phone number format").openapi({ example: "+919876543210" }),
+  otp: z.string().regex(/^\d{6}$/, "OTP must be exactly 6 numeric digits").openapi({ example: "123456" }),
+  type: z.enum(["login", "register"]).optional().openapi({ example: "login" }),
 }).openapi("AuthVerifyOtpReq");
+
 
 export const RefreshTokenReqSchema = z.object({
   token: z.string().min(1, "Refresh token is required"),

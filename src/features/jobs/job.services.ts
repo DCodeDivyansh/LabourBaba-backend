@@ -1,6 +1,7 @@
 import prisma from '../../config/prisma';
 import { CreateJobReq } from '../../type/api_req.type';
 import { dispatchJobSimple } from '../dispatch/simpleDispatch';
+import { bookingSafeSelect } from '../../shared/prismaSelects';
 // BullMQ import kept for reference — uncomment to switch back:
 // import { dispatchQueue } from '../config/bullmq'
 
@@ -49,7 +50,7 @@ export const jobService = {
     // Fetch created requirements with fields needed for dispatch
     const createdRequirements = await prisma.job_requirement.findMany({
       where: { job_id: job.id },
-      select: { id: true, skill_type: true, rate_per_day: true },
+      select: { id: true, skill_type: true, rate_per_day: true, worker_count_needed: true },
     });
     console.log("[jobService] requirements", createdRequirements);
 
@@ -122,7 +123,8 @@ export const jobService = {
     // website renders directly as "worker details" once a booking exists.
     const bookings = await prisma.booking.findMany({
       where: { job_id: jobId },
-      include: {
+      select: {
+        ...bookingSafeSelect,
         worker: {
           select: {
             id: true,

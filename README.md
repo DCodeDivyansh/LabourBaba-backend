@@ -171,19 +171,74 @@ docker-compose up --build
     *   **GET** `/api/reviews/worker/:workerId`, `/api/reviews/:bookingId`
 9.  **Chat** (`/api/chat`)
     *   **GET/POST** `/api/chat/:bookingId/messages`
-10. **Admin** (`/api/admin`)
+10. **Admin** (`/api/admin`) - *Strictly requires Admin role (`requireRole(UserRole.ADMIN)`)*
     *   **GET** `/api/admin/workers`, `/api/admin/jobs`, `/api/admin/flagged`
     *   **PATCH** `/api/admin/workers/:id/verify`
     *   **POST** `/api/admin/workers/:id/suspend`
 11. **Skills** (`/api/skill`)
-    *   **GET** `/api/skill`
-    *   **POST** `/api/skill/add`
+    *   **GET** `/api/skill` *(Public)*
+    *   **POST** `/api/skill/add` *(Admin only)*
 12. **Worker Location** (`/api/worker_location`)
     *   **POST** `/api/worker_location/add`
 13. **API Documentation** (`/api-docs`)
     *   Interactive Swagger UI
 14. **Queue Visualization Dashboard** (`/admin/queues`)
     *   Bull-Board queue dashboard UI
+
+---
+
+## 🔒 Authentication & Role-Based Access Control (RBAC)
+
+The backend enforces a strict separation between **Authentication** ("Who are you?") and **Authorization** ("Are you allowed to perform this operation?").
+
+> **Security Invariant:** Possession of a valid JWT alone **never** confers administrative access. Administrative endpoints strictly enforce server-validated role claims.
+
+### Supported Roles
+
+Roles are strongly typed via the `UserRole` enum:
+
+*   `customer`: Clients booking jobs and requesting services.
+*   `worker`: Laborers and service providers fulfilling jobs.
+*   `admin`: Platform operators with elevated administrative privileges.
+
+### Authorization Middleware Pipeline
+
+Routes are protected using modular Express middlewares:
+
+```text
+Incoming Request
+      │
+      ▼
+authenticateJWT
+  ├── Missing / malformed Bearer header ──► 401 Unauthorized
+  ├── Cryptographic signature invalid    ──► 401 Unauthorized
+  ├── Token expired                       ──► 401 Unauthorized
+  ├── Unsupported / missing role claim   ──► 401 Unauthorized
+  └── Extracts & normalizes: req.user { id, role: UserRole }
+      │
+      ▼
+requireRole(UserRole.ADMIN)
+  ├── req.user.role !== UserRole.ADMIN   ──► 403 Forbidden
+  └── req.user.role === UserRole.ADMIN   ──► next()
+      │
+      ▼
+Controller Handler
+```
+
+### RBAC Permission Matrix
+
+| Resource / Endpoint | Customer | Worker | Admin |
+| :--- | :---: | :---: | :---: |
+| Customer Profile (`/api/clients/me`) | ✅ | ❌ (403) | ❌ (403) |
+| Worker Profile (`/api/workers/me`) | ❌ (401/403) | ✅ | ❌ (403) |
+| Create Jobs (`/api/jobs`) | ✅ | ❌ | ✅ |
+| Add Skill Category (`/api/skill/add`) | ❌ (403) | ❌ (403) | ✅ |
+| List All Workers (`/api/admin/workers`) | ❌ (403) | ❌ (403) | ✅ |
+| Verify Worker Aadhaar (`/api/admin/workers/:id/verify`) | ❌ (403) | ❌ (403) | ✅ |
+| List All Platform Jobs (`/api/admin/jobs`) | ❌ (403) | ❌ (403) | ✅ |
+| Flagged Workers (`/api/admin/flagged`) | ❌ (403) | ❌ (403) | ✅ |
+| Suspend Worker (`/api/admin/workers/:id/suspend`) | ❌ (403) | ❌ (403) | ✅ |
+
 
 ---
 
