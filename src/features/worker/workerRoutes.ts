@@ -124,15 +124,15 @@ registry.registerPath({
 
 router.post("/registerWorker", validateBody(CreateWorkerReqSchema), registerWorker);
 router.post("/login", validateBody(LoginWorkerReqSchema), loginWorker);
-router.get("/me", authenticateJWT, getMe);
-router.patch("/me", authenticateJWT, validateBody(UpdateWorkerProfileReqSchema), updateMe);
+router.get("/me", authenticateJWT, requireRole(UserRole.WORKER), getMe);
+router.patch("/me", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UpdateWorkerProfileReqSchema), updateMe);
 router.patch("/me/location", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UpdateWorkerLocationReqSchema), updateLocation);
-router.patch("/me/online", authenticateJWT, validateBody(UpdateWorkerOnlineStatusReqSchema), updateOnline);
-router.post("/me/documents", authenticateJWT, validateBody(UploadWorkerDocumentReqSchema), uploadDocuments);
-router.get("/me/documents", authenticateJWT, getDocuments);
-router.get("/me/analytics", authenticateJWT, getAnalytics);
-router.get("/me/bookings", authenticateJWT, getBookings);
-router.get("/me/earnings", authenticateJWT, getEarnings);
-router.patch("/me/device-token", authenticateJWT, validateBody(UpdateDeviceTokenReqSchema), updateDeviceToken);
+router.patch("/me/online", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UpdateWorkerOnlineStatusReqSchema), updateOnline);
+router.post("/me/documents", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UploadWorkerDocumentReqSchema), uploadDocuments);
+router.get("/me/documents", authenticateJWT, requireRole(UserRole.WORKER), getDocuments);
+router.get("/me/analytics", authenticateJWT, requireRole(UserRole.WORKER), getAnalytics);
+router.get("/me/bookings", authenticateJWT, requireRole(UserRole.WORKER), getBookings);
+router.get("/me/earnings", authenticateJWT, requireRole(UserRole.WORKER), getEarnings);
+router.patch("/me/device-token", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UpdateDeviceTokenReqSchema), updateDeviceToken);
 
 export default router;

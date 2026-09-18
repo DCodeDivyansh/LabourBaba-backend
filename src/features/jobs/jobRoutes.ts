@@ -87,7 +87,7 @@ router.get("/", authenticateJWT, requireRole(UserRole.CUSTOMER), getMyJobs);
 router.get("/:jobId", authenticateJWT, getJobDetail);
 router.patch("/:jobId/cancel", authenticateJWT, requireRole(UserRole.CUSTOMER), cancelJob);
 router.get("/:jobId/requirements", authenticateJWT, getJobRequirements);
-router.post("/:jobId/requirements", authenticateJWT, validateBody(CreateJobRequirementReqSchema), createJobRequirement);
+router.post("/:jobId/requirements", authenticateJWT, requireRole(UserRole.CUSTOMER), validateBody(CreateJobRequirementReqSchema), createJobRequirement);
 router.get("/:jobId/bookings", authenticateJWT, getJobBookings);
 
 export default router;

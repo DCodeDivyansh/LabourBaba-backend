@@ -9,6 +9,7 @@ import {
   SocketAckResponse,
 } from "./socketTypes";
 import { chatService } from "../features/chat/chatServices";
+import { chatPolicy } from "../policies";
 
 /**
  * Registers secure Socket.IO event handlers.
@@ -263,19 +264,15 @@ export function registerSocketHandlers(io: Server): void {
             return;
           }
 
-          const isParticipant =
-            user.id === booking.customer_id ||
-            user.id === booking.worker_id ||
-            user.role === UserRole.ADMIN;
-
-          if (!isParticipant) {
+          const decision = chatPolicy.canJoinRoom(user, booking);
+          if (!decision.allowed) {
             console.warn(
               `[SOCKET_SECURITY] Unauthorized room join: User ${user.id} (${user.role}) attempted to join booking ${bookingId}`
             );
             const response: SocketAckResponse = {
               success: false,
-              code: "FORBIDDEN",
-              message: "Forbidden: Not an authorized participant of this booking",
+              code: decision.code || "FORBIDDEN",
+              message: decision.reason || "Forbidden: Not an authorized participant of this booking",
             };
             socket.emit("error", response);
             callback?.(response);
@@ -320,7 +317,7 @@ export function registerSocketHandlers(io: Server): void {
           }
 
           // Authoritative sender is ALWAYS socket.data.user.id
-          const message = await chatService.sendMessage(bookingId, user.id, content.trim());
+          const message = await chatService.sendMessage(bookingId, user.id, content.trim(), user);
 
           // Broadcast to authorized booking room
           io.to(`booking:${bookingId}`).emit("chat:message", message);
