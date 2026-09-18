@@ -236,7 +236,7 @@ describe("API Protection and JWT Validation Tests", () => {
 
   describe("Job Endpoints (/api/jobs)", () => {
     it("POST /api/jobs should return 401 when unauthenticated", async () => {
-      const res = await request(app).post("/api/jobs").send({ customer_id: MOCK_CUSTOMER_ID, latitude: 12.34, longitude: 56.78 });
+      const res = await request(app).post("/api/jobs").send({ latitude: 12.34, longitude: 56.78 });
       expect(res.status).toBe(401);
     });
 
@@ -247,7 +247,7 @@ describe("API Protection and JWT Validation Tests", () => {
       const res = await request(app)
         .post("/api/jobs")
         .set("Authorization", `Bearer ${customerToken}`)
-        .send({ customer_id: MOCK_CUSTOMER_ID, latitude: 12.34, longitude: 56.78, requirements: [] });
+        .send({ latitude: 12.34, longitude: 56.78, requirements: [] });
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
     });

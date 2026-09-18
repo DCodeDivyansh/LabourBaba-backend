@@ -169,7 +169,6 @@ export const LoginWorkerReqSchema = z.object({
 }).openapi("LoginWorkerReq");
 
 export const CreateJobReqSchema = z.object({
-  customer_id: z.string().uuid("Invalid customer UUID"),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   location: z.string().optional(),
@@ -178,7 +177,7 @@ export const CreateJobReqSchema = z.object({
     worker_count_needed: z.number().int().positive(),
     rate_per_day: z.number().int().optional(),
   })).optional(),
-}).openapi("CreateJobReq");
+}).strict().openapi("CreateJobReq");
 
 export const ApplyJobReqSchema = z.object({
   job_id: z.string().uuid("Invalid job UUID"),

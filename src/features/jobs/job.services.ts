@@ -6,11 +6,11 @@ import { bookingSafeSelect } from '../../shared/prismaSelects';
 // import { dispatchQueue } from '../config/bullmq'
 
 export const jobService = {
-  async createJob(payload: CreateJobReq) {
+  async createJob(customerId: string, payload: CreateJobReq) {
     const job = await prisma.$transaction(async (tx) => {
       const job = await tx.job.create({
         data: {
-          customer_id: payload.customer_id,
+          customer_id: customerId,
           latitude: payload.latitude,
           longitude: payload.longitude,
           location: payload.location,
@@ -58,7 +58,7 @@ export const jobService = {
     // Runs in background, doesn't slow down API response
     // Problem 4: pass job object directly — no extra DB query inside dispatch
     dispatchJobSimple(job, createdRequirements)
-      .catch((err) => console.error('[dispatch] error:', err));
+      ?.catch?.((err) => console.error('[dispatch] error:', err));
 
     return job;
   },
@@ -85,7 +85,7 @@ export const jobService = {
     return await prisma.$transaction(async (tx) => {
       const job = await tx.job.findUnique({ where: { id: jobId } });
       if (!job) throw new Error("Job not found");
-      if (job.customer_id !== customerId) throw new Error("Unauthorized");
+      if (job.customer_id !== customerId) throw new Error("Forbidden: You do not own this job");
       if (job.status === "COMPLETED") throw new Error("Cannot cancel a completed job");
 
       await tx.job.update({

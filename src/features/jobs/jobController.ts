@@ -3,56 +3,38 @@ import { jobService } from "./job.services";
 import { jobReqService } from "./jobReqServices";
 import { CreateJobReq, CreateJobRequirementReq } from "../../type/api_req.type";
 import prisma from "../../config/prisma";
-import { verifyToken } from "../../utils/authUtils";
+import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
 
-const getCustomerId = async (req: Request): Promise<string | null> => {
-  // 1. Check if req.user is set (e.g. by auth middleware)
-  if ((req as any).user?.id) {
-    return (req as any).user.id;
-  }
-  // 2. Decode authorization header if present
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.split(" ")[1];
-    const decoded = verifyToken(token);
-    if (decoded && decoded.id) {
-      return decoded.id;
-    }
-  }
-  return null;
-};
-
-// this function will connect will create the job and its job requirement it self
+// Create job and initial requirements strictly scoped to the authenticated customer principal
 export const createJob = async (req: Request, res: Response): Promise<void> => {
   try {
-    const payload: CreateJobReq = req.body;
-    const authCustomerId = (req as any).user?.id;
-    if (authCustomerId) {
-      payload.customer_id = authCustomerId;
-    }
-    if (!payload.customer_id) {
-      res.status(400).json({ success: false, message: "Customer ID is required" });
+    const authCustomerId = (req as AuthenticatedRequest).user?.id;
+    if (!authCustomerId) {
+      res.status(401).json({ success: false, message: "Authentication required" });
       return;
     }
-    const job = await jobService.createJob(payload);
+    const payload: CreateJobReq = req.body;
+    const job = await jobService.createJob(authCustomerId, payload);
     res.status(201).json({ success: true, data: job });
   } catch (error: any) {
-    console.log(error.message)
-    res.status(500).json({ success: false, message: error.message });
+    console.error("[createJob] Error:", error);
+    res.status(500).json({ success: false, message: "Failed to create job" });
   }
 };
 
+// Retrieve jobs belonging strictly to the authenticated customer principal
 export const getMyJobs = async (req: Request, res: Response): Promise<void> => {
   try {
-    const customerId = (req as any).user?.id || String(req.query.customer_id);
-    if (!customerId || customerId === "undefined" || customerId === "null") {
-      res.status(401).json({ success: false, message: "Unauthorized" });
+    const customerId = (req as AuthenticatedRequest).user?.id;
+    if (!customerId) {
+      res.status(401).json({ success: false, message: "Authentication required" });
       return;
     }
     const jobs = await jobService.getJobsByCustomer(customerId);
     res.status(200).json({ success: true, data: jobs });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("[getMyJobs] Error:", error);
+    res.status(500).json({ success: false, message: "Failed to retrieve jobs" });
   }
 };
 
@@ -62,19 +44,34 @@ export const getJobDetail = async (req: Request, res: Response): Promise<void> =
     const job = await jobService.getJobDetail(jobId);
     res.status(200).json({ success: true, data: job });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    if (error.message === "Job not found") {
+      res.status(404).json({ success: false, message: "Job not found" });
+      return;
+    }
+    res.status(500).json({ success: false, message: "Failed to retrieve job details" });
   }
 };
 
 export const cancelJob = async (req: Request, res: Response): Promise<void> => {
   try {
     const { jobId } = req.params as any;
-    const customerId = await getCustomerId(req);
-    if (!customerId) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
+    const customerId = (req as AuthenticatedRequest).user?.id;
+    if (!customerId) {
+      res.status(401).json({ success: false, message: "Authentication required" });
+      return;
+    }
     const response = await jobService.cancelJob(jobId, customerId);
     res.status(200).json(response);
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    if (error.message?.includes("Forbidden") || error.message === "Unauthorized") {
+      res.status(403).json({ success: false, message: "Forbidden: You do not own this job" });
+      return;
+    }
+    if (error.message === "Job not found") {
+      res.status(404).json({ success: false, message: "Job not found" });
+      return;
+    }
+    res.status(400).json({ success: false, message: error.message || "Failed to cancel job" });
   }
 };
 
