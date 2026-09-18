@@ -1,10 +1,18 @@
 import express from "express";
 import { getBooking, verifyOtp, completeBooking, confirmComplete, cancelBooking, getWorkerLocation } from "./bookingController";
-import { validateBody } from "../../middlewares/validationMiddleware";
-import { ConfirmBookingCompleteReqSchema, CancelBookingReqSchema, BookingSchema } from "../../schemas";
+import { getPaymentStatusHandler } from "../payment/paymentController";
+import { validateBody, validateParams } from "../../middlewares/validationMiddleware";
+import {
+  ConfirmBookingCompleteReqSchema,
+  CancelBookingReqSchema,
+  BookingSchema,
+  BookingIdParamSchema,
+  VerifyBookingOtpReqSchema,
+  PaymentSchema,
+} from "../../schemas";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
-import { authenticateJWT } from "../../middlewares/authMiddleware";
+import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
 
 const router = express.Router();
 
@@ -23,7 +31,7 @@ registry.registerPath({
   summary: "Worker submits OTP to start job",
   tags: ["Bookings"],
   parameters: [{ in: "path", name: "bookingId", required: true, schema: { type: "string", format: "uuid" } }],
-  request: { body: { content: { "application/json": { schema: z.object({ otp: z.string().length(6) }) } } } },
+  request: { body: { content: { "application/json": { schema: VerifyBookingOtpReqSchema } } } },
   responses: { 200: { description: "Success" } }
 });
 
@@ -65,11 +73,27 @@ registry.registerPath({
   responses: { 200: { description: "Success" } }
 });
 
-router.get("/:bookingId", authenticateJWT, getBooking);
-router.post("/:bookingId/otp/verify", authenticateJWT, verifyOtp);
-router.post("/:bookingId/complete", authenticateJWT, completeBooking);
-router.post("/:bookingId/confirm-complete", authenticateJWT, validateBody(ConfirmBookingCompleteReqSchema), confirmComplete);
-router.post("/:bookingId/cancel", authenticateJWT, validateBody(CancelBookingReqSchema), cancelBooking);
-router.get("/:bookingId/location", authenticateJWT, getWorkerLocation);
+registry.registerPath({
+  method: "get",
+  path: "/api/bookings/{bookingId}/payment",
+  summary: "Get booking payment status",
+  tags: ["Bookings"],
+  security: [{ bearerAuth: [] }],
+  parameters: [{ in: "path", name: "bookingId", required: true, schema: { type: "string", format: "uuid" } }],
+  responses: {
+    200: { description: "Payment status", content: { "application/json": { schema: z.object({ success: z.boolean(), data: PaymentSchema }) } } },
+    401: { description: "Unauthorized" },
+    403: { description: "Forbidden" },
+    404: { description: "Booking or payment not found" },
+  },
+});
+
+router.get("/:bookingId", authenticateJWT, validateParams(BookingIdParamSchema), getBooking);
+router.post("/:bookingId/otp/verify", authenticateJWT, validateParams(BookingIdParamSchema), validateBody(VerifyBookingOtpReqSchema), verifyOtp);
+router.post("/:bookingId/complete", authenticateJWT, validateParams(BookingIdParamSchema), completeBooking);
+router.post("/:bookingId/confirm-complete", authenticateJWT, validateParams(BookingIdParamSchema), validateBody(ConfirmBookingCompleteReqSchema), confirmComplete);
+router.post("/:bookingId/cancel", authenticateJWT, validateParams(BookingIdParamSchema), validateBody(CancelBookingReqSchema), cancelBooking);
+router.get("/:bookingId/location", authenticateJWT, validateParams(BookingIdParamSchema), getWorkerLocation);
+router.get("/:bookingId/payment", authenticateJWT, requireRole(UserRole.CUSTOMER, UserRole.ADMIN), validateParams(BookingIdParamSchema), getPaymentStatusHandler);
 
 export default router;
