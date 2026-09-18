@@ -50,14 +50,14 @@ export const suspendWorker = async (req: Request, res: Response): Promise<void> 
   try {
     const { id } = req.params as any;
     const payload: SuspendWorkerReq = req.body;
-    const adminId = (req as AuthenticatedRequest).user?.id;
+    const adminId = (req as AuthenticatedRequest).user?.id || "unknown-admin";
 
-    const result = await adminService.suspendWorker(id, payload);
+    const result = await adminService.suspendWorker(id, payload, adminId);
 
-    console.log(`[AUDIT] Admin ${adminId} suspended worker ${id} at ${new Date().toISOString()}`);
     res.status(200).json({ success: true, data: result });
   } catch (error: any) {
-    res.status(400).json({ success: false, message: error.message });
+    const statusCode = error.statusCode || error.status || 400;
+    res.status(statusCode).json({ success: false, message: error.message });
   }
 };
 

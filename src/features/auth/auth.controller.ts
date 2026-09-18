@@ -53,6 +53,22 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       });
       return;
     }
+    if (error.code === "ACCOUNT_SUSPENDED") {
+      res.status(401).json({
+        success: false,
+        code: "ACCOUNT_SUSPENDED",
+        message: "Account has been suspended or deactivated",
+      });
+      return;
+    }
+    if (error.code === "ACCOUNT_INACTIVE") {
+      res.status(401).json({
+        success: false,
+        code: "ACCOUNT_INACTIVE",
+        message: "Account is inactive or has been deactivated",
+      });
+      return;
+    }
     // Uniform safe error for invalid, expired, or already-consumed OTPs
     res.status(401).json({
       success: false,
@@ -96,6 +112,22 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
         success: false,
         code: "REFRESH_SESSION_EXPIRED",
         message: "Session expired. Please log in again.",
+      });
+      return;
+    }
+    if (code === "ACCOUNT_SUSPENDED") {
+      res.status(401).json({
+        success: false,
+        code: "ACCOUNT_SUSPENDED",
+        message: "Account has been suspended or deactivated",
+      });
+      return;
+    }
+    if (code === "ACCOUNT_INACTIVE") {
+      res.status(401).json({
+        success: false,
+        code: "ACCOUNT_INACTIVE",
+        message: "Account is inactive or has been deactivated",
       });
       return;
     }

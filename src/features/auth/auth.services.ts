@@ -229,6 +229,26 @@ export const authService = {
         throw error;
       }
 
+      // 5.5 Authoritative Account State Check (Issue #11)
+      // A suspended or deleted account MUST NOT be allowed to log in via OTP
+      if (role === UserRole.WORKER) {
+        const worker = user as any;
+        if (worker.deleted_at != null || worker.verification_status === "suspended") {
+          console.warn(`[AUTH_AUDIT] OTP login rejected: Worker ${worker.id} is suspended or deleted`);
+          const error: any = new Error("Account has been suspended or deactivated");
+          error.code = "ACCOUNT_SUSPENDED";
+          throw error;
+        }
+      } else if (role === UserRole.CUSTOMER) {
+        const customer = user as any;
+        if (customer.deleted_at != null) {
+          console.warn(`[AUTH_AUDIT] OTP login rejected: Customer ${customer.id} is inactive or deleted`);
+          const error: any = new Error("Account is inactive or has been deactivated");
+          error.code = "ACCOUNT_INACTIVE";
+          throw error;
+        }
+      }
+
       // 6. Issue access token (short-lived JWT)
       const token = signAccessToken({ id: user.id, role, phone: user.phone });
 
@@ -274,10 +294,12 @@ export const authService = {
         refreshToken: rotated.newRawToken,
       };
     } catch (sessionErr: any) {
-      // If it failed due to security events (reuse, expiration), rethrow immediately
+      // If it failed due to security events (reuse, expiration, suspension), rethrow immediately
       if (
         sessionErr.code === "REFRESH_TOKEN_REUSE" ||
-        sessionErr.code === "REFRESH_SESSION_EXPIRED"
+        sessionErr.code === "REFRESH_SESSION_EXPIRED" ||
+        sessionErr.code === "ACCOUNT_SUSPENDED" ||
+        sessionErr.code === "ACCOUNT_INACTIVE"
       ) {
         throw sessionErr;
       }

@@ -422,18 +422,23 @@ describe("P0 Finding #6 Security Regression Suite: Worker Location Identity Spoo
   });
 
   describe("I. Deactivated / Inactive Workers", () => {
-    it("rejects location updates from a deactivated worker with 404", async () => {
+    it("rejects location updates from a deactivated worker with 401", async () => {
+      // Issue #11: authenticateJWT now performs an authoritative DB check.
+      // Workers with deleted_at != null are rejected at the middleware level (401)
+      // before reaching the controller, so the response is 401 ACCOUNT_SUSPENDED.
       const res = await request(app)
         .post("/api/worker_location/add")
         .set("Authorization", `Bearer ${inactiveWorkerToken}`)
         .send({ latitude: 26.85, longitude: 80.95 });
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(401);
       expect(res.body.success).toBe(false);
-      expect(res.body.message).toMatch(/not found or account is deactivated/i);
+      expect(res.body.code).toBe("ACCOUNT_SUSPENDED");
     });
 
-    it("rejects location updates from a non-existent worker with 404", async () => {
+    it("rejects location updates from a non-existent worker with 401", async () => {
+      // Issue #11: authenticateJWT returns null for missing workers, yielding 401
+      // before the controller is invoked. Unknown worker IDs cannot pass auth.
       const unknownToken = generateToken({
         id: "99999999-9999-4999-a999-999999999999",
         phone: "+919876543299",
@@ -445,8 +450,9 @@ describe("P0 Finding #6 Security Regression Suite: Worker Location Identity Spoo
         .set("Authorization", `Bearer ${unknownToken}`)
         .send({ latitude: 26.85, longitude: 80.95 });
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(401);
       expect(res.body.success).toBe(false);
+      expect(res.body.code).toBe("ACCOUNT_SUSPENDED");
     });
   });
 });
