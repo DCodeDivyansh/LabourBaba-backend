@@ -4,7 +4,7 @@ import {
   workerAdminSelect,
   toWorkerAdminDTO,
   customerSummarySelect,
-  toCustomerSummaryDTO,
+  toJobDTO,
 } from "../../shared/prismaSelects";
 
 export const adminService = {
@@ -51,13 +51,7 @@ export const adminService = {
         job_requirement: true,
       }
     });
-    return jobs.map((job: any) => {
-      const j = { ...job };
-      if (j.customer) {
-        j.customer = toCustomerSummaryDTO(j.customer);
-      }
-      return j;
-    });
+    return jobs.map(toJobDTO).filter(Boolean);
   },
 
   async getFlaggedWorkers() {

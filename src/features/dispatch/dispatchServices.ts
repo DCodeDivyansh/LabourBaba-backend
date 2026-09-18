@@ -4,7 +4,7 @@ import prisma from '../../config/prisma';
 import { generateOTP, hashOTP } from '../../utils/authUtils';
 import { Prisma } from '@prisma/client';
 import { io } from '../../server';
-import { customerSummarySelect, bookingSafeSelect, toDispatchDTO } from '../../shared/prismaSelects';
+import { customerSummarySelect, bookingSafeSelect, toDispatchDTO, toWorkerPublicDTO, toDispatchWaveDTO } from '../../shared/prismaSelects';
 
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
@@ -272,11 +272,15 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       select: { id: true, name: true, phone: true, skill_type: true, worker_score: true },
     });
 
-    const workerWithLoc = worker ? {
-      ...worker,
+    const workerWithLoc = worker ? toWorkerPublicDTO({
+      id: worker.id,
+      name: worker.name,
+      phone: worker.phone,
+      skill_type: worker.skill_type,
+      worker_score: worker.worker_score,
       latitude: coords[0]?.latitude || null,
       longitude: coords[0]?.longitude || null,
-    } : null;
+    }) : null;
 
     io.to(`customer:${result.customerId}`).emit('worker:accepted', {
       jobId: result.jobId,
@@ -430,7 +434,10 @@ export const getWaves = async (requirementId: string) => {
     where: { requirement_id: requirementId },
     orderBy: { wave_position: 'asc' },
   });
-  return { waves, dispatches };
+  return {
+    waves: waves.map(toDispatchWaveDTO).filter(Boolean),
+    dispatches: dispatches.map(toDispatchDTO).filter(Boolean),
+  };
 };
 
 // ── Legacy export shape (keeps controller imports working) ───────────────────

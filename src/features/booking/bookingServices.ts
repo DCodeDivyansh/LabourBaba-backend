@@ -8,6 +8,7 @@ import {
   customerSummarySelect,
   paymentSafeSelect,
   toBookingDTO,
+  toWorkerLocationDTO,
 } from "../../shared/prismaSelects";
 import { bookingPolicy, assertPolicy, AuthenticatedUser } from "../../policies";
 
@@ -178,6 +179,6 @@ export const bookingService = {
       orderBy: { updated_at: "desc" }
     });
 
-    return location;
+    return toWorkerLocationDTO(location);
   }
 };
