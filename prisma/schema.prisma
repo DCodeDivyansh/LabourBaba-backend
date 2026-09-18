@@ -102,6 +102,50 @@ model payment {
   booking             booking @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payment_booking")
 }
 
+/// Tracks every Razorpay webhook event received for replay/idempotency protection.
+///
+/// The (provider, providerEventId) unique constraint is the authoritative database-level
+/// guard against duplicate webhook processing. It is safe under:
+///   - provider retry / multiple HTTP deliveries of the same event,
+///   - multiple running application instances,
+///   - concurrent requests carrying the same event,
+///   - process restarts.
+///
+/// Event lifecycle:
+///   PROCESSING → the event was atomically claimed; business processing is in progress.
+///   PROCESSED  → the business transition committed successfully.
+///   FAILED     → processing failed after claim; the event can be investigated.
+///   DUPLICATE  → the unique constraint rejected a second claim; already processed.
+///
+/// Idempotency identity per event type (Razorpay):
+///   payment.captured → providerEventId = payment entity ID (pay_xxx)
+///   payment.failed   → providerEventId = orderId + ":failed"
+///   other events     → providerEventId = orderId + ":" + eventType
+///
+/// The payment entity ID (pay_xxx) is stable: Razorpay reuses the same ID on retries.
+/// Using orderId+":failed" avoids colliding with a later captured payment on the same order.
+model PaymentWebhookEvent {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// "razorpay" — identifies the payment provider.
+  provider        String    @db.VarChar(50)
+  /// Stable deterministic identifier for this logical provider event.
+  /// See model comment for the identity scheme per event type.
+  providerEventId String    @db.VarChar(512)
+  eventType       String    @db.VarChar(100)
+  /// PROCESSING | PROCESSED | FAILED
+  status          String    @db.VarChar(30)
+  failureReason   String?
+  receivedAt      DateTime  @default(now()) @db.Timestamptz(6)
+  processedAt     DateTime? @db.Timestamptz(6)
+
+  /// Database-level uniqueness: one row per (provider, event identity).
+  /// Concurrent INSERTs of the same event ID will fail with a unique constraint
+  /// violation (Prisma P2002), which the service layer interprets as a safe duplicate.
+  @@unique([provider, providerEventId])
+  @@index([receivedAt], map: "idx_webhook_event_received_at")
+  @@map("payment_webhook_event")
+}
+
 model review {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   booking_id  String   @db.Uuid
