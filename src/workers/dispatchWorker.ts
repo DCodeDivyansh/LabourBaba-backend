@@ -1,8 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import prisma from '../config/prisma';
-import { redisConnectionOptions, timeoutQueue, dispatchQueue } from '../config/bullmq';
-import { sendFCMToWorker } from '../shared/fcm';
-import { io } from '../server';
+import { redisConnectionOptions, timeoutQueue, dispatchQueue, notificationQueue, DISPATCH_JOB_NAMES } from '../config/bullmq';
+
 import {
   getEligibleDispatchCandidates,
   getWaveRadiusMeters,
@@ -196,51 +195,51 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
     throw err;
   }
 
-  // 6. SIDE EFFECTS LAST: Deliver notifications to workers (FCM & Socket.IO)
-  // Failures in side effects do NOT roll back already-persisted dispatch state
-  await Promise.allSettled(
-    waveWorkers.map(async (w) => {
-      try {
-        await sendFCMToWorker(w.id, {
-          title: 'New Job',
-          body: req.skill_type ?? 'New Job',
-          data: {
-            type: 'incoming_job',
-            jobId: req.job.id,
-            requirementId: req.id,
-            title: 'New Job',
-            body: req.skill_type ?? '',
-            ratePerDay: String(req.rate_per_day ?? 0),
-            customerName: req.job.customer.name,
-            location: req.job.location ?? '',
-            expiresAt: expiresAt.toISOString(),
-          },
-        });
-      } catch (err) {
-        console.error(`[dispatchWorker] Failed to send FCM to worker ${w.id}:`, err);
-      }
-
-      try {
-        if (io && typeof io.to === 'function') {
-          const socketRoom = io.to(`worker:${w.id}`);
-          if (socketRoom && typeof socketRoom.emit === 'function') {
-            socketRoom.emit('job:incoming', {
-              requirementId,
-              jobId,
-              skillType: req.skill_type,
-              ratePerDay: req.rate_per_day,
-              expiresAt,
-            });
-          }
-        }
-      } catch (err) {
-        console.error(`[dispatchWorker] Failed to send socket event to worker ${w.id}:`, err);
-      }
-    }),
-  );
+  // 6. DURABLE NOTIFICATION ENQUEUE: enqueue a notification job to deliver FCM and
+  // Socket.IO events to the dispatched workers. This enqueue happens AFTER the DB
+  // transaction has committed and the timeout job has been queued.
+  //
+  // Invariant: DB commit → notificationQueue.add → [notificationWorker] → FCM/Socket.IO
+  //
+  // If the process crashes after the DB commit, BullMQ will re-deliver this notification
+  // job on restart. If FCM/Socket.IO delivery fails inside notificationWorker, BullMQ
+  // retries the notification job — the persisted dispatch state is never affected.
+  try {
+    await notificationQueue.add(
+      DISPATCH_JOB_NAMES.DISPATCH_NOTIFY,
+      {
+        type: 'dispatch-notify' as const,
+        requirementId,
+        jobId,
+        waveNumber,
+        expiresAt: expiresAt.toISOString(),
+        workers: waveWorkers.map((w) => ({ id: w.id })),
+        skillType: req.skill_type,
+        ratePerDay: req.rate_per_day,
+        location: req.job.location ?? null,
+        customerName: req.job.customer.name,
+      },
+      {
+        // Deterministic jobId: if this enqueue is retried (e.g. after a crash before
+        // the BullMQ job completes), BullMQ will ignore the duplicate and not double-notify.
+        jobId: `notify:${requirementId}:wave-${waveNumber}`,
+        attempts: 5,
+        backoff: { type: 'exponential', delay: 2000 },
+      },
+    );
+  } catch (err) {
+    console.error(
+      `[dispatchWorker] Failed to enqueue notification job for requirement ${requirementId} wave ${waveNumber}:`,
+      err,
+    );
+    // Throw so BullMQ retries the dispatch job and re-attempts the notification enqueue.
+    // The DB write has already committed — the next retry will hit the idempotency guard
+    // at the top (existing wave check) and skip re-persisting, then re-attempt the enqueue.
+    throw err;
+  }
 
   console.log(
-    `[dispatchWorker] Wave ${waveNumber} successfully persisted and dispatched for requirement ${requirementId}. Timeout queued in BullMQ.`,
+    `[dispatchWorker] Wave ${waveNumber} persisted and notification job enqueued for requirement ${requirementId}. Timeout queued in BullMQ.`,
   );
 }
 

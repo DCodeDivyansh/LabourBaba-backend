@@ -6,6 +6,8 @@ import {
   DEFAULT_LOCATION_FRESHNESS_HOURS,
 } from "../src/features/dispatch/dispatchCandidate.service";
 import { processDispatchJob, DispatchJobData } from "../src/workers/dispatchWorker";
+import { processNotificationJob } from "../src/workers/notificationWorker";
+import { notificationQueue } from "../src/config/bullmq";
 import { sendFCMNotification, sendFCMToWorker } from "../src/shared/fcm";
 import { io } from "../src/server";
 
@@ -39,6 +41,14 @@ jest.mock("../src/config/bullmq", () => ({
   },
   dispatchQueue: {
     add: jest.fn().mockResolvedValue({ id: "mock-dispatch-job-id" }),
+  },
+  notificationQueue: {
+    add: jest.fn().mockResolvedValue({ id: "mock-notification-job-id" }),
+  },
+  DISPATCH_JOB_NAMES: {
+    DISPATCH_WAVE: "dispatch-wave",
+    WAVE_TIMEOUT: "wave-timeout",
+    DISPATCH_NOTIFY: "dispatch-notify",
   },
 }));
 
@@ -994,7 +1004,33 @@ describe("P0 Finding #8 Security Regression Suite: BullMQ Dispatch Geographic Fi
         offset: 0,
       });
 
-      // 1. Worker A inside radius receives FCM notification via sendFCMToWorker
+      // 1. Notification job is enqueued via notificationQueue with only Worker A inside radius
+      expect(notificationQueue.add).toHaveBeenCalledWith(
+        "dispatch-notify",
+        expect.objectContaining({
+          type: "dispatch-notify",
+          jobId,
+          requirementId,
+          waveNumber: 1,
+          workers: [
+            expect.objectContaining({
+              id: "worker-A-inside",
+            }),
+          ],
+        }),
+        expect.objectContaining({
+          jobId: `notify:${requirementId}:wave-1`,
+        }),
+      );
+
+      const queuedJobData = (notificationQueue.add as jest.Mock).mock.calls[0][1];
+      const workerIds = queuedJobData.workers.map((w: any) => w.id);
+      expect(workerIds).toContain("worker-A-inside");
+      expect(workerIds).not.toContain("worker-B-outside");
+
+      // 2. Downstream notification worker processes only Worker A
+      await processNotificationJob(queuedJobData);
+
       expect(sendFCMToWorker).toHaveBeenCalledWith(
         "worker-A-inside",
         expect.objectContaining({
@@ -1006,7 +1042,7 @@ describe("P0 Finding #8 Security Regression Suite: BullMQ Dispatch Geographic Fi
         }),
       );
 
-      // 2. Worker B outside radius NEVER receives FCM notification
+      // Worker B outside radius NEVER receives FCM notification
       expect(sendFCMToWorker).not.toHaveBeenCalledWith(
         "worker-B-outside",
         expect.anything(),

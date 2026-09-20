@@ -1,5 +1,5 @@
 import prisma from '../src/config/prisma';
-import { dispatchQueue, timeoutQueue } from '../src/config/bullmq';
+import { dispatchQueue, timeoutQueue, notificationQueue } from '../src/config/bullmq';
 import { processDispatchJob } from '../src/workers/dispatchWorker';
 import { processTimeoutJob } from '../src/workers/timeoutWorker';
 import { reconcileDispatchState } from '../src/features/dispatch/dispatchReconciliationService';
@@ -45,6 +45,14 @@ jest.mock('../src/config/bullmq', () => ({
   },
   timeoutQueue: {
     add: jest.fn().mockResolvedValue({ id: 'mock-timeout-job' }),
+  },
+  notificationQueue: {
+    add: jest.fn().mockResolvedValue({ id: 'mock-notification-job' }),
+  },
+  DISPATCH_JOB_NAMES: {
+    DISPATCH_WAVE: 'dispatch-wave',
+    WAVE_TIMEOUT: 'wave-timeout',
+    DISPATCH_NOTIFY: 'dispatch-notify',
   },
 }));
 
@@ -150,9 +158,9 @@ describe('Issue #21: BullMQ Dispatch Lifecycle & Startup Reconciliation', () => 
         return { id: 'mock-timeout' };
       });
 
-      (sendFCMToWorker as jest.Mock).mockImplementation(async () => {
-        callOrder.push('sendFCMToWorker');
-        return [{ success: true }];
+      (notificationQueue.add as jest.Mock).mockImplementation(async () => {
+        callOrder.push('notificationQueue.add');
+        return { id: 'mock-notify' };
       });
 
       await processDispatchJob({
@@ -162,12 +170,12 @@ describe('Issue #21: BullMQ Dispatch Lifecycle & Startup Reconciliation', () => 
         offset: 0,
       });
 
-      // Assert strict ordering: Persistence -> Queue timeout -> Notifications
+      // Assert strict ordering: Persistence -> Queue timeout -> Notifications queue
       expect(callOrder).toEqual([
         'dispatch_wave.create',
         'job_dispatch.createMany',
         'timeoutQueue.add',
-        'sendFCMToWorker',
+        'notificationQueue.add',
       ]);
 
       // Assert timeoutQueue was queued with deterministic jobId and 30s delay

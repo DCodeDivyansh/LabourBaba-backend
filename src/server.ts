@@ -197,6 +197,10 @@ import { assertProductionPaymentConfig } from "./config/paymentConfig";
 import { assertBullMQConfig } from "./config/bullmq";
 import { reconcileDispatchState } from "./features/dispatch/dispatchReconciliationService";
 import { authService } from "./features/auth/auth.services";
+// Issue #22: import notification worker so BullMQ consumer starts on bootstrap
+// (the module's top-level guard `if (NODE_ENV !== 'test')` calls getNotificationWorker())
+import "./workers/notificationWorker";
+
 
 // Periodic hygiene cleanup for expired OTP challenges (runs daily, unref'd)
 const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;

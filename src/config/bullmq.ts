@@ -8,10 +8,12 @@ import 'dotenv/config';
 
 export const DISPATCH_QUEUE_NAME = 'dispatch';
 export const TIMEOUT_QUEUE_NAME = 'timeout';
+export const NOTIFICATION_QUEUE_NAME = 'notification';
 
 export const DISPATCH_JOB_NAMES = {
   DISPATCH_WAVE: 'dispatch-wave',
   WAVE_TIMEOUT: 'wave-timeout',
+  DISPATCH_NOTIFY: 'dispatch-notify',
 } as const;
 
 export class DispatchQueueUnavailableError extends Error {
@@ -74,4 +76,22 @@ export const dispatchQueue = new Queue(DISPATCH_QUEUE_NAME, {
 export const timeoutQueue = new Queue(TIMEOUT_QUEUE_NAME, {
   connection: redisConnectionOptions,
   defaultJobOptions,
+});
+
+/**
+ * Dedicated queue for durable notification delivery (FCM + Socket.IO).
+ * Notifications are enqueued here AFTER the dispatch DB transaction commits,
+ * ensuring the invariant: PostgreSQL COMMIT → notification enqueue → delivery.
+ * Failures in delivery are retried by BullMQ and never roll back persisted state.
+ */
+export const notificationQueue = new Queue(NOTIFICATION_QUEUE_NAME, {
+  connection: redisConnectionOptions,
+  defaultJobOptions: {
+    ...defaultJobOptions,
+    attempts: 5, // More retries for notification delivery
+    backoff: {
+      type: 'exponential' as const,
+      delay: 2000,
+    },
+  },
 });
