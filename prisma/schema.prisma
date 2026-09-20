@@ -208,7 +208,7 @@ model PaymentWebhookEvent {
 
 model review {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  booking_id  String   @unique @db.Uuid
+  booking_id  String   @unique(map: "uniq_review_booking") @db.Uuid
   worker_id   String   @db.Uuid
   customer_id String   @db.Uuid
   rating      Decimal? @db.Decimal(2, 1)

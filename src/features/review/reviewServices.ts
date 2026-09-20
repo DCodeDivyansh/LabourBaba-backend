@@ -44,6 +44,17 @@ export function isReviewUniqueConstraintError(err: any): boolean {
     return false;
   }
 
+  // PostgreSQL native unique_violation error code 23505
+  if (err?.code === "23505") {
+    if (
+      err.constraint === "uniq_review_booking" ||
+      err.constraint === "review_booking_id_key" ||
+      (typeof err.detail === "string" && err.detail.includes("booking_id"))
+    ) {
+      return true;
+    }
+  }
+
   // Not explicit P2002 code, check message string for PostgreSQL unique violation text
   if (typeof err?.message === "string") {
     return (
