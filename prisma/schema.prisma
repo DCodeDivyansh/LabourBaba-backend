@@ -262,6 +262,7 @@ model job_dispatch {
   job_requirement job_requirement @relation(fields: [requirement_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_dispatch_requirement")
   worker          Worker          @relation(fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_dispatch_worker")
 
+  @@unique([requirement_id, worker_id], map: "uniq_job_dispatch_req_worker")
   @@index([requirement_id], map: "idx_dispatch_requirement")
   @@index([worker_id], map: "idx_dispatch_worker")
 }
@@ -359,6 +360,8 @@ model dispatch_wave {
   created_at       DateTime        @default(now()) @db.Timestamp(6)
   updated_at       DateTime        @default(now()) @db.Timestamp(6)
   job_requirement  job_requirement @relation(fields: [requirement_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wave_requirement")
+
+  @@unique([requirement_id, wave_number], map: "uniq_dispatch_wave_req_wave")
 }
 
 model job_requirement {

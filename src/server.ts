@@ -194,6 +194,8 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 import { assertJwtConfig, assertProductionAuthConfig } from "./config/authConfig";
 import { assertProductionPaymentConfig } from "./config/paymentConfig";
+import { assertBullMQConfig } from "./config/bullmq";
+import { reconcileDispatchState } from "./features/dispatch/dispatchReconciliationService";
 import { authService } from "./features/auth/auth.services";
 
 // Periodic hygiene cleanup for expired OTP challenges (runs daily, unref'd)
@@ -209,14 +211,25 @@ otpCleanupTimer.unref();
 
 async function startServer() {
   try {
-    // 1. Fail-fast configuration gatekeepers (JWT security & production provider checks)
+    // 1. Fail-fast configuration gatekeepers (JWT security, payments, & BullMQ/Redis checks)
     assertJwtConfig();
     assertProductionAuthConfig();
     assertProductionPaymentConfig();
+    assertBullMQConfig();
 
     await prisma.$connect();
 
     console.log("Database Connected");
+
+    // 2. Authoritative startup reconciliation: reconstruct missing BullMQ jobs for orphaned states
+    try {
+      await reconcileDispatchState();
+    } catch (err: any) {
+      console.error("[DISPATCH_RECONCILIATION_ERROR] Startup reconciliation failed:", err.message);
+      if (process.env.NODE_ENV === "production") {
+        throw err;
+      }
+    }
 
     // Run initial startup hygiene cleanup
     authService.cleanupExpiredOtpChallenges().catch((err) => {

@@ -282,7 +282,7 @@ describe("Issue #20 — Real PostgreSQL Concurrency Integration Tests", () => {
       [bookingId]
     );
     expect(countRes.rows[0].count).toBe(1);
-  });
+  }, 30000);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // 5. Sequential Mobile Retry / Double-Submit

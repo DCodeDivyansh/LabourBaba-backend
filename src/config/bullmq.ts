@@ -6,34 +6,57 @@ import { Queue } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import 'dotenv/config';
 
-// const redis = new Redis({
-//   host: "127.0.0.1",
-//   port: 6379,
-// });
-// Using local Redis instead of Aiven
-// export const redisConnectionOptions: ConnectionOptions = {
-//   host: '127.0.0.1',
-//   port: 6379,
-//   // Note: Local redis usually doesn't need tls, password, or username.
-//   maxRetriesPerRequest: null, // required by BullMQ — must NOT be a positive number
-//   keepAlive: 30_000,
-//   lazyConnect: false,
-// };
+export const DISPATCH_QUEUE_NAME = 'dispatch';
+export const TIMEOUT_QUEUE_NAME = 'timeout';
 
+export const DISPATCH_JOB_NAMES = {
+  DISPATCH_WAVE: 'dispatch-wave',
+  WAVE_TIMEOUT: 'wave-timeout',
+} as const;
 
+export class DispatchQueueUnavailableError extends Error {
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'DispatchQueueUnavailableError';
+    if (cause) (this as any).cause = cause;
+  }
+}
+
+/**
+ * Validates BullMQ and Redis connection configuration on startup.
+ * Throws fast if production environment lacks mandatory Redis coordinates.
+ */
+export function assertBullMQConfig(): void {
+  if (process.env.NODE_ENV === 'test') {
+    return;
+  }
+  const host = process.env.REDIS_HOST?.trim();
+  const port = process.env.REDIS_PORT?.trim();
+  if (!host) {
+    throw new Error('[BULLMQ_CONFIG_ERROR] REDIS_HOST is required for BullMQ dispatch engine.');
+  }
+  if (!port || isNaN(Number(port))) {
+    throw new Error('[BULLMQ_CONFIG_ERROR] Valid REDIS_PORT is required for BullMQ dispatch engine.');
+  }
+}
+
+const parseEnvString = (val?: string): string | undefined => {
+  if (!val) return undefined;
+  const trimmed = val.trim().replace(/^['"]|['"]$/g, '');
+  return trimmed.length > 0 ? trimmed : undefined;
+};
 
 export const redisConnectionOptions: ConnectionOptions = {
-  username: String(process.env.REDIS_USERNAME),
-  password: String(process.env.REDIS_PASSWORD),
-  host: String(process.env.REDIS_HOST),
-  port: Number(process.env.REDIS_PORT),
+  username: parseEnvString(process.env.REDIS_USERNAME),
+  password: parseEnvString(process.env.REDIS_PASSWORD),
+  host: parseEnvString(process.env.REDIS_HOST) || '127.0.0.1',
+  port: Number(process.env.REDIS_PORT) || 6379,
   maxRetriesPerRequest: null,
   enableOfflineQueue: false,
   connectTimeout: 10000,
 };
 
-
-const defaultJobOptions = {
+export const defaultJobOptions = {
   attempts: 3,
   backoff: {
     type: 'exponential' as const,
@@ -43,12 +66,12 @@ const defaultJobOptions = {
   removeOnFail: { count: 5000 },
 };
 
-export const dispatchQueue = new Queue('dispatch', {
+export const dispatchQueue = new Queue(DISPATCH_QUEUE_NAME, {
   connection: redisConnectionOptions,
   defaultJobOptions,
 });
 
-export const timeoutQueue = new Queue('timeout', {
+export const timeoutQueue = new Queue(TIMEOUT_QUEUE_NAME, {
   connection: redisConnectionOptions,
   defaultJobOptions,
 });

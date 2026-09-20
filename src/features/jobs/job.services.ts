@@ -1,6 +1,6 @@
 import prisma from '../../config/prisma';
 import { CreateJobReq } from '../../type/api_req.type';
-import { dispatchJobSimple } from '../dispatch/simpleDispatch';
+import { dispatchQueue } from '../../config/bullmq';
 import { bookingSafeSelect } from '../../shared/prismaSelects';
 import { jobPolicy, assertPolicy, AuthenticatedUser, PolicyActor, AuthorizationError, UserRole } from '../../policies';
 import { jobStateService, JobAction, JobStatus, JobTransitionActor } from './jobStateMachine';
@@ -75,11 +75,46 @@ export const jobService = {
     });
     console.log("[jobService] requirements", createdRequirements);
 
-    // Fire dispatch for all requirements in parallel — no await needed
-    // Runs in background, doesn't slow down API response
-    // Problem 4: pass job object directly — no extra DB query inside dispatch
-    dispatchJobSimple(job, createdRequirements)
-      ?.catch?.((err) => console.error('[dispatch] error:', err));
+    // Transition job to SEARCHING and requirements to DISPATCHING
+    try {
+      await prisma.$transaction(async (tx) => {
+        await jobStateService.transition(tx, {
+          jobId: job.id,
+          action: JobAction.START_DISPATCH,
+          actor: { role: "SYSTEM" },
+          reason: "BullMQ dispatch wave initiated",
+        });
+        await tx.job_requirement.updateMany({
+          where: { job_id: job.id, status: RequirementStatus.OPEN },
+          data: { status: RequirementStatus.DISPATCHING },
+        });
+      });
+    } catch (err: any) {
+      console.warn(`[jobService] Transition to SEARCHING note: ${err?.message}`);
+    }
+
+    // Fire BullMQ dispatch for all requirements with deterministic job IDs
+    // Durable, crash-resilient dispatch scheduling backed by Redis
+    await Promise.all(
+      createdRequirements.map(async (req) => {
+        try {
+          await dispatchQueue.add(
+            'dispatch-wave',
+            {
+              requirementId: req.id,
+              jobId: job.id,
+              waveNumber: 1,
+              offset: 0,
+            },
+            {
+              jobId: `dispatch:${req.id}:wave-1`,
+            },
+          );
+        } catch (err) {
+          console.error(`[jobService] Failed to enqueue BullMQ dispatch job for requirement ${req.id}:`, err);
+        }
+      }),
+    );
 
     return job;
   },

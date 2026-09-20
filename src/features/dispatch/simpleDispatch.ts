@@ -1,18 +1,17 @@
 /**
- * Simple Dispatch — no BullMQ, no Redis needed.
+ * @deprecated NON-PRODUCTION TEST FIXTURE ONLY
  *
- * Finds nearby workers via PostGIS, writes job_dispatch rows,
- * sends FCM + Socket.IO notifications, and uses setTimeout for timeouts.
+ * This module is DEPRECATED and ISOLATED strictly for backwards compatibility with legacy unit tests.
+ * Under Issue #21, BullMQ is the ONLY authoritative production dispatch engine.
  *
- * Recommended indexes (add via migration if not already present):
- *   CREATE INDEX IF NOT EXISTS worker_location_geo_gist ON worker USING GIST (location_geo);
- *   CREATE INDEX IF NOT EXISTS job_dispatch_requirement_worker_idx ON job_dispatch (requirement_id, worker_id);
- *   CREATE INDEX IF NOT EXISTS job_dispatch_requirement_wave_status_idx ON job_dispatch (requirement_id, wave_number, status);
- *
- * Call `recoverStaleDispatchesOnStartup()` once, right after Prisma connects
- * at server boot, to resume any requirement that was mid-dispatch when the
- * process last restarted. See that function's docstring for details.
+ * Any attempt to invoke this module in production will throw a fatal error.
  */
+
+if (process.env.NODE_ENV === 'production') {
+  throw new Error(
+    '[FATAL_ARCHITECTURE_VIOLATION] simpleDispatch is forbidden in production. BullMQ is the only production dispatch engine.',
+  );
+}
 
 import prisma from '../../config/prisma';
 import { sendFCMNotification, sendFCMToWorker } from '../../shared/fcm';

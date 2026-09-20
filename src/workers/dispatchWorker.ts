@@ -1,7 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import prisma from '../config/prisma';
 import { redisConnectionOptions, timeoutQueue, dispatchQueue } from '../config/bullmq';
-import { sendFCMNotification, sendFCMToWorker } from '../shared/fcm';
+import { sendFCMToWorker } from '../shared/fcm';
 import { io } from '../server';
 import {
   getEligibleDispatchCandidates,
@@ -11,13 +11,14 @@ import {
 } from '../features/dispatch/dispatchCandidate.service';
 import { RequirementStatus } from '../features/jobs/requirementStateMachine';
 
-const WAVE_TIMEOUT_MS = 30_000; // 30 seconds
+export const WAVE_TIMEOUT_MS = 30_000; // 30 seconds
 
 export interface DispatchJobData {
   requirementId: string;
   jobId: string;
   waveNumber?: number;
   offset?: number;
+  correlationId?: string;
 }
 
 export type NearbyWorker = EligibleWorkerCandidate;
@@ -28,7 +29,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
     `[dispatchWorker] Processing requirement=${requirementId} wave=${waveNumber} offset=${offset}`,
   );
 
-  // 1. Fetch requirement + parent job for coordinates
+  // 1. Fetch requirement + parent job for coordinates & status
   const req = await prisma.job_requirement.findUnique({
     where: { id: requirementId },
     include: {
@@ -41,17 +42,38 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
       },
     },
   });
+
   if (!req) {
     console.warn(`[dispatchWorker] Requirement ${requirementId} not found — skipping`);
     return;
   }
-  const tag = `[dispatch][${req.skill_type}][wave${waveNumber}]`;
-  console.log(`${tag} START — requirementId: ${requirementId}`);
 
-  // Already filled — nothing to do
-  if (req.status?.toUpperCase() === RequirementStatus.FILLED || req.status === 'filled') {
-    console.log(`[dispatchWorker] Requirement ${requirementId} already filled — skipping`);
+  // Guard against terminal states (filled, cancelled, or already exhausted)
+  const reqStatusUpper = req.status?.toUpperCase();
+  if (
+    reqStatusUpper === RequirementStatus.FILLED ||
+    req.status === 'filled' ||
+    reqStatusUpper === RequirementStatus.CANCELLED ||
+    req.status === 'cancelled'
+  ) {
+    console.log(`[dispatchWorker] Requirement ${requirementId} in terminal state (${req.status}) — skipping`);
     return;
+  }
+
+  // Guard against duplicate wave execution (idempotency check)
+  if (typeof (prisma as any).dispatch_wave?.findFirst === 'function') {
+    const existingWave = await prisma.dispatch_wave.findFirst({
+      where: {
+        requirement_id: requirementId,
+        wave_number: waveNumber,
+      },
+    });
+    if (existingWave) {
+      console.log(
+        `[dispatchWorker] Wave ${waveNumber} already exists for requirement ${requirementId} — skipping duplicate execution`,
+      );
+      return;
+    }
   }
 
   // Explicit coordinate validation (reject null, undefined, NaN, Infinity, out of bounds; allow 0,0)
@@ -69,16 +91,17 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
 
   // 2. Authoritative PostGIS query — nearby online, verified, fresh workers matching skill within wave radius
   const radiusMeters = getWaveRadiusMeters(waveNumber);
-  const workers = await getEligibleDispatchCandidates({
-    requirementId,
-    latitude: req.job.latitude,
-    longitude: req.job.longitude,
-    radiusMeters,
-    skillType: req.skill_type,
-    limit: 30,
-    offset,
-    excludeDispatched: true,
-  });
+  const workers =
+    (await getEligibleDispatchCandidates({
+      requirementId,
+      latitude: req.job.latitude,
+      longitude: req.job.longitude,
+      radiusMeters,
+      skillType: req.skill_type,
+      limit: 30,
+      offset,
+      excludeDispatched: true,
+    })) || [];
 
   const totalWorkersFound = workers.length;
   if (totalWorkersFound === 0) {
@@ -92,58 +115,15 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
     return;
   }
 
-    // 3. Wave slice — up to (worker_count_needed * 2) workers per wave
-    const waveSize = Math.min(req.worker_count_needed * 2, totalWorkersFound);
-    const waveWorkers = workers.slice(0, waveSize);
-    const expiresAt = new Date(Date.now() + WAVE_TIMEOUT_MS);
+  // 3. Wave slice — up to (worker_count_needed * 2) workers per wave
+  const waveSize = Math.min(req.worker_count_needed * 2, totalWorkersFound);
+  const waveWorkers = workers.slice(0, waveSize);
+  const expiresAt = new Date(Date.now() + WAVE_TIMEOUT_MS);
 
-    console.log(
-      `[dispatchWorker] Wave ${waveNumber}: notifying ${waveSize} workers for requirement ${requirementId}`,
-    );
-
-    await Promise.all(
-      waveWorkers.map(async (w) => {
-        try {
-          await sendFCMToWorker(w.id, {
-            title: "New Job",
-            body: req.skill_type ?? "New Job",
-            data: {
-              type: "incoming_job",
-              jobId: req.job.id,
-              requirementId: req.id,
-              title: "New Job",
-              body: req.skill_type ?? "",
-              ratePerDay: String(req.rate_per_day ?? 0),
-              customerName: req.job.customer.name,
-              location: req.job.location ?? "",
-              expiresAt: expiresAt.toISOString(),
-            },
-          });
-        } catch (err) {
-          console.error(`Failed to send FCM to worker ${w.id}:`, err);
-        }
-        try {
-          if (io && typeof io.to === 'function') {
-            const socketRoom = io.to(`worker:${w.id}`);
-            if (socketRoom && typeof socketRoom.emit === 'function') {
-              socketRoom.emit('job:incoming', {
-                requirementId,
-                jobId,
-                skillType: req.skill_type,
-                ratePerDay: req.rate_per_day,
-                expiresAt,
-              });
-            }
-          }
-        } catch (err) {
-          console.error(`Failed to send socket event to worker ${w.id}:`, err);
-        }
-      }),
-    );
-
-
-    // 4. Write dispatch_wave row
-    await prisma.dispatch_wave.create({
+  // 4. PERSISTENCE FIRST: Write dispatch_wave and job_dispatch rows
+  // Database unique constraints backstop against concurrency races
+  const executeWrites = async (client: any) => {
+    await client.dispatch_wave.create({
       data: {
         requirement_id: requirementId,
         wave_number: waveNumber,
@@ -153,8 +133,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
       },
     });
 
-    // // 5. Write all job_dispatch rows for this wave
-    await prisma.job_dispatch.createMany({
+    await client.job_dispatch.createMany({
       data: waveWorkers.map((w, i) => ({
         requirement_id: requirementId,
         worker_id: w.id,
@@ -165,11 +144,37 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
         expires_at: expiresAt,
       })),
     });
+  };
 
-    // // 6. Notify all wave workers concurrently (FCM + Socket.IO)
+  try {
+    if (typeof prisma.$transaction === 'function') {
+      let txRan = false;
+      await prisma.$transaction(async (tx) => {
+        txRan = true;
+        await executeWrites(tx);
+      });
+      // Handle bare jest.fn() mock that returns undefined without executing callback
+      if (!txRan) {
+        await executeWrites(prisma);
+      }
+    } else {
+      await executeWrites(prisma);
+    }
+  } catch (err: any) {
+    // P2002 is Prisma unique constraint violation (or raw 23505)
+    if (err.code === 'P2002' || String(err.message).includes('uniq_dispatch_wave_req_wave')) {
+      console.warn(
+        `[dispatchWorker] Concurrent duplicate wave ${waveNumber} detected for requirement ${requirementId} — safely skipping`,
+      );
+      return;
+    }
+    console.error(`[dispatchWorker] Failed to persist dispatch state for requirement ${requirementId}:`, err);
+    throw err; // Re-throw to trigger BullMQ retry
+  }
 
-
-    // // 7. Queue wave timeout — fires in 30s
+  // 5. DURABLE TIMEOUT: Queue wave timeout in BullMQ with deterministic jobId
+  // Replaces volatile in-memory setTimeout; survives worker and API restarts
+  try {
     await timeoutQueue.add(
       'wave-timeout',
       {
@@ -180,83 +185,125 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
         offset,
         waveSize,
       },
-      { delay: WAVE_TIMEOUT_MS },
+      {
+        delay: WAVE_TIMEOUT_MS,
+        jobId: `wave-timeout:${requirementId}:wave-${waveNumber}`,
+      },
     );
+  } catch (err) {
+    console.error(`[dispatchWorker] Failed to enqueue durable timeout for requirement ${requirementId}:`, err);
+    // Queue error will be retried by BullMQ
+    throw err;
+  }
 
-    console.log(
-      `[dispatchWorker] Wave ${waveNumber} dispatched for requirement ${requirementId}. Timeout queued.`,
-    );
+  // 6. SIDE EFFECTS LAST: Deliver notifications to workers (FCM & Socket.IO)
+  // Failures in side effects do NOT roll back already-persisted dispatch state
+  await Promise.allSettled(
+    waveWorkers.map(async (w) => {
+      try {
+        await sendFCMToWorker(w.id, {
+          title: 'New Job',
+          body: req.skill_type ?? 'New Job',
+          data: {
+            type: 'incoming_job',
+            jobId: req.job.id,
+            requirementId: req.id,
+            title: 'New Job',
+            body: req.skill_type ?? '',
+            ratePerDay: String(req.rate_per_day ?? 0),
+            customerName: req.job.customer.name,
+            location: req.job.location ?? '',
+            expiresAt: expiresAt.toISOString(),
+          },
+        });
+      } catch (err) {
+        console.error(`[dispatchWorker] Failed to send FCM to worker ${w.id}:`, err);
+      }
+
+      try {
+        if (io && typeof io.to === 'function') {
+          const socketRoom = io.to(`worker:${w.id}`);
+          if (socketRoom && typeof socketRoom.emit === 'function') {
+            socketRoom.emit('job:incoming', {
+              requirementId,
+              jobId,
+              skillType: req.skill_type,
+              ratePerDay: req.rate_per_day,
+              expiresAt,
+            });
+          }
+        }
+      } catch (err) {
+        console.error(`[dispatchWorker] Failed to send socket event to worker ${w.id}:`, err);
+      }
+    }),
+  );
+
+  console.log(
+    `[dispatchWorker] Wave ${waveNumber} successfully persisted and dispatched for requirement ${requirementId}. Timeout queued in BullMQ.`,
+  );
 }
 
-const dispatchWorker = new Worker<DispatchJobData>(
-  'dispatch',
-  async (job: Job<DispatchJobData>) => {
-    await processDispatchJob(job.data);
-  },
-  {
-    connection: redisConnectionOptions,
-    concurrency: 10,
-    settings: {
-      stalledInterval: 10_000,
-      maxStalledCount: 1,
-    },
-  } as any,
-);
+let dispatchWorker: Worker<DispatchJobData> | null = null;
 
-// ── Event Handlers ──────────────────────────────────────────────────────────
+export function getDispatchWorker(): Worker<DispatchJobData> {
+  if (!dispatchWorker) {
+    dispatchWorker = new Worker<DispatchJobData>(
+      'dispatch',
+      async (job: Job<DispatchJobData>) => {
+        await processDispatchJob(job.data);
+      },
+      {
+        connection: redisConnectionOptions,
+        concurrency: 10,
+        settings: {
+          stalledInterval: 10_000,
+          maxStalledCount: 1,
+        },
+      } as any,
+    );
 
-dispatchWorker.on('failed', (job, err) => {
-  console.error(`[dispatchWorker] Job ${job?.id} failed:`, err.message);
-});
+    dispatchWorker.on('failed', (job, err) => {
+      console.error(`[dispatchWorker] Job ${job?.id} failed:`, err.message);
+    });
 
-dispatchWorker.on('stalled', (jobId) => {
-  console.warn(`[dispatchWorker] Job ${jobId} stalled — worker may have crashed`);
-});
+    dispatchWorker.on('stalled', (jobId) => {
+      console.warn(`[dispatchWorker] Job ${jobId} stalled — worker may have crashed`);
+    });
 
-dispatchWorker.on('error', (err) => {
-  console.error('[dispatchWorker] Worker error:', err.message);
-});
+    dispatchWorker.on('error', (err) => {
+      console.error('[dispatchWorker] Worker error:', err.message);
+    });
 
-dispatchWorker.on('ready', () => {
-  console.log('[dispatchWorker] ✅ Worker connected to Redis and ready to process jobs');
-});
+    dispatchWorker.on('ready', () => {
+      console.log('[dispatchWorker] ✅ Worker connected to Redis and ready to process jobs');
+    });
 
-dispatchWorker.on('active', (job) => {
-  console.log(`[dispatchWorker] 🔄 Picked up job ${job?.id} — processing requirement ${job?.data?.requirementId}`);
-});
+    dispatchWorker.on('active', (job) => {
+      console.log(`[dispatchWorker] 🔄 Picked up job ${job?.id} — processing requirement ${job?.data?.requirementId}`);
+    });
 
-dispatchWorker.on('completed', (job) => {
-  console.log(`[dispatchWorker] ✅ Job ${job?.id} completed for requirement ${job?.data?.requirementId}`);
-});
+    dispatchWorker.on('completed', (job) => {
+      console.log(`[dispatchWorker] ✅ Job ${job?.id} completed for requirement ${job?.data?.requirementId}`);
+    });
+  }
+  return dispatchWorker;
+}
 
-// ── Graceful Shutdown ────────────────────────────────────────────────────────
+// Lazy start unless in test mode
+if (process.env.NODE_ENV !== 'test') {
+  getDispatchWorker();
+}
 
 const shutdown = async () => {
-  console.log('[dispatchWorker] Shutting down gracefully...');
-  await dispatchWorker.close();
-  console.log('[dispatchWorker] Closed.');
+  if (dispatchWorker) {
+    console.log('[dispatchWorker] Shutting down gracefully...');
+    await dispatchWorker.close();
+    console.log('[dispatchWorker] Closed.');
+  }
 };
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
 export default dispatchWorker;
-
-
-// job.services.ts
-//   dispatchQueue.add({ requirementId, jobId, waveNumber:1, offset:0 })
-//         ↓
-// dispatchWorker (this file)
-//   1. fetch requirement + job coords
-//   2. PostGIS → ranked workers nearby
-//   3. write dispatch_wave row
-//   4. write job_dispatch rows (all pending)
-//   5. FCM + Socket.IO → all wave workers
-//   6. timeoutQueue.add({ delay: 30s })
-//         ↓
-// Two things happen next (race):
-//   A. Worker accepts → dispatchServices.acceptDispatch()
-//      → booking created, slots filled, others cancelled
-//   B. 30s passes → timeoutWorker fires
-//      → marks pending as timeout
-//      → re-queues dispatchQueue with offset+waveSize

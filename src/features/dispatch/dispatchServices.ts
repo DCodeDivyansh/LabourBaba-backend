@@ -1,6 +1,5 @@
 import prisma from '../../config/prisma';
-// BullMQ import — commented out for simple dispatch mode:
-// import { dispatchQueue } from '../config/bullmq';
+import { dispatchQueue } from '../../config/bullmq';
 import { generateOTP, hashOTP } from '../../utils/authUtils';
 import { Prisma } from '@prisma/client';
 import { io } from '../../server';
@@ -398,21 +397,29 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
         data: { status: 'exhausted', resolved_at: new Date() },
       });
 
-      // Re-queue with next offset
-      // NOTE: Commented out for simple dispatch mode — single wave only.
-      // Uncomment to re-enable BullMQ multi-wave dispatch:
+      // Re-queue with next offset via BullMQ
       const nextWaveNumber = currentWave + 1;
       const nextOffset = currentWave * (req.worker_count_needed * 2);
 
       console.log(
-        `[dispatchServices] Would fire wave ${nextWaveNumber} at offset ${nextOffset} — skipped (simple dispatch mode)`,
+        `[dispatchServices] Firing wave ${nextWaveNumber} at offset ${nextOffset} via BullMQ`,
       );
-      // await dispatchQueue.add('dispatch-wave', {
-      //   requirementId,
-      //   jobId: req.job_id,
-      //   waveNumber: nextWaveNumber,
-      //   offset: nextOffset,
-      // });
+      try {
+        await dispatchQueue.add(
+          'dispatch-wave',
+          {
+            requirementId,
+            jobId: req.job_id,
+            waveNumber: nextWaveNumber,
+            offset: nextOffset,
+          },
+          {
+            jobId: `dispatch:${requirementId}:wave-${nextWaveNumber}`,
+          },
+        );
+      } catch (err) {
+        console.error(`[dispatchServices] Failed to enqueue wave ${nextWaveNumber} for requirement ${requirementId}:`, err);
+      }
     }
   }
 
