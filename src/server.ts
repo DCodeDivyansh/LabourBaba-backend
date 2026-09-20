@@ -194,6 +194,18 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 import { assertJwtConfig, assertProductionAuthConfig } from "./config/authConfig";
 import { assertProductionPaymentConfig } from "./config/paymentConfig";
+import { authService } from "./features/auth/auth.services";
+
+// Periodic hygiene cleanup for expired OTP challenges (runs daily, unref'd)
+const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const otpCleanupTimer = setInterval(async () => {
+  try {
+    await authService.cleanupExpiredOtpChallenges();
+  } catch (err: any) {
+    console.error("[AUTH_CLEANUP_ERROR] Periodic OTP cleanup failed:", err.message);
+  }
+}, CLEANUP_INTERVAL_MS);
+otpCleanupTimer.unref();
 
 async function startServer() {
   try {
@@ -202,10 +214,14 @@ async function startServer() {
     assertProductionAuthConfig();
     assertProductionPaymentConfig();
 
-
     await prisma.$connect();
 
     console.log("Database Connected");
+
+    // Run initial startup hygiene cleanup
+    authService.cleanupExpiredOtpChallenges().catch((err) => {
+      console.warn("[AUTH_CLEANUP_WARN] Initial OTP cleanup skipped on startup:", err.message);
+    });
 
     httpServer.listen(port, () => {
       console.log(`Server running on port ${port}`);

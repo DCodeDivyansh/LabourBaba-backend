@@ -5,6 +5,8 @@ import { defaultMockSmsProvider } from "../src/providers/sms/mockSmsProvider";
 import { setSmsProvider } from "../src/providers/sms/smsProviderFactory";
 import { hashOTP, comparePassword, generateOTP } from "../src/utils/authUtils";
 import { authConfig } from "../src/config/authConfig";
+import { resetMemoryRateLimiter, hashIdentifier } from "../src/middlewares/otpRateLimiter";
+import { authService } from "../src/features/auth/auth.services";
 
 // In-memory backing store to simulate PostgreSQL otp_challenge table
 interface StoredChallenge {
@@ -20,11 +22,6 @@ interface StoredChallenge {
 }
 
 let challengeStore: StoredChallenge[] = [];
-
-// Concurrency mutex lock to simulate PostgreSQL row locking
-let rowLocks = new Set<string>();
-
-import { resetMemoryRateLimiter } from "../src/middlewares/otpRateLimiter";
 
 jest.mock("../src/config/prisma", () => {
   return {
@@ -46,9 +43,9 @@ jest.mock("../src/config/prisma", () => {
       refresh_session: {
         create: jest.fn().mockImplementation(async ({ data }: any) => ({
           id: "a1b2c3d4-e5f6-4890-a234-56789abcdef0",
-          expires_at: data.expires_at || new Date(Date.now() + 30 * 86400000),
-          user_id: data.user_id,
-          user_role: data.user_role,
+          expires_at: data?.expires_at || new Date(Date.now() + 30 * 86400000),
+          user_id: data?.user_id,
+          user_role: data?.user_role,
         })),
         findUnique: jest.fn(),
         update: jest.fn(),
@@ -59,7 +56,7 @@ jest.mock("../src/config/prisma", () => {
   };
 });
 
-describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification", () => {
+describe("P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants", () => {
   const TEST_PHONE = "+919876543210";
   const TEST_CUSTOMER = {
     id: "c1b2c3d4-e5f6-4890-a234-56789abcdef0",
@@ -82,6 +79,7 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
         if (where.status && c.status !== where.status) return false;
         if (where.consumed_at === null && c.consumed_at !== null) return false;
         if (where.expires_at?.gt && c.expires_at <= where.expires_at.gt) return false;
+        if (where.created_at?.gt && c.created_at <= where.created_at.gt) return false;
         return true;
       });
 
@@ -111,7 +109,13 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
     (prisma.otp_challenge.update as jest.Mock).mockImplementation(async ({ where, data }: any) => {
       const item = challengeStore.find((c) => c.id === where.id);
       if (!item) throw new Error("Record to update not found");
-      Object.assign(item, data);
+      if (data.attempt_count && typeof data.attempt_count === "object" && "increment" in data.attempt_count) {
+        item.attempt_count += data.attempt_count.increment;
+      } else if (typeof data.attempt_count === "number") {
+        item.attempt_count = data.attempt_count;
+      }
+      if (data.status) item.status = data.status;
+      if (data.consumed_at !== undefined) item.consumed_at = data.consumed_at;
       return item;
     });
 
@@ -135,10 +139,20 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
 
     (prisma.otp_challenge.deleteMany as jest.Mock).mockImplementation(async ({ where }: any) => {
       const before = challengeStore.length;
-      challengeStore = challengeStore.filter((c) => {
-        if (where.expires_at?.lt && c.expires_at < where.expires_at.lt) return false;
-        return true;
-      });
+      if (where?.OR && Array.isArray(where.OR)) {
+        challengeStore = challengeStore.filter((c) => {
+          const matchOr = where.OR.some((condition: any) => {
+            if (condition.expires_at?.lt && c.expires_at < condition.expires_at.lt) return true;
+            if (condition.status?.in && condition.status.in.includes(c.status)) {
+              if (condition.created_at?.lt && c.created_at < condition.created_at.lt) return true;
+            }
+            return false;
+          });
+          return !matchOr;
+        });
+      } else if (where?.expires_at?.lt) {
+        challengeStore = challengeStore.filter((c) => c.expires_at >= where.expires_at.lt);
+      }
       return { count: before - challengeStore.length };
     });
 
@@ -154,14 +168,12 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
 
   beforeEach(() => {
     challengeStore = [];
-    rowLocks.clear();
     jest.clearAllMocks();
     resetMemoryRateLimiter();
     setupPrismaMock();
     defaultMockSmsProvider.clear();
     setSmsProvider(defaultMockSmsProvider);
   });
-
 
   // ─────────────────────────────────────────────────────────────────────────────
   // 1. HARD-CODED OTP REMOVAL & ATTACK BYPASS PREVENTION
@@ -191,7 +203,6 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
     });
 
     it("MUST reject '123456' even after a genuine OTP is requested, if the generated OTP is different", async () => {
-      // 1. Request OTP legitimately
       const sendRes = await request(app)
         .post("/api/auth/send-otp")
         .send({ phone: TEST_PHONE, type: "login" });
@@ -200,7 +211,6 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
       const legitimateOtp = defaultMockSmsProvider.getLastOtpFor(TEST_PHONE);
       expect(legitimateOtp).toBeDefined();
 
-      // If by astronomical chance randomInt generated 123456, skip assert
       if (legitimateOtp !== "123456") {
         const res = await request(app)
           .post("/api/auth/verify-otp")
@@ -225,7 +235,6 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
       const legitimateOtp = defaultMockSmsProvider.getLastOtpFor(TEST_PHONE);
       expect(legitimateOtp).toMatch(/^\d{6}$/);
 
-      // Verify that plain OTP is NOT stored in the database
       expect(challengeStore[0].otp_hash).not.toBe(legitimateOtp);
       expect(challengeStore[0].otp_hash.startsWith("$2")).toBe(true); // bcrypt hash
 
@@ -290,8 +299,6 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
         expect(challengeStore[0].status).toBe("ACTIVE");
       }
 
-
-
       // 5th wrong attempt: Exceeds limit -> Locked
       const fifthRes = await request(app)
         .post("/api/auth/verify-otp")
@@ -338,13 +345,11 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
   // ─────────────────────────────────────────────────────────────────────────────
   describe("Invariant 6: Resend Cooldown and Challenge Invalidation", () => {
     it("MUST reject consecutive resend within 60s cooldown window", async () => {
-      // First request
       const first = await request(app)
         .post("/api/auth/send-otp")
         .send({ phone: TEST_PHONE, type: "login" });
       expect(first.status).toBe(200);
 
-      // Immediate resend attempt: Must be rejected with 429
       const second = await request(app)
         .post("/api/auth/send-otp")
         .send({ phone: TEST_PHONE, type: "login" });
@@ -359,10 +364,9 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
 
       const otpA = defaultMockSmsProvider.getLastOtpFor(TEST_PHONE)!;
 
-      // Simulate elapsed cooldown time (advance created_at by 65 seconds)
+      // Advance created_at by 65 seconds to simulate elapsed cooldown
       challengeStore[0].created_at = new Date(Date.now() - 65000);
 
-      // Request second OTP
       const secondSend = await request(app)
         .post("/api/auth/send-otp")
         .send({ phone: TEST_PHONE, type: "login" });
@@ -391,14 +395,12 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
   // ─────────────────────────────────────────────────────────────────────────────
   describe("Invariant 7: Purpose / Context Isolation", () => {
     it("MUST reject an OTP requested for 'register' when verified for 'login'", async () => {
-      // Send OTP for registration
       await request(app)
         .post("/api/auth/send-otp")
         .send({ phone: TEST_PHONE, type: "register" });
 
       const registerOtp = defaultMockSmsProvider.getLastOtpFor(TEST_PHONE)!;
 
-      // Attempt to verify for login
       const loginVerifyRes = await request(app)
         .post("/api/auth/verify-otp")
         .send({ phone: TEST_PHONE, otp: registerOtp, type: "login" });
@@ -406,7 +408,6 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
       expect(loginVerifyRes.status).toBe(401);
       expect(loginVerifyRes.body.success).toBe(false);
 
-      // Verifying for matching purpose 'register' must succeed
       const registerVerifyRes = await request(app)
         .post("/api/auth/verify-otp")
         .send({ phone: TEST_PHONE, otp: registerOtp, type: "register" });
@@ -443,9 +444,32 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
       expect(failures.length).toBe(4);
       expect(successes[0].body.data.token).toBeDefined();
 
-      // Ensure challenge status is CONSUMED in DB
       expect(challengeStore[0].status).toBe("CONSUMED");
       expect(challengeStore[0].consumed_at).not.toBeNull();
+    });
+
+    it("MUST enforce cooldown atomically under concurrent resend attempts (0 SMS duplication)", async () => {
+      // First, ensure no challenges exist
+      expect(challengeStore.length).toBe(0);
+
+      // Send 5 concurrent send-otp requests
+      const concurrentSends = Array.from({ length: 5 }, () =>
+        request(app)
+          .post("/api/auth/send-otp")
+          .send({ phone: TEST_PHONE, type: "login" })
+      );
+
+      const responses = await Promise.all(concurrentSends);
+
+      const successes = responses.filter((r) => r.status === 200);
+      const throttled = responses.filter((r) => r.status === 429);
+
+      // Exactly 1 request creates the challenge and sends SMS; others get 429 cooldown
+      expect(successes.length).toBe(1);
+      expect(throttled.length).toBe(4);
+      for (const t of throttled) {
+        expect(t.body.code).toBe("OTP_RESEND_COOLDOWN");
+      }
     });
   });
 
@@ -463,11 +487,9 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
       expect(res.status).toBe(502);
       expect(res.body.code).toBe("SMS_DELIVERY_FAILED");
 
-      // Verify challenge was marked as DELIVERY_FAILED
       expect(challengeStore[0].status).toBe("DELIVERY_FAILED");
       expect(challengeStore[0].consumed_at).not.toBeNull();
 
-      // Verification of this failed delivery challenge must fail
       const verifyRes = await request(app)
         .post("/api/auth/verify-otp")
         .send({ phone: TEST_PHONE, otp: "123456" });
@@ -510,6 +532,122 @@ describe("P0 Security Regression Tests — Issue #3: Hard-Coded OTP Verification
       expect(res.body.otp).toBeUndefined();
       expect(res.body.code).toBeUndefined();
       expect(res.body.message).toBe("OTP sent successfully.");
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 11. MULTI-DIMENSION RATE LIMITING & PRIVACY-PRESERVING KEYS
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe("Invariant 11: Multi-Dimension Rate Limiting (IP, Phone, Device) & Key Privacy", () => {
+    it("MUST enforce device-level rate limit when device_id is supplied in body", async () => {
+      const deviceId = "device-uuid-test-99";
+
+      // 5 requests allowed per device in window
+      for (let i = 0; i < 5; i++) {
+        // use different phone numbers to avoid phone rate limit
+        const phone = `+91987654320${i}`;
+        const res = await request(app)
+          .post("/api/auth/send-otp")
+          .send({ phone, type: "login", device_id: deviceId });
+        expect(res.status).toBe(200);
+      }
+
+      // 6th request with same deviceId must be throttled
+      const res6 = await request(app)
+        .post("/api/auth/send-otp")
+        .send({ phone: "+919876543299", type: "login", device_id: deviceId });
+      expect(res6.status).toBe(429);
+      expect(res6.body.code).toBe("OTP_RATE_LIMITED");
+      expect(res6.body.message).toContain("device");
+    });
+
+    it("MUST enforce device-level rate limit when x-device-id header is provided", async () => {
+      const deviceId = "device-header-uuid-88";
+
+      for (let i = 0; i < 5; i++) {
+        const phone = `+91987654310${i}`;
+        const res = await request(app)
+          .post("/api/auth/send-otp")
+          .set("x-device-id", deviceId)
+          .send({ phone, type: "login" });
+        expect(res.status).toBe(200);
+      }
+
+      const res6 = await request(app)
+        .post("/api/auth/send-otp")
+        .set("x-device-id", deviceId)
+        .send({ phone: "+919876543199", type: "login" });
+      expect(res6.status).toBe(429);
+      expect(res6.body.code).toBe("OTP_RATE_LIMITED");
+      expect(res6.body.message).toContain("device");
+    });
+
+    it("MUST generate SHA-256 privacy-preserving key hash without plaintext phone numbers", () => {
+      const rawPhone = "+919876543210";
+      const hashed = hashIdentifier(rawPhone);
+
+      expect(hashed).toHaveLength(16);
+      expect(hashed).not.toContain(rawPhone);
+      expect(hashed).toMatch(/^[0-9a-f]{16}$/);
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 12. PERIODIC STALE CHALLENGE CLEANUP
+  // ─────────────────────────────────────────────────────────────────────────────
+  describe("Invariant 12: Stale & Expired Challenge Cleanup", () => {
+    it("MUST purge expired and consumed records older than retention cutoff", async () => {
+      const now = Date.now();
+      const oldDate = new Date(now - 10 * 24 * 60 * 60 * 1000); // 10 days ago (> 7 days retention)
+      const freshDate = new Date(now - 1 * 24 * 60 * 60 * 1000); // 1 day ago
+
+      // Add old consumed challenge
+      challengeStore.push({
+        id: "old-consumed",
+        phone: "+919876543201",
+        purpose: "login",
+        otp_hash: "hash",
+        expires_at: oldDate,
+        attempt_count: 1,
+        status: "CONSUMED",
+        consumed_at: oldDate,
+        created_at: oldDate,
+      });
+
+      // Add old expired challenge
+      challengeStore.push({
+        id: "old-expired",
+        phone: "+919876543202",
+        purpose: "login",
+        otp_hash: "hash",
+        expires_at: oldDate,
+        attempt_count: 0,
+        status: "ACTIVE",
+        consumed_at: null,
+        created_at: oldDate,
+      });
+
+      // Add fresh active challenge
+      challengeStore.push({
+        id: "fresh-active",
+        phone: "+919876543203",
+        purpose: "login",
+        otp_hash: "hash",
+        expires_at: new Date(now + 300000),
+        attempt_count: 0,
+        status: "ACTIVE",
+        consumed_at: null,
+        created_at: freshDate,
+      });
+
+      expect(challengeStore.length).toBe(3);
+
+      // Run cleanup
+      const result = await authService.cleanupExpiredOtpChallenges();
+
+      expect(result.count).toBe(2);
+      expect(challengeStore.length).toBe(1);
+      expect(challengeStore[0].id).toBe("fresh-active");
     });
   });
 });

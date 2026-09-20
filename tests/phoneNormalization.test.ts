@@ -293,17 +293,20 @@ describe("Issue #12: Canonicalize Phone Identity (E.164)", () => {
 
   describe("5. OTP Flow Equivalence & Cross-Representation Verification", () => {
     it("should send OTP and store challenge with canonical E.164 phone", async () => {
-      (prisma.otp_challenge.findFirst as jest.Mock).mockResolvedValue(null);
+      const findFirstMock = jest.fn().mockResolvedValue(null);
+      const createMock = jest.fn().mockResolvedValue({
+        id: "otp-uuid-1",
+        phone: "+919876543210",
+        purpose: "login",
+        status: "ACTIVE",
+      });
+
       (prisma.$transaction as jest.Mock).mockImplementation(async (cb) => {
         const tx = {
           otp_challenge: {
+            findFirst: findFirstMock,
             updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-            create: jest.fn().mockResolvedValue({
-              id: "otp-uuid-1",
-              phone: "+919876543210",
-              purpose: "login",
-              status: "ACTIVE",
-            }),
+            create: createMock,
           },
         };
         return cb(tx);
@@ -318,7 +321,7 @@ describe("Issue #12: Canonicalize Phone Identity (E.164)", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(prisma.otp_challenge.findFirst).toHaveBeenCalledWith(
+      expect(findFirstMock).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             phone: "+919876543210",
@@ -331,6 +334,24 @@ describe("Issue #12: Canonicalize Phone Identity (E.164)", () => {
     it("should verify OTP sent in one format using another format of the same phone", async () => {
       const bcrypt = require("bcrypt");
       const hashedOtp = await bcrypt.hash("123456", 10);
+
+      (prisma.otp_challenge.findFirst as jest.Mock).mockResolvedValue({
+        id: "otp-uuid-1",
+        phone: "+919876543210",
+        purpose: "login",
+        otp_hash: hashedOtp,
+        attempt_count: 0,
+        status: "ACTIVE",
+      });
+
+      (prisma.otp_challenge.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (prisma.customer.findUnique as jest.Mock).mockResolvedValue({
+        id: "cust-1",
+        phone: "+919876543210",
+        name: "OTP Customer",
+        deleted_at: null,
+      });
+      (prisma.worker.findUnique as jest.Mock).mockResolvedValue(null);
 
       (prisma.$transaction as jest.Mock).mockImplementation(async (cb) => {
         const tx = {
@@ -377,11 +398,11 @@ describe("Issue #12: Canonicalize Phone Identity (E.164)", () => {
 
   describe("6. Rate Limiting Canonical Phone Key Equivalence", () => {
     it("should share the same rate limiting bucket across equivalent phone representations", async () => {
-      // 5 requests allowed per phone in 15 mins
-      (prisma.otp_challenge.findFirst as jest.Mock).mockResolvedValue(null);
+      // 5 requests allowed per phone in 60 mins
       (prisma.$transaction as jest.Mock).mockImplementation(async (cb) => {
         const tx = {
           otp_challenge: {
+            findFirst: jest.fn().mockResolvedValue(null),
             updateMany: jest.fn().mockResolvedValue({ count: 0 }),
             create: jest.fn().mockResolvedValue({
               id: "otp-uuid",
@@ -420,3 +441,4 @@ describe("Issue #12: Canonicalize Phone Identity (E.164)", () => {
     });
   });
 });
+

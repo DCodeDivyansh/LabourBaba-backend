@@ -18,41 +18,38 @@ import { REVOKE_REASON } from "./session.types";
 export const authService = {
   /**
    * Generates and dispatches a cryptographically secure, hashed OTP challenge.
-   * Enforces resend cooldown and invalidates any previous active challenges for (phone, purpose).
+   * Atomically enforces resend cooldown and invalidates any previous active challenges for (phone, purpose).
    */
   async sendOtp(rawPhone: string, type: "login" | "register") {
     const phone = normalizePhoneToE164(rawPhone);
 
-    // 1. Check for active unconsumed challenge to enforce resend cooldown
-    const existingActive = await prisma.otp_challenge.findFirst({
-      where: {
-        phone,
-        purpose: type,
-        status: "ACTIVE",
-        consumed_at: null,
-        expires_at: { gt: new Date() },
-      },
-      orderBy: { created_at: "desc" },
-    });
+    // 1. Cryptographically secure random 6-digit OTP
+    const plainOtp = generateOTP();
+    const otp_hash = await hashOTP(plainOtp);
+    const expires_at = new Date(Date.now() + authConfig.otpTtlSeconds * 1000);
+    const cooldownThreshold = new Date(Date.now() - authConfig.otpResendCooldownSeconds * 1000);
 
-    if (existingActive) {
-      const elapsedSeconds = Math.floor((Date.now() - existingActive.created_at.getTime()) / 1000);
-      if (elapsedSeconds < authConfig.otpResendCooldownSeconds) {
-        const waitSeconds = authConfig.otpResendCooldownSeconds - elapsedSeconds;
+    // 2. Atomically verify cooldown, invalidate prior challenges, and create new ACTIVE challenge
+    const challenge = await prisma.$transaction(async (tx) => {
+      // Check for any challenge created within cooldown window for this (phone, purpose)
+      const recentChallenge = await tx.otp_challenge.findFirst({
+        where: {
+          phone,
+          purpose: type,
+          created_at: { gt: cooldownThreshold },
+        },
+        orderBy: { created_at: "desc" },
+      });
+
+      if (recentChallenge) {
+        const elapsedSeconds = Math.floor((Date.now() - recentChallenge.created_at.getTime()) / 1000);
+        const waitSeconds = Math.max(1, authConfig.otpResendCooldownSeconds - elapsedSeconds);
         const error: any = new Error("Please wait before requesting another OTP.");
         error.code = "OTP_RESEND_COOLDOWN";
         error.waitSeconds = waitSeconds;
         throw error;
       }
-    }
 
-    // 2. Cryptographically secure random 6-digit OTP
-    const plainOtp = generateOTP();
-    const otp_hash = await hashOTP(plainOtp);
-    const expires_at = new Date(Date.now() + authConfig.otpTtlSeconds * 1000);
-
-    // 3. Atomically invalidate prior challenges and create new ACTIVE challenge
-    const challenge = await prisma.$transaction(async (tx) => {
       // Invalidate any existing active challenges for this phone & purpose
       await tx.otp_challenge.updateMany({
         where: {
@@ -79,7 +76,7 @@ export const authService = {
       });
     });
 
-    // 4. Dispatch OTP via SMS Provider
+    // 3. Dispatch OTP via SMS Provider
     try {
       const provider = getSmsProvider();
       await provider.sendOtp(phone, plainOtp, type);
@@ -144,11 +141,13 @@ export const authService = {
       }
 
       // 2. Check attempt limits
-      if (challenge.attempt_count >= authConfig.otpMaxAttempts) {
-        await tx.otp_challenge.update({
-          where: { id: challenge.id },
-          data: { status: "LOCKED", consumed_at: new Date() },
-        });
+      if (challenge.attempt_count >= authConfig.otpMaxAttempts || challenge.status === "LOCKED") {
+        if (challenge.status !== "LOCKED") {
+          await tx.otp_challenge.update({
+            where: { id: challenge.id },
+            data: { status: "LOCKED", consumed_at: new Date() },
+          });
+        }
         console.warn(`[AUTH_AUDIT] Challenge locked due to attempt limit for ${maskPhone(phone)}`);
         const error: any = new Error("Maximum verification attempts exceeded. Please request a new OTP.");
         error.code = "OTP_MAX_ATTEMPTS";
@@ -159,20 +158,27 @@ export const authService = {
       const isMatch = await comparePassword(otp, challenge.otp_hash);
 
       if (!isMatch) {
-        const nextAttempts = challenge.attempt_count + 1;
-        const reachedLimit = nextAttempts >= authConfig.otpMaxAttempts;
-
-        await tx.otp_challenge.update({
+        // Atomic database-level increment to prevent concurrent attempt bypass
+        const updated = await tx.otp_challenge.update({
           where: { id: challenge.id },
           data: {
-            attempt_count: nextAttempts,
-            status: reachedLimit ? "LOCKED" : "ACTIVE",
-            ...(reachedLimit ? { consumed_at: new Date() } : {}),
+            attempt_count: { increment: 1 },
           },
         });
 
+        const reachedLimit = updated.attempt_count >= authConfig.otpMaxAttempts;
+        if (reachedLimit) {
+          await tx.otp_challenge.update({
+            where: { id: challenge.id },
+            data: {
+              status: "LOCKED",
+              consumed_at: new Date(),
+            },
+          });
+        }
+
         console.warn(
-          `[AUTH_AUDIT] Incorrect OTP attempt (${nextAttempts}/${authConfig.otpMaxAttempts}) for ${maskPhone(phone)}`
+          `[AUTH_AUDIT] Incorrect OTP attempt (${updated.attempt_count}/${authConfig.otpMaxAttempts}) for ${maskPhone(phone)}`
         );
 
         const error: any = new Error(
@@ -351,14 +357,22 @@ export const authService = {
   },
 
   /**
-   * Periodic hygiene cleanup for expired challenges older than retention threshold.
+   * Periodic hygiene cleanup for expired and consumed/invalidated challenges older than retention threshold.
    */
   async cleanupExpiredOtpChallenges() {
     const cutoff = new Date(Date.now() - authConfig.otpCleanupRetentionDays * 24 * 60 * 60 * 1000);
-    return await prisma.otp_challenge.deleteMany({
+    const result = await prisma.otp_challenge.deleteMany({
       where: {
-        expires_at: { lt: cutoff },
+        OR: [
+          { expires_at: { lt: cutoff } },
+          {
+            status: { in: ["CONSUMED", "INVALIDATED", "LOCKED", "DELIVERY_FAILED"] },
+            created_at: { lt: cutoff },
+          },
+        ],
       },
     });
+    console.log(`[AUTH_CLEANUP] Purged ${result.count} stale OTP challenge records older than ${authConfig.otpCleanupRetentionDays} days`);
+    return result;
   },
 };
