@@ -110,6 +110,13 @@ export const bookingSafeSelect = {
   customer_id: true,
   status: true,
   otp_verified: true,
+  started_at: true,
+  completion_requested_at: true,
+  completed_at: true,
+  cancelled_at: true,
+  cancelled_by: true,
+  cancellation_reason: true,
+  confirmed_by: true,
   created_at: true,
   updated_at: true,
 } satisfies Prisma.bookingSelect;
@@ -646,6 +653,13 @@ export interface BookingSafeDTO {
   customer_id: string;
   status: string | null;
   otp_verified: boolean | null;
+  started_at?: Date | null;
+  completion_requested_at?: Date | null;
+  completed_at?: Date | null;
+  cancelled_at?: Date | null;
+  cancelled_by?: string | null;
+  cancellation_reason?: string | null;
+  confirmed_by?: string | null;
   created_at: Date | null;
   updated_at: Date | null;
   job?: JobDTO | null;
@@ -670,6 +684,13 @@ export function toBookingDTO(b: any, actor?: any): BookingSafeDTO | null {
     customer_id: b.customer_id,
     status: b.status !== undefined ? b.status : null,
     otp_verified: b.otp_verified !== undefined ? b.otp_verified : null,
+    started_at: b.started_at !== undefined ? b.started_at : undefined,
+    completion_requested_at: b.completion_requested_at !== undefined ? b.completion_requested_at : undefined,
+    completed_at: b.completed_at !== undefined ? b.completed_at : undefined,
+    cancelled_at: b.cancelled_at !== undefined ? b.cancelled_at : undefined,
+    cancelled_by: b.cancelled_by !== undefined ? b.cancelled_by : undefined,
+    cancellation_reason: b.cancellation_reason !== undefined ? b.cancellation_reason : undefined,
+    confirmed_by: b.confirmed_by !== undefined ? b.confirmed_by : undefined,
     created_at: b.created_at !== undefined ? b.created_at : null,
     updated_at: b.updated_at !== undefined ? b.updated_at : null,
     job: b.job ? toJobDTO(b.job) : undefined,

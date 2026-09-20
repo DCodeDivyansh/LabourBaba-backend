@@ -13,6 +13,7 @@ import {
   RequirementAction,
   requirementStateService,
 } from '../jobs/requirementStateMachine';
+import { BookingStatus } from '../booking/bookingStateMachine';
 
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
@@ -181,7 +182,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
           requirement_id: requirementId,
           worker_id: workerId,
           customer_id: req.job.customer_id,
-          status: 'confirmed',
+          status: BookingStatus.CONFIRMED,
           otp_hash,
         },
         select: bookingSafeSelect,

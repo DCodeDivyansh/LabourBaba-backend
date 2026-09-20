@@ -48,20 +48,48 @@ model booking {
   status          String?         @db.VarChar(30)
   otp_hash        String?
   otp_verified    Boolean?        @default(false)
-  created_at      DateTime        @default(now()) @db.Timestamp(6)
-  updated_at      DateTime        @default(now()) @db.Timestamp(6)
-  customer        customer        @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_customer")
-  job             job             @relation(fields: [job_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_job")
-  job_requirement job_requirement @relation(fields: [requirement_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_requirement")
-  worker          Worker          @relation(fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_worker")
-  conversation    conversation?
-  payment         payment?
-  review          review?
+  started_at              DateTime?       @db.Timestamptz(6)
+  completion_requested_at DateTime?       @db.Timestamptz(6)
+  completed_at            DateTime?       @db.Timestamptz(6)
+  cancelled_at            DateTime?       @db.Timestamptz(6)
+  cancelled_by            String?         @db.VarChar(100)
+  cancellation_reason     String?         @db.Text
+  confirmed_by            String?         @db.VarChar(100)
+  created_at              DateTime        @default(now()) @db.Timestamp(6)
+  updated_at              DateTime        @default(now()) @db.Timestamp(6)
+  customer                customer        @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_customer")
+  job                     job             @relation(fields: [job_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_job")
+  job_requirement         job_requirement @relation(fields: [requirement_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_requirement")
+  worker                  Worker          @relation(fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_worker")
+  conversation            conversation?
+  payment                 payment?
+  review                  review?
+  booking_transition      booking_transition[]
 
   @@unique([requirement_id, worker_id], map: "uniq_booking_requirement_worker")
   @@index([customer_id], map: "idx_booking_customer")
   @@index([job_id], map: "idx_booking_job")
   @@index([worker_id], map: "idx_booking_worker")
+  @@index([status], map: "idx_booking_status")
+}
+
+/// Durable audit history for all Booking state machine transitions.
+/// Recorded transactionally in the same DB transaction as the status update.
+model booking_transition {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  booking_id  String   @db.Uuid
+  from_status String   @db.VarChar(30)
+  to_status   String   @db.VarChar(30)
+  action      String   @db.VarChar(50)
+  actor_type  String   @db.VarChar(30)
+  actor_id    String?  @db.VarChar(100)
+  reason      String?  @db.Text
+  metadata    Json?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  booking     booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_transition_booking")
+
+  @@index([booking_id, created_at], map: "idx_booking_transition_booking_id")
+  @@map("booking_transition")
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.

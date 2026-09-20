@@ -13,6 +13,7 @@ import {
 import { bookingPolicy, assertPolicy, AuthenticatedUser, AuthorizationError, UserRole } from "../../policies";
 import { jobStateService, JobAction } from "../jobs/jobStateMachine";
 import { requirementStateService, ACTIVE_BOOKING_STATUSES } from "../jobs/requirementStateMachine";
+import { bookingStateService, BookingAction, BookingStatus, BookingInvalidTransitionError } from "./bookingStateMachine";
 
 export const bookingService = {
   async getBookingDetail(bookingId: string, actor?: AuthenticatedUser) {
@@ -95,9 +96,11 @@ export const bookingService = {
         throw new Error("Invalid OTP");
       }
 
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: { status: "IN_PROGRESS", otp_verified: true }
+      await bookingStateService.transition(tx, {
+        bookingId,
+        action: BookingAction.START_WORK,
+        actor: { id: effectiveWorkerId, role: actor?.role || UserRole.WORKER },
+        reason: `Worker verified OTP for booking ${bookingId}`,
       });
 
       // Synchronize parent job state -> IN_PROGRESS
@@ -139,14 +142,15 @@ export const bookingService = {
       } else {
         if (booking.worker_id !== workerId) throw new AuthorizationError("Forbidden: You are not assigned to this booking", 403);
       }
-      if (booking.status !== "IN_PROGRESS") throw new Error("Booking is not in progress");
 
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: { status: "COMPLETED" }
+      await bookingStateService.transition(tx, {
+        bookingId,
+        action: BookingAction.REQUEST_COMPLETION,
+        actor: { id: effectiveWorkerId, role: actor?.role || UserRole.WORKER },
+        reason: "Worker marked work completed",
       });
 
-      return { success: true, message: "Booking completed by worker" };
+      return { success: true, message: "Booking completion requested by worker, awaiting customer confirmation" };
     });
   },
 
@@ -172,11 +176,24 @@ export const bookingService = {
         if (booking.customer_id !== customerId) throw new AuthorizationError("Forbidden: You do not own this booking", 403);
       }
 
-      if (payload.rating) {
-        if (booking.status !== "COMPLETED") {
-          throw new Error("Cannot review a booking that is not completed");
-        }
+      const currentNormalized = bookingStateService.normalizeStatus(booking.status);
+      if (payload.rating && currentNormalized !== BookingStatus.COMPLETED && currentNormalized !== BookingStatus.AWAITING_CONFIRMATION) {
+        throw new BookingInvalidTransitionError(
+          currentNormalized,
+          BookingAction.CONFIRM_COMPLETION,
+          "Cannot review a booking that is not completed"
+        );
+      }
 
+      // Transition AWAITING_CONFIRMATION -> COMPLETED (or idempotent if already COMPLETED)
+      await bookingStateService.transition(tx, {
+        bookingId,
+        action: BookingAction.CONFIRM_COMPLETION,
+        actor: { id: effectiveCustomerId, role: actor?.role || UserRole.CUSTOMER },
+        reason: "Customer confirmed completion",
+      });
+
+      if (payload.rating) {
         try {
           await tx.review.create({
             data: {
@@ -250,9 +267,11 @@ export const bookingService = {
         }
       }
 
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: { status: "CANCELLED" }
+      await bookingStateService.transition(tx, {
+        bookingId,
+        action: BookingAction.CANCEL,
+        actor: { id: actor?.id || userId, role: actor?.role || UserRole.CUSTOMER },
+        reason: payload.reason || "Booking cancelled",
       });
 
       // Reconcile requirement capacity from authoritative active bookings

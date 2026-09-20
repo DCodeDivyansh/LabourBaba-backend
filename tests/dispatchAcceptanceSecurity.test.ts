@@ -384,7 +384,7 @@ describe("P0 Finding #9 Security Regression Suite: Dispatch Acceptance Invariant
       expect(res.body.success).toBe(true);
       expect(res.body.data.booking).toBeDefined();
       expect(res.body.data.booking.worker_id).toBe(WORKER_A_ID);
-      expect(res.body.data.booking.status).toBe("confirmed");
+      expect(res.body.data.booking.status?.toUpperCase()).toBe("CONFIRMED");
       expect(res.body.data.otp).toBeDefined();
 
       // Verify database state mutations

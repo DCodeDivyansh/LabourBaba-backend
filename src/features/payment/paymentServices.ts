@@ -53,7 +53,7 @@ export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
  * Payment is allowed when the booking is confirmed but work has not yet started.
  * We accept both "confirmed" (set by dispatchServices) and "OTP_PENDING" (set by booking flow).
  */
-const PAYABLE_BOOKING_STATUSES = new Set(["confirmed", "OTP_PENDING", "PENDING"]);
+const PAYABLE_BOOKING_STATUSES = new Set(["confirmed", "CONFIRMED", "OTP_PENDING", "PENDING"]);
 
 // ── Error class ─────────────────────────────────────────────────────────────────
 

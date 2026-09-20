@@ -41,7 +41,7 @@ export const JobStatusSchema = z.enum(["OPEN", "DISPATCHING", "BOOKED", "IN_PROG
   example: "OPEN",
 });
 
-export const BookingStatusSchema = z.enum(["PENDING", "OTP_PENDING", "IN_PROGRESS", "COMPLETED", "CANCELLED"]).openapi({
+export const BookingStatusSchema = z.enum(["CONFIRMED", "PENDING", "OTP_PENDING", "IN_PROGRESS", "AWAITING_CONFIRMATION", "COMPLETED", "CANCELLED"]).openapi({
   description: "Status of a booking",
   example: "PENDING",
 });

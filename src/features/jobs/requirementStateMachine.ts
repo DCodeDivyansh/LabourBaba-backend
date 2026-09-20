@@ -102,6 +102,7 @@ export const ACTIVE_BOOKING_STATUSES: ReadonlySet<string> = new Set([
   "confirmed",
   "CONFIRMED",
   "IN_PROGRESS",
+  "AWAITING_CONFIRMATION",
   "COMPLETED",
 ]);
 

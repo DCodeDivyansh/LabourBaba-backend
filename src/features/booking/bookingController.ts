@@ -3,10 +3,35 @@ import { bookingService } from "./bookingServices";
 import { ConfirmBookingCompleteReq, CancelBookingReq } from "../../type/api_req.type";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
 import { AuthorizationError } from "../../policies";
+import { BookingStateError } from "./bookingStateMachine";
 
-const getUserId = (req: Request) => {
-  return (req as AuthenticatedRequest).user?.id || null;
-};
+function handleBookingError(error: any, res: Response): void {
+  if (error instanceof BookingStateError) {
+    res.status(error.statusCode).json({
+      success: false,
+      code: error.code,
+      message: error.message,
+    });
+    return;
+  }
+  if (error instanceof AuthorizationError) {
+    res.status(error.status).json({ success: false, message: error.message });
+    return;
+  }
+  if (error.statusCode === 403 || error.code === "FORBIDDEN" || error.message?.includes("Forbidden") || error.message === "Unauthorized") {
+    res.status(403).json({ success: false, message: error.message || "Forbidden" });
+    return;
+  }
+  if (error.message === "Booking not found" || error.statusCode === 404) {
+    res.status(404).json({ success: false, message: "Booking not found" });
+    return;
+  }
+  res.status(error.statusCode || 400).json({
+    success: false,
+    code: error.code,
+    message: error.message,
+  });
+}
 
 export const getBooking = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -19,19 +44,7 @@ export const getBooking = async (req: Request, res: Response): Promise<void> => 
     const booking = await bookingService.getBookingDetail(bookingId, actor);
     res.status(200).json({ success: true, data: booking });
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
-      return;
-    }
-    if (error.statusCode === 403 || error.code === "FORBIDDEN" || error.message?.includes("Forbidden")) {
-      res.status(403).json({ success: false, message: error.message || "Forbidden" });
-      return;
-    }
-    if (error.message === "Booking not found" || error.statusCode === 404) {
-      res.status(404).json({ success: false, message: "Booking not found" });
-      return;
-    }
-    res.status(400).json({ success: false, message: error.message });
+    handleBookingError(error, res);
   }
 };
 
@@ -44,19 +57,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     const result = await bookingService.verifyOtp(bookingId, actor.id, otp, actor);
     res.status(200).json(result);
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
-      return;
-    }
-    if (error.message?.includes("Forbidden") || error.message === "Unauthorized") {
-      res.status(403).json({ success: false, message: error.message });
-      return;
-    }
-    if (error.message === "Booking not found") {
-      res.status(404).json({ success: false, message: "Booking not found" });
-      return;
-    }
-    res.status(400).json({ success: false, message: error.message });
+    handleBookingError(error, res);
   }
 };
 
@@ -68,19 +69,7 @@ export const completeBooking = async (req: Request, res: Response): Promise<void
     const result = await bookingService.completeBooking(bookingId, actor.id, actor);
     res.status(200).json(result);
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
-      return;
-    }
-    if (error.message?.includes("Forbidden") || error.message === "Unauthorized") {
-      res.status(403).json({ success: false, message: error.message });
-      return;
-    }
-    if (error.message === "Booking not found") {
-      res.status(404).json({ success: false, message: "Booking not found" });
-      return;
-    }
-    res.status(400).json({ success: false, message: error.message });
+    handleBookingError(error, res);
   }
 };
 
@@ -93,19 +82,7 @@ export const confirmComplete = async (req: Request, res: Response): Promise<void
     const result = await bookingService.confirmComplete(bookingId, actor.id, payload, actor);
     res.status(200).json(result);
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
-      return;
-    }
-    if (error.message?.includes("Forbidden") || error.message === "Unauthorized") {
-      res.status(403).json({ success: false, message: error.message });
-      return;
-    }
-    if (error.message === "Booking not found") {
-      res.status(404).json({ success: false, message: "Booking not found" });
-      return;
-    }
-    res.status(400).json({ success: false, message: error.message });
+    handleBookingError(error, res);
   }
 };
 
@@ -118,19 +95,7 @@ export const cancelBooking = async (req: Request, res: Response): Promise<void> 
     const result = await bookingService.cancelBooking(bookingId, actor.id, payload, actor);
     res.status(200).json(result);
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
-      return;
-    }
-    if (error.message?.includes("Forbidden") || error.message === "Unauthorized") {
-      res.status(403).json({ success: false, message: "Forbidden: Not an authorized participant of this booking" });
-      return;
-    }
-    if (error.message === "Booking not found") {
-      res.status(404).json({ success: false, message: "Booking not found" });
-      return;
-    }
-    res.status(400).json({ success: false, message: error.message });
+    handleBookingError(error, res);
   }
 };
 
@@ -142,18 +107,6 @@ export const getWorkerLocation = async (req: Request, res: Response): Promise<vo
     const location = await bookingService.getWorkerLocation(bookingId, actor);
     res.status(200).json({ success: true, data: location });
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
-      return;
-    }
-    if (error.message?.includes("Forbidden") || error.message === "Unauthorized") {
-      res.status(403).json({ success: false, message: error.message });
-      return;
-    }
-    if (error.message === "Booking not found" || error.statusCode === 404) {
-      res.status(404).json({ success: false, message: "Booking not found" });
-      return;
-    }
-    res.status(400).json({ success: false, message: error.message });
+    handleBookingError(error, res);
   }
 };
