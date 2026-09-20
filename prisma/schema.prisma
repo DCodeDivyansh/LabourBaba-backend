@@ -9,7 +9,7 @@ datasource db {
 model Worker {
   id                  String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   skill_category_id   String                    @db.Uuid
-  phone               String                    @unique @db.VarChar(15)
+  phone               String                    @unique @db.VarChar(20)
   skill_type          String                    @db.VarChar(100)
   worker_score        Decimal?                  @default(5.0) @db.Decimal(4, 2)
   is_online           Boolean?                  @default(false)
@@ -175,7 +175,7 @@ model conversation {
 
 model customer {
   id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  phone        String         @unique @db.VarChar(15)
+  phone        String         @unique @db.VarChar(20)
   name         String         @db.VarChar(150)
   created_at   DateTime?      @default(now()) @db.Timestamptz(6)
   deleted_at   DateTime?      @db.Timestamptz(6)

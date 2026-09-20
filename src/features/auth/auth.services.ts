@@ -5,7 +5,7 @@ import {
   generateOTP,
   hashOTP,
   comparePassword,
-  normalizePhone,
+  normalizePhoneToE164,
   maskPhone,
   signAccessToken,
   verifyRefreshToken,
@@ -21,7 +21,7 @@ export const authService = {
    * Enforces resend cooldown and invalidates any previous active challenges for (phone, purpose).
    */
   async sendOtp(rawPhone: string, type: "login" | "register") {
-    const phone = normalizePhone(rawPhone);
+    const phone = normalizePhoneToE164(rawPhone);
 
     // 1. Check for active unconsumed challenge to enforce resend cooldown
     const existingActive = await prisma.otp_challenge.findFirst({
@@ -116,7 +116,7 @@ export const authService = {
     type?: "login" | "register",
     opts?: { deviceId?: string; userAgent?: string; ipAddress?: string }
   ) {
-    const phone = normalizePhone(rawPhone);
+    const phone = normalizePhoneToE164(rawPhone);
 
     return await prisma.$transaction(async (tx) => {
       // 1. Locate active challenge

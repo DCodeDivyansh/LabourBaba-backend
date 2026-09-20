@@ -1,8 +1,38 @@
 import { z } from "zod";
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
+import { normalizePhoneToE164 } from "../utils/authUtils";
 
 // Extend Zod with OpenAPI capabilities
 extendZodWithOpenApi(z);
+
+export const e164PhoneSchema = z.string().transform((val, ctx) => {
+  try {
+    return normalizePhoneToE164(val);
+  } catch (err: any) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        err?.message ||
+        "Invalid phone number format. Please provide a valid number with country code (e.g., +919876543210).",
+    });
+    return z.NEVER;
+  }
+});
+
+export const optionalE164PhoneSchema = z.string().optional().transform((val, ctx) => {
+  if (val === undefined || val === null || val === "") return undefined;
+  try {
+    return normalizePhoneToE164(val);
+  } catch (err: any) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        err?.message ||
+        "Invalid phone number format. Please provide a valid number with country code (e.g., +919876543210).",
+    });
+    return z.NEVER;
+  }
+});
 
 // --- Enums ---
 
@@ -149,14 +179,14 @@ export const ReviewSchema = z.object({
 // --- API Request Schemas ---
 
 export const CreateCustomerReqSchema = z.object({
-  phone: z.string().min(10, "Phone number must be at least 10 digits").openapi({ example: "+919876543210" }),
+  phone: e164PhoneSchema,
   name: z.string().min(1, "Name is required").openapi({ example: "John Doe" }),
 }).openapi("CreateCustomerReq");
 
 export const CreateWorkerReqSchema = z.object({
   name: z.string().min(1, "Name is required").openapi({ example: "John Worker" }),
   skill_category_id: z.string().uuid("Invalid Skill Category UUID"),
-  phone: z.string().min(10, "Phone must be at least 10 digits").openapi({ example: "+919876543211" }),
+  phone: e164PhoneSchema,
   password: z.string().min(6, "Password must be at least 6 characters").openapi({ example: "mysecurepassword" }),
   skill_type: z.string().min(1, "Skill type is required").openapi({ example: "Plumber" }),
   aadhaar_last4: z.string().length(4, "Aadhaar must be exactly 4 digits").optional(),
@@ -164,7 +194,7 @@ export const CreateWorkerReqSchema = z.object({
 }).openapi("CreateWorkerReq");
 
 export const LoginWorkerReqSchema = z.object({
-  phone: z.string().min(10, "Phone must be at least 10 digits").openapi({ example: "+919876543211" }),
+  phone: e164PhoneSchema,
   password: z.string().min(1, "Password is required").openapi({ example: "mysecurepassword" }),
 }).openapi("LoginWorkerReq");
 
@@ -267,13 +297,13 @@ export const UploadWorkerDocumentReqSchema = z.object({
 }).openapi("UploadWorkerDocumentReq");
 
 export const SignupCustomerReqSchema = z.object({
-  phone: z.string().min(10, "Phone number must be at least 10 digits").openapi({ example: "+919876543210" }),
+  phone: e164PhoneSchema,
   name: z.string().min(1, "Name is required").openapi({ example: "John Doe" }),
   password: z.string().min(6, "Password must be at least 6 characters").openapi({ example: "mysecurepassword" }),
 }).openapi("SignupCustomerReq");
 
 export const LoginCustomerReqSchema = z.object({
-  phone: z.string().min(10, "Phone number must be at least 10 digits").openapi({ example: "+919876543210" }),
+  phone: e164PhoneSchema,
   password: z.string().min(1, "Password is required").openapi({ example: "mysecurepassword" }),
 }).openapi("LoginCustomerReq");
 
@@ -329,12 +359,12 @@ export const WorkerAnalyticsSchema = z.object({
 }).openapi("WorkerAnalytics");
 
 export const SendOtpReqSchema = z.object({
-  phone: z.string().min(10, "Phone number must be at least 10 digits").max(15, "Phone number cannot exceed 15 digits").regex(/^\+?[1-9]\d{9,14}$/, "Invalid phone number format").openapi({ example: "+919876543210" }),
+  phone: e164PhoneSchema,
   type: z.enum(["login", "register"]).openapi({ example: "login" }),
 }).openapi("SendOtpReq");
 
 export const AuthVerifyOtpReqSchema = z.object({
-  phone: z.string().min(10, "Phone number must be at least 10 digits").max(15, "Phone number cannot exceed 15 digits").regex(/^\+?[1-9]\d{9,14}$/, "Invalid phone number format").openapi({ example: "+919876543210" }),
+  phone: e164PhoneSchema,
   otp: z.string().regex(/^\d{6}$/, "OTP must be exactly 6 numeric digits").openapi({ example: "123456" }),
   type: z.enum(["login", "register"]).optional().openapi({ example: "login" }),
 }).openapi("AuthVerifyOtpReq");
@@ -363,7 +393,7 @@ export const SessionDTOSchema = z.object({
 
 export const UpdateWorkerProfileReqSchema = z.object({
   name: z.string().optional(),
-  phone: z.string().min(10).optional(),
+  phone: optionalE164PhoneSchema,
   skill_type: z.string().optional(),
 }).openapi("UpdateWorkerProfileReq");
 

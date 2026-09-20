@@ -2,7 +2,7 @@ import prisma from "../../config/prisma";
 import { CreateWorkerReq, UpdateWorkerProfileReq, UpdateWorkerLocationReq, UpdateWorkerOnlineStatusReq, UploadWorkerDocumentReq, RegisterWorkerDeviceReq } from "../../type/api_req.type";
 import { workerLocationService } from "../worker_location/worker_location.service";
 import { workerDeviceService } from "../worker_device/worker_device.service";
-import { hashPassword } from "../../utils/authUtils";
+import { hashPassword, normalizePhoneToE164 } from "../../utils/authUtils";
 import {
   workerSelfSelect,
   toWorkerSelfDTO,
@@ -18,20 +18,39 @@ import { workerPolicy, assertPolicy, AuthorizationError, AuthenticatedUser } fro
 
 export const workerService = {
   async register(payload: CreateWorkerReq) {
-    const hashedPassword = await hashPassword(payload.password);
-    const worker = await prisma.worker.create({
-      data: {
-        name: payload.name,
-        skill_category_id: payload.skill_category_id,
-        phone: payload.phone,
-        password: hashedPassword,
-        skill_type: payload.skill_type,
-        aadhaar_last4: payload.aadhaar_last4,
-        device_token: payload.device_token,
-      },
-      select: workerSelfSelect,
+    const phone = normalizePhoneToE164(payload.phone);
+    const existingWorker = await prisma.worker.findUnique({
+      where: { phone },
     });
-    return toWorkerSelfDTO(worker);
+    if (existingWorker) {
+      const err: any = new Error("Worker with this phone number already exists");
+      err.code = "PHONE_ALREADY_REGISTERED";
+      throw err;
+    }
+
+    const hashedPassword = await hashPassword(payload.password);
+    try {
+      const worker = await prisma.worker.create({
+        data: {
+          name: payload.name,
+          skill_category_id: payload.skill_category_id,
+          phone,
+          password: hashedPassword,
+          skill_type: payload.skill_type,
+          aadhaar_last4: payload.aadhaar_last4,
+          device_token: payload.device_token,
+        },
+        select: workerSelfSelect,
+      });
+      return toWorkerSelfDTO(worker);
+    } catch (createErr: any) {
+      if (createErr.code === "P2002") {
+        const err: any = new Error("Worker with this phone number already exists");
+        err.code = "PHONE_ALREADY_REGISTERED";
+        throw err;
+      }
+      throw createErr;
+    }
   },
 
   async getProfile(workerId: string) {
@@ -44,12 +63,25 @@ export const workerService = {
   },
 
   async updateProfile(workerId: string, payload: UpdateWorkerProfileReq) {
-    const updated = await prisma.worker.update({
-      where: { id: workerId },
-      data: payload,
-      select: workerSelfSelect,
-    });
-    return toWorkerSelfDTO(updated);
+    const updateData: any = { ...payload };
+    if (payload.phone) {
+      updateData.phone = normalizePhoneToE164(payload.phone);
+    }
+    try {
+      const updated = await prisma.worker.update({
+        where: { id: workerId },
+        data: updateData,
+        select: workerSelfSelect,
+      });
+      return toWorkerSelfDTO(updated);
+    } catch (updateErr: any) {
+      if (updateErr.code === "P2002") {
+        const err: any = new Error("Phone number is already in use by another worker");
+        err.code = "PHONE_ALREADY_REGISTERED";
+        throw err;
+      }
+      throw updateErr;
+    }
   },
 
   async updateLocation(workerId: string, payload: UpdateWorkerLocationReq) {

@@ -10,6 +10,14 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
     const response = await authService.sendOtp(payload.phone, payload.type);
     res.status(200).json(response);
   } catch (error: any) {
+    if (error.code === "INVALID_PHONE_NUMBER") {
+      res.status(422).json({
+        success: false,
+        code: "INVALID_PHONE_NUMBER",
+        message: error.message,
+      });
+      return;
+    }
     if (error.code === "OTP_RESEND_COOLDOWN") {
       res.status(429).json({
         success: false,
@@ -41,6 +49,14 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     });
     res.status(200).json({ success: true, data: response });
   } catch (error: any) {
+    if (error.code === "INVALID_PHONE_NUMBER") {
+      res.status(422).json({
+        success: false,
+        code: "INVALID_PHONE_NUMBER",
+        message: error.message,
+      });
+      return;
+    }
     if (error.code === "USER_NOT_FOUND") {
       res.status(404).json({ success: false, code: "USER_NOT_FOUND", message: error.message });
       return;

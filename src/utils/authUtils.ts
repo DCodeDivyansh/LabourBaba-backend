@@ -150,6 +150,8 @@ export function verifyToken(token: string): any {
 
 
 
+import { parsePhoneNumber } from "libphonenumber-js";
+
 /**
  * Generate a cryptographically secure random 6-digit OTP string.
  * Uses crypto.randomInt to guarantee uniform, non-predictable distribution.
@@ -167,13 +169,51 @@ export async function hashOTP(otp: string): Promise<string> {
 }
 
 /**
- * Normalizes phone numbers to a canonical representation by stripping
- * whitespace, hyphens, parentheses, and dots.
- * Note: Broader international E.164 normalization is tracked in Issue #66.
+ * Normalizes phone numbers to a canonical E.164 representation using libphonenumber-js.
+ * Requires a valid international phone number with country code prefix (e.g., +919876543210).
+ * Ambiguous local numbers without country code will throw an INVALID_PHONE_NUMBER error.
+ *
+ * @param phone Raw phone string input
+ * @returns Canonical E.164 formatted phone number (e.g., "+919876543210")
+ * @throws Object with code "INVALID_PHONE_NUMBER" if invalid, malformed, or missing country code
+ */
+export function normalizePhoneToE164(phone: string): string {
+  if (!phone || typeof phone !== "string") {
+    throw {
+      code: "INVALID_PHONE_NUMBER",
+      message: "Phone number is required.",
+    };
+  }
+
+  const trimmed = phone.trim();
+  if (!trimmed) {
+    throw {
+      code: "INVALID_PHONE_NUMBER",
+      message: "Phone number cannot be blank.",
+    };
+  }
+
+  try {
+    const parsed = parsePhoneNumber(trimmed);
+    if (!parsed || !parsed.isValid()) {
+      throw new Error("Invalid phone structure");
+    }
+    return parsed.format("E.164");
+  } catch (err: any) {
+    throw {
+      code: "INVALID_PHONE_NUMBER",
+      message:
+        "Invalid phone number format. Please provide a valid number with country code (e.g., +919876543210).",
+    };
+  }
+}
+
+/**
+ * Normalizes phone numbers to a canonical representation.
+ * Alias to normalizePhoneToE164 for canonical E.164 format.
  */
 export function normalizePhone(phone: string): string {
-  if (!phone) return "";
-  return phone.trim().replace(/[\s\-\(\)\.]/g, "");
+  return normalizePhoneToE164(phone);
 }
 
 /**

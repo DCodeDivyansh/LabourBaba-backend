@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { redis } from "../config/redis";
-import { normalizePhone } from "../utils/authUtils";
+import { normalizePhoneToE164 } from "../utils/authUtils";
 
 interface MemoryRateLimitRecord {
   count: number;
@@ -58,6 +58,15 @@ async function incrementRateLimit(key: string, maxLimit: number, windowSeconds: 
   }
 }
 
+function safeNormalizePhone(rawPhone?: string): string | null {
+  if (!rawPhone || typeof rawPhone !== "string") return null;
+  try {
+    return normalizePhoneToE164(rawPhone);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Rate limiter for OTP Send requests:
  * - 5 requests per phone per 15 minutes
@@ -66,7 +75,7 @@ async function incrementRateLimit(key: string, maxLimit: number, windowSeconds: 
 export async function otpRequestRateLimiter(req: Request, res: Response, next: NextFunction): Promise<void> {
   const ip = req.ip || req.socket.remoteAddress || "unknown_ip";
   const rawPhone = req.body?.phone;
-  const phone = normalizePhone(rawPhone || "");
+  const phone = safeNormalizePhone(rawPhone);
   const windowSeconds = 15 * 60; // 15 minutes
 
   // 1. IP rate limit check
@@ -81,7 +90,7 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
     return;
   }
 
-  // 2. Phone rate limit check (if phone provided)
+  // 2. Phone rate limit check (if phone provided and valid)
   if (phone) {
     const phoneKey = `ratelimit:otp:req:phone:${phone}`;
     const phoneResult = await incrementRateLimit(phoneKey, 5, windowSeconds);
@@ -106,7 +115,7 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
 export async function otpVerifyRateLimiter(req: Request, res: Response, next: NextFunction): Promise<void> {
   const ip = req.ip || req.socket.remoteAddress || "unknown_ip";
   const rawPhone = req.body?.phone;
-  const phone = normalizePhone(rawPhone || "");
+  const phone = safeNormalizePhone(rawPhone);
   const windowSeconds = 15 * 60;
 
   // 1. IP rate limit check

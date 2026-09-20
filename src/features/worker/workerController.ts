@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { workerService } from "./workerServices";
 import { CreateWorkerReq, LoginWorkerReq, UpdateWorkerProfileReq, UpdateWorkerLocationReq, UpdateWorkerOnlineStatusReq, UploadWorkerDocumentReq } from "../../type/api_req.type";
 import { AuthenticatedRequest, UserRole } from "../../middlewares/authMiddleware";
-import { comparePassword, generateToken } from "../../utils/authUtils";
+import { comparePassword, generateToken, normalizePhoneToE164 } from "../../utils/authUtils";
 import prisma from "../../config/prisma";
 import { workerPolicy, assertPolicy, AuthorizationError } from "../../policies";
 import { sessionService } from "../auth/session.service";
@@ -13,7 +13,8 @@ const getWorkerId = (req: Request) => {
 
 export const loginWorker = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { phone, password }: LoginWorkerReq = req.body;
+    const { phone: rawPhone, password }: LoginWorkerReq = req.body;
+    const phone = normalizePhoneToE164(rawPhone);
     const worker = await prisma.worker.findUnique({
       where: { phone },
     });
@@ -54,6 +55,10 @@ export const loginWorker = async (req: Request, res: Response): Promise<void> =>
       refreshToken: sessionResult.rawToken,
     });
   } catch (error: any) {
+    if (error.code === "INVALID_PHONE_NUMBER") {
+      res.status(422).json({ success: false, code: "INVALID_PHONE_NUMBER", message: error.message });
+      return;
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -64,6 +69,14 @@ export const registerWorker = async (req: Request, res: Response): Promise<void>
     const worker = await workerService.register(payload);
     res.status(201).json({ success: true, data: worker });
   } catch (error: any) {
+    if (error.code === "PHONE_ALREADY_REGISTERED" || error.code === "P2002") {
+      res.status(409).json({ success: false, code: "PHONE_ALREADY_REGISTERED", message: "Worker with this phone number already exists" });
+      return;
+    }
+    if (error.code === "INVALID_PHONE_NUMBER") {
+      res.status(422).json({ success: false, code: "INVALID_PHONE_NUMBER", message: error.message });
+      return;
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -87,6 +100,14 @@ export const updateMe = async (req: Request, res: Response): Promise<void> => {
     const worker = await workerService.updateProfile(workerId, payload);
     res.status(200).json({ success: true, data: worker });
   } catch (error: any) {
+    if (error.code === "PHONE_ALREADY_REGISTERED" || error.code === "P2002") {
+      res.status(409).json({ success: false, code: "PHONE_ALREADY_REGISTERED", message: "Phone number is already in use by another worker" });
+      return;
+    }
+    if (error.code === "INVALID_PHONE_NUMBER") {
+      res.status(422).json({ success: false, code: "INVALID_PHONE_NUMBER", message: error.message });
+      return;
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 };

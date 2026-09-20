@@ -4,6 +4,7 @@ import {
   generateToken,
   hashPassword,
   comparePassword,
+  normalizePhoneToE164,
 } from "../../utils/authUtils";
 import {
   SignupCustomerReq,
@@ -21,7 +22,8 @@ export const signupCustomer = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { name, phone, password }: SignupCustomerReq = req.body;
+    const { name, phone: rawPhone, password }: SignupCustomerReq = req.body;
+    const phone = normalizePhoneToE164(rawPhone);
 
     const existingCustomer = await prisma.customer.findUnique({
       where: { phone },
@@ -30,6 +32,7 @@ export const signupCustomer = async (
     if (existingCustomer) {
       res.status(409).json({
         success: false,
+        code: "PHONE_ALREADY_REGISTERED",
         message: "Customer with this phone number already exists",
       });
       return;
@@ -59,6 +62,23 @@ export const signupCustomer = async (
       token,
     });
   } catch (error: any) {
+    if (error.code === "INVALID_PHONE_NUMBER") {
+      res.status(422).json({
+        success: false,
+        code: "INVALID_PHONE_NUMBER",
+        message: error.message,
+      });
+      return;
+    }
+    if (error.code === "P2002") {
+      res.status(409).json({
+        success: false,
+        code: "PHONE_ALREADY_REGISTERED",
+        message: "Customer with this phone number already exists",
+      });
+      return;
+    }
+
     console.error("Signup error:", error);
 
     res.status(500).json({
@@ -76,7 +96,8 @@ export const loginCustomer = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { phone, password }: LoginCustomerReq = req.body;
+    const { phone: rawPhone, password }: LoginCustomerReq = req.body;
+    const phone = normalizePhoneToE164(rawPhone);
 
     const customer = await prisma.customer.findUnique({
       where: { phone },
@@ -125,6 +146,15 @@ export const loginCustomer = async (
       refreshToken: sessionResult.rawToken,
     });
   } catch (error: any) {
+    if (error.code === "INVALID_PHONE_NUMBER") {
+      res.status(422).json({
+        success: false,
+        code: "INVALID_PHONE_NUMBER",
+        message: error.message,
+      });
+      return;
+    }
+
     console.error("Login error:", error);
 
     res.status(500).json({
