@@ -3,8 +3,7 @@ import { CreateJobReq } from '../../type/api_req.type';
 import { dispatchJobSimple } from '../dispatch/simpleDispatch';
 import { bookingSafeSelect } from '../../shared/prismaSelects';
 import { jobPolicy, assertPolicy, AuthenticatedUser, PolicyActor, AuthorizationError, UserRole } from '../../policies';
-// BullMQ import kept for reference — uncomment to switch back:
-// import { dispatchQueue } from '../config/bullmq'
+import { jobStateService, JobAction, JobStatus, JobTransitionActor } from './jobStateMachine';
 
 export const jobService = {
   async createJob(customerId: string, payload: CreateJobReq) {
@@ -15,7 +14,7 @@ export const jobService = {
           latitude: payload.latitude,
           longitude: payload.longitude,
           location: payload.location,
-          status: 'OPEN',
+          status: JobStatus.OPEN,
           dispatch_status: 'PENDING',
         },
       });
@@ -30,6 +29,25 @@ export const jobService = {
         `;
       } catch (err) {
         console.error("UPDATE failed:", err);
+      }
+
+      // Record initial creation in transition history
+      try {
+        if ((tx as any).job_transition?.create) {
+          await (tx as any).job_transition.create({
+            data: {
+              job_id: job.id,
+              from_status: "INITIAL",
+              to_status: JobStatus.OPEN,
+              action: JobAction.CREATE,
+              actor_type: UserRole.CUSTOMER,
+              actor_id: customerId,
+              reason: "Job created by customer",
+            },
+          });
+        }
+      } catch (histErr: any) {
+        console.warn(`[jobService] Could not write initial transition: ${histErr?.message}`);
       }
 
       if (payload.requirements && payload.requirements.length > 0) {
@@ -87,8 +105,8 @@ export const jobService = {
     return job;
   },
 
-  async cancelJob(jobId: string, customerId: string, actor?: PolicyActor) {
-    const effectiveActor: PolicyActor = actor || (customerId ? {
+  async cancelJob(jobId: string, customerId: string, actor?: PolicyActor, reason?: string) {
+    const effectiveActor: JobTransitionActor = actor || (customerId ? {
       id: customerId,
       role: UserRole.CUSTOMER,
       phone: "",
@@ -97,34 +115,49 @@ export const jobService = {
     if (!effectiveActor) {
       throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
     }
+
     return await prisma.$transaction(async (tx) => {
-      const job = await tx.job.findUnique({ where: { id: jobId } });
-      if (!job) throw new Error("Job not found");
-      assertPolicy(jobPolicy.canCancel(effectiveActor, job));
-      if (job.status === "COMPLETED") throw new Error("Cannot cancel a completed job");
-
-      await tx.job.update({
-        where: { id: jobId },
-        data: { status: "CANCELLED" },
+      // Execute cancellation strictly through the centralized state machine
+      const transitionResult = await jobStateService.transition(tx, {
+        jobId,
+        action: JobAction.CANCEL,
+        actor: effectiveActor,
+        reason: reason || "Job cancelled by customer/admin",
       });
 
+      // Synchronously cascade cancellation to open requirements and pending dispatches
       await tx.job_requirement.updateMany({
-        where: { job_id: jobId },
+        where: { job_id: jobId, status: { notIn: ["filled", "CANCELLED"] } },
         data: { status: "CANCELLED" },
       });
 
-      // Also cancel pending dispatches
       const reqs = await tx.job_requirement.findMany({ where: { job_id: jobId } });
       for (const r of reqs) {
         await tx.job_dispatch.updateMany({
-          where: { requirement_id: r.id, status: "PENDING" },
-          data: { status: "CANCELLED" },
+          where: { requirement_id: r.id, status: "pending" },
+          data: { status: "CANCELLED", responded_at: new Date() },
         });
       }
 
-      return { success: true, message: "Job cancelled" };
+      return {
+        success: true,
+        message: "Job cancelled",
+        data: transitionResult,
+      };
     });
   },
+
+  async completeJob(jobId: string, actor: JobTransitionActor, reason?: string) {
+    return await prisma.$transaction(async (tx) => {
+      return await jobStateService.transition(tx, {
+        jobId,
+        action: JobAction.COMPLETE,
+        actor,
+        reason: reason || "All requirements completed",
+      });
+    });
+  },
+
 
   async getJobRequirements(jobId: string, actor?: PolicyActor) {
     if (!actor) {

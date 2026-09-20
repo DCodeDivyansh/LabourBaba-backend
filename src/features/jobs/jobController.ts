@@ -63,6 +63,14 @@ export const getJobDetail = async (req: Request, res: Response): Promise<void> =
   }
 };
 
+import {
+  JobStateError,
+  JobNotFoundError,
+  JobAuthorizationError,
+  JobStateConflictError,
+  JobInvalidTransitionError,
+} from "./jobStateMachine";
+
 export const cancelJob = async (req: Request, res: Response): Promise<void> => {
   try {
     const { jobId } = req.params as any;
@@ -74,16 +82,24 @@ export const cancelJob = async (req: Request, res: Response): Promise<void> => {
     const response = await jobService.cancelJob(jobId, actor.id, actor);
     res.status(200).json(response);
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
+    if (error instanceof AuthorizationError || error instanceof JobAuthorizationError) {
+      res.status(error.status || error.statusCode || 403).json({ success: false, message: error.message });
+      return;
+    }
+    if (error instanceof JobNotFoundError || error.message === "Job not found") {
+      res.status(404).json({ success: false, message: "Job not found" });
+      return;
+    }
+    if (error instanceof JobStateConflictError) {
+      res.status(409).json({ success: false, message: error.message, code: error.code });
+      return;
+    }
+    if (error instanceof JobInvalidTransitionError) {
+      res.status(400).json({ success: false, message: error.message, code: error.code });
       return;
     }
     if (error.message?.includes("Forbidden") || error.message === "Unauthorized") {
       res.status(403).json({ success: false, message: "Forbidden: You do not own this job" });
-      return;
-    }
-    if (error.message === "Job not found") {
-      res.status(404).json({ success: false, message: "Job not found" });
       return;
     }
     res.status(400).json({ success: false, message: error.message || "Failed to cancel job" });

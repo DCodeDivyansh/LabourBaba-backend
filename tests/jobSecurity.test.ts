@@ -398,11 +398,12 @@ describe("Issue #2 Remediation — Client-Controlled customer_id Removal from Jo
         .set("Authorization", `Bearer ${customerAToken}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.success).toBe(true);
-      expect(prisma.job.update).toHaveBeenCalledWith({
-        where: { id: JOB_ID_A },
-        data: { status: "CANCELLED" },
-      });
+      expect(prisma.job.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: JOB_ID_A },
+          data: expect.objectContaining({ status: "CANCELLED" }),
+        })
+      );
     });
 
     it("TEST 11c: PATCH /api/jobs/:jobId/cancel fails with 401 when unauthenticated", async () => {

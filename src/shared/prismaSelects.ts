@@ -473,6 +473,10 @@ export interface JobDTO {
   status?: string | null;
   dispatch_status?: string | null;
   created_at?: Date | null;
+  updated_at?: Date | null;
+  cancelled_at?: Date | null;
+  cancelled_by?: string | null;
+  completed_at?: Date | null;
   job_requirement?: JobRequirementDTO[];
   customer?: CustomerSummaryDTO | null;
   booking?: Array<{ worker_id: string }>;
@@ -490,6 +494,10 @@ export function toJobDTO(job: any): JobDTO | null {
   if (job.status !== undefined) dto.status = job.status;
   if (job.dispatch_status !== undefined) dto.dispatch_status = job.dispatch_status;
   if (job.created_at !== undefined) dto.created_at = job.created_at;
+  if (job.updated_at !== undefined) dto.updated_at = job.updated_at;
+  if (job.cancelled_at !== undefined) dto.cancelled_at = job.cancelled_at;
+  if (job.cancelled_by !== undefined) dto.cancelled_by = job.cancelled_by;
+  if (job.completed_at !== undefined) dto.completed_at = job.completed_at;
   if (Array.isArray(job.job_requirement)) {
     dto.job_requirement = job.job_requirement.map(toJobRequirementDTO).filter(Boolean) as JobRequirementDTO[];
   }

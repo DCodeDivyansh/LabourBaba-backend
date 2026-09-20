@@ -75,14 +75,39 @@ model job {
   status          String?                   @db.VarChar(30)
   dispatch_status String?                   @db.VarChar(30)
   created_at      DateTime?                 @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?                 @default(now()) @db.Timestamptz(6)
+  cancelled_at    DateTime?                 @db.Timestamptz(6)
+  cancelled_by    String?                   @db.VarChar(100)
+  completed_at    DateTime?                 @db.Timestamptz(6)
   deleted_at      DateTime?                 @db.Timestamptz(6)
   booking         booking[]
   customer        customer                  @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_job_customer")
   job_requirement job_requirement[]
   notification    notification[]
+  job_transition  job_transition[]
 
   @@index([customer_id], map: "idx_job_customer")
+  @@index([status, customer_id], map: "idx_job_status_customer")
   @@index([location_geo], map: "idx_job_location", type: Gist)
+}
+
+/// Durable audit history for all Job state machine transitions.
+/// Recorded transactionally in the same DB transaction as the status update.
+model job_transition {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  job_id      String   @db.Uuid
+  from_status String   @db.VarChar(30)
+  to_status   String   @db.VarChar(30)
+  action      String   @db.VarChar(50)
+  actor_type  String   @db.VarChar(30)
+  actor_id    String?  @db.VarChar(100)
+  reason      String?  @db.Text
+  metadata    Json?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  job         job      @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_transition_job")
+
+  @@index([job_id, created_at], map: "idx_job_transition_job_id")
+  @@map("job_transition")
 }
 
 model payment {

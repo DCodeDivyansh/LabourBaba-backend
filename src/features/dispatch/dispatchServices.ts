@@ -7,6 +7,8 @@ import { io } from '../../server';
 import { customerSummarySelect, bookingSafeSelect, toDispatchDTO, toWorkerPublicDTO, toDispatchWaveDTO } from '../../shared/prismaSelects';
 import { PolicyActor, AuthorizationError, UserRole } from '../../policies';
 
+import { jobStateService, JobAction } from '../jobs/jobStateMachine';
+
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
 async function checkJobComplete(
@@ -21,6 +23,17 @@ async function checkJobComplete(
   });
 
   if (unfilledCount === 0) {
+    try {
+      await jobStateService.transition(tx, {
+        jobId,
+        action: JobAction.MARK_BOOKED,
+        actor: { role: "SYSTEM" },
+        reason: "All job requirements filled",
+      });
+    } catch (err: any) {
+      console.warn(`[dispatchServices] Note: Job transition to BOOKED: ${err.message}`);
+    }
+
     await tx.job.update({
       where: { id: jobId },
       data: { dispatch_status: 'fully_booked' },

@@ -98,6 +98,8 @@ function sleep(ms: number): Promise<void> {
 
 // ── Public entry point ───────────────────────────────────────────────────────
 
+import { jobStateService, JobAction } from '../jobs/jobStateMachine';
+
 /**
  * Dispatch all requirements for a job in parallel.
  * Call this fire-and-forget after job creation — it runs in the background
@@ -107,6 +109,18 @@ export async function dispatchJobSimple(
   job: JobForDispatch,
   requirements: RequirementForDispatch[],
 ): Promise<void> {
+  try {
+    await prisma.$transaction(async (tx) => {
+      await jobStateService.transition(tx, {
+        jobId: job.id,
+        action: JobAction.START_DISPATCH,
+        actor: { role: "DISPATCH_WORKER" },
+        reason: "Dispatch wave initiated",
+      });
+    });
+  } catch (err: any) {
+    // If job was already in DISPATCHING or BOOKED (e.g. on recovery or mock), safely ignore
+  }
   await Promise.all(requirements.map((req) => dispatchRequirementSimple(job, req)));
 }
 

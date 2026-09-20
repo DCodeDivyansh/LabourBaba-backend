@@ -11,6 +11,7 @@ import {
   toWorkerLocationDTO,
 } from "../../shared/prismaSelects";
 import { bookingPolicy, assertPolicy, AuthenticatedUser, AuthorizationError, UserRole } from "../../policies";
+import { jobStateService, JobAction } from "../jobs/jobStateMachine";
 
 export const bookingService = {
   async getBookingDetail(bookingId: string, actor?: AuthenticatedUser) {
@@ -98,6 +99,20 @@ export const bookingService = {
         data: { status: "IN_PROGRESS", otp_verified: true }
       });
 
+      // Synchronize parent job state -> IN_PROGRESS
+      if (booking.job_id) {
+        try {
+          await jobStateService.transition(tx, {
+            jobId: booking.job_id,
+            action: JobAction.START_WORK,
+            actor: { id: effectiveWorkerId, role: UserRole.WORKER },
+            reason: `Worker verified OTP for booking ${bookingId}`,
+          });
+        } catch {
+          // If job was already in IN_PROGRESS (multi-worker), safe to proceed
+        }
+      }
+
       return { success: true, message: "OTP verified, job started" };
     });
   },
@@ -177,6 +192,28 @@ export const bookingService = {
           } else {
             throw err;
           }
+        }
+      }
+
+      // Check if all bookings under parent job are now completed -> transition job to COMPLETED
+      if (booking.job_id) {
+        try {
+          const uncompletedBookings = await tx.booking.count({
+            where: {
+              job_id: booking.job_id,
+              status: { notIn: ["COMPLETED", "CANCELLED"] },
+            },
+          });
+          if (uncompletedBookings === 0) {
+            await jobStateService.transition(tx, {
+              jobId: booking.job_id,
+              action: JobAction.COMPLETE,
+              actor: { id: effectiveCustomerId, role: actor?.role || UserRole.CUSTOMER },
+              reason: "All bookings completed and confirmed",
+            });
+          }
+        } catch {
+          // Safe ignore if already completed or unable
         }
       }
 

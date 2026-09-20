@@ -36,7 +36,7 @@ export const optionalE164PhoneSchema = z.string().optional().transform((val, ctx
 
 // --- Enums ---
 
-export const JobStatusSchema = z.enum(["OPEN", "DISPATCHING", "BOOKED", "COMPLETED", "CANCELLED"]).openapi({
+export const JobStatusSchema = z.enum(["OPEN", "DISPATCHING", "BOOKED", "IN_PROGRESS", "COMPLETED", "CANCELLED"]).openapi({
   description: "Status of a job",
   example: "OPEN",
 });
