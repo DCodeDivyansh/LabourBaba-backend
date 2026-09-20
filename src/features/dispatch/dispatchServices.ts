@@ -14,6 +14,7 @@ import {
   requirementStateService,
 } from '../jobs/requirementStateMachine';
 import { BookingStatus } from '../booking/bookingStateMachine';
+import { bookingConfig } from '../../config/bookingConfig';
 
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
@@ -172,6 +173,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
     // Generate and hash a fresh OTP for job start verification
     const otp = generateOTP();
     const otp_hash = await hashOTP(otp);
+    const otp_expires_at = new Date(Date.now() + bookingConfig.bookingOtpTtlSeconds * 1000);
 
     // Create booking
     let booking;
@@ -184,6 +186,8 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
           customer_id: req.job.customer_id,
           status: BookingStatus.CONFIRMED,
           otp_hash,
+          otp_expires_at,
+          otp_attempts: 0,
         },
         select: bookingSafeSelect,
       });

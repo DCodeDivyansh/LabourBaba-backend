@@ -13,7 +13,19 @@ import {
 import { bookingPolicy, assertPolicy, AuthenticatedUser, AuthorizationError, UserRole } from "../../policies";
 import { jobStateService, JobAction } from "../jobs/jobStateMachine";
 import { requirementStateService, ACTIVE_BOOKING_STATUSES } from "../jobs/requirementStateMachine";
-import { bookingStateService, BookingAction, BookingStatus, BookingInvalidTransitionError } from "./bookingStateMachine";
+import { bookingConfig } from "../../config/bookingConfig";
+import {
+  bookingStateService,
+  BookingAction,
+  BookingStatus,
+  BookingInvalidTransitionError,
+  BookingOtpError,
+  BookingOtpInvalidError,
+  BookingOtpExpiredError,
+  BookingOtpLockedError,
+  BookingOtpAlreadyConsumedError,
+  BookingOtpWrongStateError,
+} from "./bookingStateMachine";
 
 export const bookingService = {
   async getBookingDetail(bookingId: string, actor?: AuthenticatedUser) {
@@ -74,28 +86,111 @@ export const bookingService = {
   async verifyOtp(bookingId: string, workerId: string, otp: string, actor?: AuthenticatedUser) {
     return await prisma.$transaction(async (tx) => {
       const effectiveWorkerId = actor?.role === UserRole.WORKER ? actor.id : workerId;
-      const scopeWhere = actor?.role === UserRole.ADMIN
-        ? { id: bookingId }
-        : { id: bookingId, worker_id: effectiveWorkerId };
 
-      let booking = tx.booking.findFirst
-        ? await tx.booking.findFirst({ where: scopeWhere })
-        : null;
-
-      if (!booking && tx.booking.findUnique) {
-        booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      // 1. Acquire row lock and fetch latest booking record
+      let lockedBooking: any = null;
+      try {
+        if (typeof (tx as any).$queryRaw === "function") {
+          const rows = await (tx as any).$queryRaw`
+            SELECT id, status, otp_hash, otp_expires_at, otp_attempts, otp_locked_at, otp_consumed_at, otp_verified, worker_id, customer_id, job_id
+            FROM "booking"
+            WHERE id = ${bookingId}::uuid
+            FOR UPDATE
+          `;
+          if (Array.isArray(rows) && rows.length > 0) {
+            lockedBooking = rows[0];
+          }
+        }
+      } catch {
+        lockedBooking = null;
       }
 
-      if (!booking) throw new AuthorizationError("Booking not found", 404);
+      if (!lockedBooking) {
+        if (typeof (tx.booking as any)?.findUnique === "function") {
+          lockedBooking = await (tx.booking as any).findUnique({ where: { id: bookingId } });
+        }
+        if (!lockedBooking && typeof (tx.booking as any)?.findFirst === "function") {
+          const scopeWhere = actor?.role === UserRole.ADMIN
+            ? { id: bookingId }
+            : { id: bookingId, worker_id: effectiveWorkerId };
+          lockedBooking = await (tx.booking as any).findFirst({ where: scopeWhere });
+        }
+      }
+
+      if (!lockedBooking) throw new AuthorizationError("Booking not found", 404);
+
+      // 2. Authorization check
       if (actor) {
-        assertPolicy(bookingPolicy.canVerifyOtp(actor, booking));
+        assertPolicy(bookingPolicy.canVerifyOtp(actor, lockedBooking));
       } else {
-        if (booking.worker_id !== workerId) throw new AuthorizationError("Forbidden: You are not assigned to this booking", 403);
-      }
-      if (!booking.otp_hash || !(await comparePassword(otp, booking.otp_hash))) {
-        throw new Error("Invalid OTP");
+        if (lockedBooking.worker_id !== workerId) {
+          throw new AuthorizationError("Forbidden: You are not assigned to this booking", 403);
+        }
       }
 
+      // 3. State check: pre-verification state is strictly CONFIRMED
+      const currentStatus = bookingStateService.normalizeStatus(lockedBooking.status);
+      if (currentStatus !== BookingStatus.CONFIRMED) {
+        throw new BookingOtpWrongStateError(
+          `Cannot verify OTP: Booking is in status '${currentStatus}', expected '${BookingStatus.CONFIRMED}'`
+        );
+      }
+
+      // 4. Consumption check
+      if (lockedBooking.otp_consumed_at != null || lockedBooking.otp_verified === true) {
+        throw new BookingOtpAlreadyConsumedError("Booking OTP has already been verified and consumed");
+      }
+
+      // 5. Lockout / attempt exhaustion check
+      const currentAttempts = lockedBooking.otp_attempts ?? 0;
+      if (lockedBooking.otp_locked_at != null || currentAttempts >= bookingConfig.bookingOtpMaxAttempts) {
+        throw new BookingOtpLockedError(
+          "Maximum verification attempts exceeded. Booking OTP is locked."
+        );
+      }
+
+      // 6. Expiration check
+      if (lockedBooking.otp_expires_at != null && Date.now() > new Date(lockedBooking.otp_expires_at).getTime()) {
+        throw new BookingOtpExpiredError("Booking OTP has expired");
+      }
+
+      // 7. Verify hash
+      let isValid = false;
+      if (lockedBooking.otp_hash) {
+        try {
+          isValid = await comparePassword(otp, lockedBooking.otp_hash);
+        } catch {
+          isValid = false;
+        }
+      }
+
+      // 8. Handle invalid OTP (increment attempts, lock if max exceeded)
+      if (!isValid) {
+        const newAttempts = currentAttempts + 1;
+        const isNowLocked = newAttempts >= bookingConfig.bookingOtpMaxAttempts;
+        const now = new Date();
+
+        if (typeof (tx.booking as any)?.update === "function") {
+          await (tx.booking as any).update({
+            where: { id: bookingId },
+            data: {
+              otp_attempts: newAttempts,
+              ...(isNowLocked ? { otp_locked_at: now } : {}),
+              updated_at: now,
+            },
+          });
+        }
+
+        if (isNowLocked) {
+          throw new BookingOtpLockedError(
+            "Maximum verification attempts exceeded. Booking OTP is locked."
+          );
+        }
+
+        throw new BookingOtpInvalidError("Invalid OTP");
+      }
+
+      // 9. Transition booking state -> IN_PROGRESS
       await bookingStateService.transition(tx, {
         bookingId,
         action: BookingAction.START_WORK,
@@ -104,10 +199,10 @@ export const bookingService = {
       });
 
       // Synchronize parent job state -> IN_PROGRESS
-      if (booking.job_id) {
+      if (lockedBooking.job_id) {
         try {
           await jobStateService.transition(tx, {
-            jobId: booking.job_id,
+            jobId: lockedBooking.job_id,
             action: JobAction.START_WORK,
             actor: { id: effectiveWorkerId, role: UserRole.WORKER },
             reason: `Worker verified OTP for booking ${bookingId}`,

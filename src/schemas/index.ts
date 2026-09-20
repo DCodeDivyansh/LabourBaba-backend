@@ -503,7 +503,7 @@ export const PaymentIdParamSchema = z.object({
 
 export const VerifyBookingOtpReqSchema = z.object({
   otp: z.string().regex(/^\d{6}$/, "OTP must be exactly 6 digits"),
-}).openapi("VerifyBookingOtpReq");
+}).strict().openapi("VerifyBookingOtpReq");
 
 export const WorkerIdParamSchema = z.object({
   id: z.string().refine(

@@ -52,6 +52,10 @@ export const bookingPolicy = {
    * Only the assigned worker may verify the OTP to begin the job.
    */
   canVerifyOtp(actor: AuthenticatedUser, booking: BookingResource): PolicyDecision {
+    if (actor.role === UserRole.ADMIN) {
+      return { allowed: true };
+    }
+
     if (actor.role !== UserRole.WORKER) {
       return {
         allowed: false,

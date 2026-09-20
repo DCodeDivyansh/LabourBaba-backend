@@ -79,6 +79,48 @@ export class BookingAuthorizationError extends BookingStateError {
   }
 }
 
+export class BookingOtpError extends BookingStateError {
+  constructor(message: string, statusCode: number = 400, code: string = "OTP_ERROR") {
+    super(message, statusCode, code);
+    this.name = "BookingOtpError";
+  }
+}
+
+export class BookingOtpInvalidError extends BookingOtpError {
+  constructor(message: string = "Invalid OTP") {
+    super(message, 400, "OTP_INVALID");
+    this.name = "BookingOtpInvalidError";
+  }
+}
+
+export class BookingOtpExpiredError extends BookingOtpError {
+  constructor(message: string = "Booking OTP has expired") {
+    super(message, 400, "OTP_EXPIRED");
+    this.name = "BookingOtpExpiredError";
+  }
+}
+
+export class BookingOtpLockedError extends BookingOtpError {
+  constructor(message: string = "Maximum verification attempts exceeded. Booking OTP is locked.") {
+    super(message, 400, "OTP_LOCKED");
+    this.name = "BookingOtpLockedError";
+  }
+}
+
+export class BookingOtpAlreadyConsumedError extends BookingOtpError {
+  constructor(message: string = "Booking OTP has already been verified and consumed") {
+    super(message, 409, "OTP_ALREADY_USED");
+    this.name = "BookingOtpAlreadyConsumedError";
+  }
+}
+
+export class BookingOtpWrongStateError extends BookingOtpError {
+  constructor(message: string = "Booking is not in a verifiable state") {
+    super(message, 400, "OTP_WRONG_STATE");
+    this.name = "BookingOtpWrongStateError";
+  }
+}
+
 // ── 3. FORMAL TRANSITION DEFINITION ──────────────────────────────────────────
 
 export interface BookingTransitionRule {
@@ -367,6 +409,9 @@ export const bookingStateService = {
     if (targetStatus === BookingStatus.IN_PROGRESS) {
       updateData.started_at = now;
       updateData.otp_verified = true;
+      updateData.otp_consumed_at = now;
+      updateData.verified_at = now;
+      updateData.verified_by = actor.id || String(actor.role);
     } else if (targetStatus === BookingStatus.AWAITING_CONFIRMATION) {
       updateData.completion_requested_at = now;
     } else if (targetStatus === BookingStatus.COMPLETED) {

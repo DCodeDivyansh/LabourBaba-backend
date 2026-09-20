@@ -110,6 +110,8 @@ export const bookingSafeSelect = {
   customer_id: true,
   status: true,
   otp_verified: true,
+  verified_at: true,
+  verified_by: true,
   started_at: true,
   completion_requested_at: true,
   completed_at: true,
@@ -653,6 +655,8 @@ export interface BookingSafeDTO {
   customer_id: string;
   status: string | null;
   otp_verified: boolean | null;
+  verified_at?: Date | null;
+  verified_by?: string | null;
   started_at?: Date | null;
   completion_requested_at?: Date | null;
   completed_at?: Date | null;
@@ -684,6 +688,8 @@ export function toBookingDTO(b: any, actor?: any): BookingSafeDTO | null {
     customer_id: b.customer_id,
     status: b.status !== undefined ? b.status : null,
     otp_verified: b.otp_verified !== undefined ? b.otp_verified : null,
+    verified_at: b.verified_at !== undefined ? b.verified_at : undefined,
+    verified_by: b.verified_by !== undefined ? b.verified_by : undefined,
     started_at: b.started_at !== undefined ? b.started_at : undefined,
     completion_requested_at: b.completion_requested_at !== undefined ? b.completion_requested_at : undefined,
     completed_at: b.completed_at !== undefined ? b.completed_at : undefined,
