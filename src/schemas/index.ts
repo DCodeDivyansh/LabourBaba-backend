@@ -406,9 +406,16 @@ export const ConfirmBookingCompleteReqSchema = z.object({
   comment: z.string().optional(),
 }).strict().openapi("ConfirmBookingCompleteReq");
 
-export const CancelBookingReqSchema = z.object({
-  reason: z.string().min(1, "Cancellation reason is required"),
-}).openapi("CancelBookingReq");
+export const CancelBookingReqSchema = z
+  .object({
+    reason: z
+      .string()
+      .trim()
+      .min(1, "Cancellation reason is required and cannot be empty")
+      .max(500, "Cancellation reason cannot exceed 500 characters"),
+  })
+  .strict()
+  .openapi("CancelBookingReq");
 
 export const VerifyWorkerDocumentReqSchema = z.object({
   status: z.enum(["VERIFIED", "REJECTED"]),

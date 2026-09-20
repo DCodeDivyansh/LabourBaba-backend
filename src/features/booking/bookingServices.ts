@@ -336,71 +336,130 @@ export const bookingService = {
 
   async cancelBooking(bookingId: string, userId: string, payload: CancelBookingReq, actor?: AuthenticatedUser) {
     return await prisma.$transaction(async (tx) => {
-      const scopeWhere = actor
-        ? (actor.role === UserRole.ADMIN
-            ? { id: bookingId }
-            : actor.role === UserRole.CUSTOMER
-            ? { id: bookingId, customer_id: actor.id }
-            : { id: bookingId, worker_id: actor.id })
-        : { id: bookingId };
+      const effectiveActorId = actor?.id || userId;
+      const effectiveRole = actor?.role || UserRole.CUSTOMER;
 
-      let booking = tx.booking.findFirst
-        ? await tx.booking.findFirst({ where: scopeWhere })
-        : null;
-
-      if (!booking && tx.booking.findUnique) {
-        booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      // 1. Acquire exclusive row lock
+      let lockedBooking: any = null;
+      try {
+        if (typeof (tx as any).$queryRaw === "function") {
+          const rows = await (tx as any).$queryRaw`
+            SELECT id, status, customer_id, worker_id, job_id, requirement_id, cancelled_at, cancelled_by, cancellation_reason
+            FROM "booking"
+            WHERE id = ${bookingId}::uuid
+            FOR UPDATE
+          `;
+          if (Array.isArray(rows) && rows.length > 0) {
+            lockedBooking = rows[0];
+          }
+        }
+      } catch {
+        lockedBooking = null;
       }
 
-      if (!booking) throw new AuthorizationError("Booking not found", 404);
+      if (!lockedBooking) {
+        if (typeof (tx.booking as any)?.findUnique === "function") {
+          lockedBooking = await (tx.booking as any).findUnique({ where: { id: bookingId } });
+        }
+        if (!lockedBooking && typeof (tx.booking as any)?.findFirst === "function") {
+          const scopeWhere = actor
+            ? (actor.role === UserRole.ADMIN
+                ? { id: bookingId }
+                : actor.role === UserRole.CUSTOMER
+                ? { id: bookingId, customer_id: actor.id }
+                : { id: bookingId, worker_id: actor.id })
+            : { id: bookingId };
+          lockedBooking = await (tx.booking as any).findFirst({ where: scopeWhere });
+        }
+      }
 
+      if (!lockedBooking) throw new AuthorizationError("Booking not found", 404);
+
+      // 2. Authorization check
       if (actor) {
-        assertPolicy(bookingPolicy.canCancel(actor, booking));
+        assertPolicy(bookingPolicy.canCancel(actor, lockedBooking));
       } else {
-        if (booking.customer_id !== userId && booking.worker_id !== userId) {
+        if (lockedBooking.customer_id !== userId && lockedBooking.worker_id !== userId) {
           throw new AuthorizationError("Forbidden: Not an authorized participant of this booking", 403);
         }
       }
 
-      await bookingStateService.transition(tx, {
+      // 3. Reason validation: non-empty, trimmed
+      const trimmedReason = payload.reason?.trim();
+      if (!trimmedReason) {
+        throw new BookingInvalidTransitionError(
+          lockedBooking.status,
+          BookingAction.CANCEL,
+          "Cancellation reason is required and cannot be empty"
+        );
+      }
+
+      // 4. Transition booking to CANCELLED (handles state verification, metadata stamping, audit event)
+      const transitionResult = await bookingStateService.transition(tx, {
         bookingId,
         action: BookingAction.CANCEL,
-        actor: { id: actor?.id || userId, role: actor?.role || UserRole.CUSTOMER },
-        reason: payload.reason || "Booking cancelled",
+        actor: { id: effectiveActorId, role: effectiveRole },
+        reason: trimmedReason,
       });
 
-      // Reconcile requirement capacity from authoritative active bookings
-      if (booking.requirement_id) {
-        try {
-          await requirementStateService.reconcileCapacity(tx, booking.requirement_id);
-        } catch (capErr: any) {
-          console.warn(`[bookingServices] Note: Could not reconcile requirement capacity: ${capErr?.message}`);
-        }
-      }
-
-      // If all bookings cancelled for the job, reopen dispatch if applicable
-      if (booking.job_id) {
-        try {
-          const activeBookings = await tx.booking.count({
-            where: {
-              job_id: booking.job_id,
-              status: { in: Array.from(ACTIVE_BOOKING_STATUSES) },
-            },
-          });
-          if (activeBookings === 0) {
-            await jobStateService.transition(tx, {
-              jobId: booking.job_id,
-              action: JobAction.REOPEN_DISPATCH,
-              actor: { role: "SYSTEM" },
-              reason: `Booking ${bookingId} cancelled, reopening dispatch`,
-            });
+      // 5. Reconcile side effects if not idempotent retry
+      if (!transitionResult.isIdempotent) {
+        // Reconcile requirement capacity from authoritative active bookings
+        if (lockedBooking.requirement_id) {
+          try {
+            await requirementStateService.reconcileCapacity(tx, lockedBooking.requirement_id);
+          } catch (capErr: any) {
+            console.warn(`[bookingServices] Note: Could not reconcile requirement capacity: ${capErr?.message}`);
           }
-        } catch {
-          // Safe ignore if parent job already in terminal/cancelled state
+        }
+
+        // Reconcile worker dispatch record
+        if (lockedBooking.requirement_id && lockedBooking.worker_id) {
+          try {
+            await (tx as any).job_dispatch.updateMany({
+              where: {
+                requirement_id: lockedBooking.requirement_id,
+                worker_id: lockedBooking.worker_id,
+                status: { in: ['accepted', 'pending'] },
+              },
+              data: {
+                status: 'cancelled',
+                responded_at: new Date(),
+              },
+            });
+          } catch (dispErr: any) {
+            console.warn(`[bookingServices] Note: Could not reconcile dispatch state: ${dispErr?.message}`);
+          }
+        }
+
+        // If all bookings cancelled for the job, reopen dispatch if applicable
+        if (lockedBooking.job_id) {
+          try {
+            const activeBookings = await tx.booking.count({
+              where: {
+                job_id: lockedBooking.job_id,
+                status: { in: Array.from(ACTIVE_BOOKING_STATUSES) },
+              },
+            });
+            if (activeBookings === 0) {
+              await jobStateService.transition(tx, {
+                jobId: lockedBooking.job_id,
+                action: JobAction.REOPEN_DISPATCH,
+                actor: { role: "SYSTEM" },
+                reason: `Booking ${bookingId} cancelled, reopening dispatch`,
+              });
+            }
+          } catch {
+            // Safe ignore if parent job already in terminal/cancelled state
+          }
         }
       }
 
-      return { success: true, message: "Booking cancelled" };
+      return {
+        success: true,
+        message: "Booking cancelled",
+        data: toBookingDTO(transitionResult.booking, actor),
+      };
     });
   },
 

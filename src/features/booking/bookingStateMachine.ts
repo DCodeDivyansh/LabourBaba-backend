@@ -381,6 +381,7 @@ export const bookingStateService = {
       };
     }
 
+
     // 3. Concurrency check against expected source status if specified
     if (expectedCurrentStatus && currentStatus !== expectedCurrentStatus) {
       throw new BookingStateConflictError(
@@ -398,6 +399,16 @@ export const bookingStateService = {
     }
 
     const targetStatus = decision.targetStatus!;
+
+    if (action === BookingAction.CANCEL) {
+      if (!reason || !reason.trim()) {
+        throw new BookingInvalidTransitionError(
+          currentStatus,
+          action,
+          "Cancellation reason is required and cannot be empty"
+        );
+      }
+    }
 
     // 5. Build lifecycle timestamp updates
     const now = new Date();
@@ -421,7 +432,7 @@ export const bookingStateService = {
     } else if (targetStatus === BookingStatus.CANCELLED) {
       updateData.cancelled_at = now;
       updateData.cancelled_by = actor.id || String(actor.role);
-      updateData.cancellation_reason = reason || null;
+      updateData.cancellation_reason = reason!.trim();
     }
 
     // 6. Update booking
