@@ -118,6 +118,7 @@ export const bookingSafeSelect = {
   cancelled_at: true,
   cancelled_by: true,
   cancellation_reason: true,
+  confirmed_at: true,
   confirmed_by: true,
   created_at: true,
   updated_at: true,
@@ -663,6 +664,7 @@ export interface BookingSafeDTO {
   cancelled_at?: Date | null;
   cancelled_by?: string | null;
   cancellation_reason?: string | null;
+  confirmed_at?: Date | null;
   confirmed_by?: string | null;
   created_at: Date | null;
   updated_at: Date | null;
@@ -696,6 +698,7 @@ export function toBookingDTO(b: any, actor?: any): BookingSafeDTO | null {
     cancelled_at: b.cancelled_at !== undefined ? b.cancelled_at : undefined,
     cancelled_by: b.cancelled_by !== undefined ? b.cancelled_by : undefined,
     cancellation_reason: b.cancellation_reason !== undefined ? b.cancellation_reason : undefined,
+    confirmed_at: b.confirmed_at !== undefined ? b.confirmed_at : undefined,
     confirmed_by: b.confirmed_by !== undefined ? b.confirmed_by : undefined,
     created_at: b.created_at !== undefined ? b.created_at : null,
     updated_at: b.updated_at !== undefined ? b.updated_at : null,

@@ -404,7 +404,7 @@ export const UpdateWorkerOnlineStatusReqSchema = z.object({
 export const ConfirmBookingCompleteReqSchema = z.object({
   rating: z.number().min(1).max(5).optional(),
   comment: z.string().optional(),
-}).openapi("ConfirmBookingCompleteReq");
+}).strict().openapi("ConfirmBookingCompleteReq");
 
 export const CancelBookingReqSchema = z.object({
   reason: z.string().min(1, "Cancellation reason is required"),

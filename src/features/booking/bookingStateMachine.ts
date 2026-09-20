@@ -416,6 +416,7 @@ export const bookingStateService = {
       updateData.completion_requested_at = now;
     } else if (targetStatus === BookingStatus.COMPLETED) {
       updateData.completed_at = now;
+      updateData.confirmed_at = now;
       updateData.confirmed_by = actor.id || String(actor.role);
     } else if (targetStatus === BookingStatus.CANCELLED) {
       updateData.cancelled_at = now;
