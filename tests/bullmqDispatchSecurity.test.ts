@@ -1054,10 +1054,10 @@ describe("P0 Finding #8 Security Regression Suite: BullMQ Dispatch Geographic Fi
         offset: 0,
       });
 
-      // Status flipped to no_workers_available
+      // Status flipped to no_workers_available / NO_WORKERS_AVAILABLE
       expect(prisma.job_requirement.update).toHaveBeenCalledWith({
         where: { id: requirementId },
-        data: { status: "no_workers_available" },
+        data: { status: expect.stringMatching(/no_workers_available/i) },
       });
 
       // Zero workers notified

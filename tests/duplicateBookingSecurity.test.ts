@@ -433,7 +433,7 @@ describe("P0 Finding #10 Security & Concurrency Suite: Database-Level Duplicate 
       expect(rejected.length).toBe(TOTAL_WORKERS - SLOTS_NEEDED);
       expect(db.bookings.length).toBe(SLOTS_NEEDED);
       expect(db.requirements.get(REQ_ID)?.worker_count_filled).toBe(SLOTS_NEEDED);
-      expect(db.requirements.get(REQ_ID)?.status).toBe("filled");
+      expect(db.requirements.get(REQ_ID)?.status?.toUpperCase()).toBe("FILLED");
 
       // Verify each booked worker has unique worker_id
       const bookedWorkerIds = new Set(db.bookings.map((b) => b.worker_id));

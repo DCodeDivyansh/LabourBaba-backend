@@ -71,8 +71,9 @@ export interface RequirementForDispatch {
   id: string;
   skill_type?: string | null;
   rate_per_day?: number | null;
-  workers_needed?: number | null;
   worker_count_needed?: number | null;
+  /** @deprecated Authoritative field is worker_count_needed */
+  workers_needed?: number | null;
 }
 
 // ── Structured logging ───────────────────────────────────────────────────────
@@ -163,9 +164,9 @@ export async function recoverStaleDispatchesOnStartup(): Promise<void> {
 
     dispatchRequirementSimple(job, {
       id: req.id,
-      skill_type: (req as unknown as RequirementForDispatch).skill_type,
-      rate_per_day: (req as unknown as RequirementForDispatch).rate_per_day,
-      workers_needed: (req as unknown as RequirementForDispatch).workers_needed,
+      skill_type: req.skill_type,
+      rate_per_day: req.rate_per_day,
+      worker_count_needed: req.worker_count_needed,
     }).catch((err) => logError('dispatch.startup_recovery_failed', { requirementId: req.id }, err));
   }
 }
@@ -438,7 +439,7 @@ export async function findAvailableWorkers(
     excludeDispatched: true,
   });
 
-  log('dispatch.pool_limit_used', { requirementId: req.id, workersNeeded: needed ?? null, poolLimit });
+  log('dispatch.pool_limit_used', { requirementId: req.id, workerCountNeeded: needed, poolLimit });
   return workers;
 }
 

@@ -9,6 +9,7 @@ import {
   validateDispatchCoordinates,
   EligibleWorkerCandidate,
 } from '../features/dispatch/dispatchCandidate.service';
+import { RequirementStatus } from '../features/jobs/requirementStateMachine';
 
 const WAVE_TIMEOUT_MS = 30_000; // 30 seconds
 
@@ -48,7 +49,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
   console.log(`${tag} START — requirementId: ${requirementId}`);
 
   // Already filled — nothing to do
-  if (req.status === 'filled') {
+  if (req.status?.toUpperCase() === RequirementStatus.FILLED || req.status === 'filled') {
     console.log(`[dispatchWorker] Requirement ${requirementId} already filled — skipping`);
     return;
   }
@@ -61,7 +62,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
     });
     await prisma.job_requirement.update({
       where: { id: requirementId },
-      data: { status: 'no_workers_available' },
+      data: { status: RequirementStatus.NO_WORKERS_AVAILABLE },
     });
     return;
   }
@@ -86,7 +87,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
     );
     await prisma.job_requirement.update({
       where: { id: requirementId },
-      data: { status: 'no_workers_available' },
+      data: { status: RequirementStatus.NO_WORKERS_AVAILABLE },
     });
     return;
   }

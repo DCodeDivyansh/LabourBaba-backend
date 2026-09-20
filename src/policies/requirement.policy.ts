@@ -54,6 +54,34 @@ export const requirementPolicy = {
   },
 
   /**
+   * Only the owning customer or admin can update a requirement's demand.
+   */
+  canUpdate(actor: AuthenticatedUser, requirement: RequirementResource): PolicyDecision {
+    if (actor.role === UserRole.ADMIN) {
+      return { allowed: true };
+    }
+
+    if (actor.role === UserRole.CUSTOMER) {
+      if (requirement.job && requirement.job.customer_id === actor.id) {
+        return { allowed: true };
+      }
+      return {
+        allowed: false,
+        reason: "Forbidden: You do not own this requirement",
+        statusCode: 403,
+        code: "NOT_OWNER",
+      };
+    }
+
+    return {
+      allowed: false,
+      reason: "Forbidden: Insufficient permissions to update requirement",
+      statusCode: 403,
+      code: "ROLE_FORBIDDEN",
+    };
+  },
+
+  /**
    * Database-level Prisma query scope for reading a requirement.
    */
   scopeRead(actor: AuthenticatedUser, requirementId?: string): Record<string, any> {

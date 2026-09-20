@@ -4,6 +4,7 @@ import { dispatchJobSimple } from '../dispatch/simpleDispatch';
 import { bookingSafeSelect } from '../../shared/prismaSelects';
 import { jobPolicy, assertPolicy, AuthenticatedUser, PolicyActor, AuthorizationError, UserRole } from '../../policies';
 import { jobStateService, JobAction, JobStatus, JobTransitionActor } from './jobStateMachine';
+import { RequirementStatus } from './requirementStateMachine';
 
 export const jobService = {
   async createJob(customerId: string, payload: CreateJobReq) {
@@ -58,7 +59,8 @@ export const jobService = {
               skill_type: req.skill_type,
               worker_count_needed: req.worker_count_needed,
               rate_per_day: req.rate_per_day,
-              status: 'OPEN',
+              status: RequirementStatus.OPEN,
+              worker_count_filled: 0,
             },
           });
         }
@@ -127,8 +129,8 @@ export const jobService = {
 
       // Synchronously cascade cancellation to open requirements and pending dispatches
       await tx.job_requirement.updateMany({
-        where: { job_id: jobId, status: { notIn: ["filled", "CANCELLED"] } },
-        data: { status: "CANCELLED" },
+        where: { job_id: jobId, status: { notIn: ["filled", "FILLED", RequirementStatus.CANCELLED] } },
+        data: { status: RequirementStatus.CANCELLED },
       });
 
       const reqs = await tx.job_requirement.findMany({ where: { job_id: jobId } });

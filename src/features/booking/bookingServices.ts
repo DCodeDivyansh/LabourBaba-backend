@@ -12,6 +12,7 @@ import {
 } from "../../shared/prismaSelects";
 import { bookingPolicy, assertPolicy, AuthenticatedUser, AuthorizationError, UserRole } from "../../policies";
 import { jobStateService, JobAction } from "../jobs/jobStateMachine";
+import { requirementStateService, ACTIVE_BOOKING_STATUSES } from "../jobs/requirementStateMachine";
 
 export const bookingService = {
   async getBookingDetail(bookingId: string, actor?: AuthenticatedUser) {
@@ -253,6 +254,37 @@ export const bookingService = {
         where: { id: bookingId },
         data: { status: "CANCELLED" }
       });
+
+      // Reconcile requirement capacity from authoritative active bookings
+      if (booking.requirement_id) {
+        try {
+          await requirementStateService.reconcileCapacity(tx, booking.requirement_id);
+        } catch (capErr: any) {
+          console.warn(`[bookingServices] Note: Could not reconcile requirement capacity: ${capErr?.message}`);
+        }
+      }
+
+      // If all bookings cancelled for the job, reopen dispatch if applicable
+      if (booking.job_id) {
+        try {
+          const activeBookings = await tx.booking.count({
+            where: {
+              job_id: booking.job_id,
+              status: { in: Array.from(ACTIVE_BOOKING_STATUSES) },
+            },
+          });
+          if (activeBookings === 0) {
+            await jobStateService.transition(tx, {
+              jobId: booking.job_id,
+              action: JobAction.REOPEN_DISPATCH,
+              actor: { role: "SYSTEM" },
+              reason: `Booking ${bookingId} cancelled, reopening dispatch`,
+            });
+          }
+        } catch {
+          // Safe ignore if parent job already in terminal/cancelled state
+        }
+      }
 
       return { success: true, message: "Booking cancelled" };
     });

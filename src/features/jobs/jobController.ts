@@ -152,8 +152,12 @@ export const createJobRequirement = async (req: Request, res: Response): Promise
     const requirement = await jobReqService.createJobReq(jobId, payload, actor);
     res.status(201).json({ success: true, data: toJobRequirementDTO(requirement) });
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
+    if (error instanceof AuthorizationError || error.name === "RequirementAuthorizationError") {
+      res.status(error.status || error.statusCode || 403).json({ success: false, message: error.message });
+      return;
+    }
+    if (error.name === "RequirementInvalidWorkerCountError") {
+      res.status(400).json({ success: false, message: error.message });
       return;
     }
     if (error.message === "Job not found") {
@@ -171,11 +175,50 @@ export const getRequirementDetail = async (req: Request, res: Response): Promise
     const requirement = await jobReqService.getRequirementDetail(jobId, requirementId, actor);
     res.status(200).json({ success: true, data: toJobRequirementDTO(requirement) });
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
+    if (error instanceof AuthorizationError || error.name === "RequirementAuthorizationError") {
+      res.status(error.status || error.statusCode || 403).json({ success: false, message: error.message });
       return;
     }
-    if (error.message === "Job not found" || error.message === "Requirement not found") {
+    if (error.message === "Job not found" || error.message === "Requirement not found" || error.name === "RequirementNotFoundError") {
+      res.status(404).json({ success: false, message: "Requirement not found" });
+      return;
+    }
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const updateRequirementDemand = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { jobId, requirementId } = req.params as any;
+    const actor = (req as AuthenticatedRequest).user;
+    const { worker_count_needed } = req.body;
+    const result = await jobReqService.updateRequirementDemand(
+      jobId,
+      requirementId,
+      worker_count_needed,
+      actor
+    );
+    res.status(200).json({
+      success: true,
+      data: {
+        requirement: toJobRequirementDTO(result.requirement),
+        capacity: result.capacity,
+      },
+    });
+  } catch (error: any) {
+    if (error instanceof AuthorizationError || error.name === "RequirementAuthorizationError") {
+      res.status(error.status || error.statusCode || 403).json({ success: false, message: error.message });
+      return;
+    }
+    if (error.name === "RequirementCapacityExceededError") {
+      res.status(409).json({ success: false, message: error.message });
+      return;
+    }
+    if (error.name === "RequirementInvalidWorkerCountError" || error.name === "RequirementInvalidTransitionError") {
+      res.status(400).json({ success: false, message: error.message });
+      return;
+    }
+    if (error.message === "Job not found" || error.message === "Requirement not found" || error.name === "RequirementNotFoundError") {
       res.status(404).json({ success: false, message: "Requirement not found" });
       return;
     }

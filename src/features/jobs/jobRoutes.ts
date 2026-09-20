@@ -8,6 +8,7 @@ import {
   getJobBookings,
   createJobRequirement,
   getRequirementDetail,
+  updateRequirementDemand,
 } from "./jobController";
 import { validateBody, validateParams } from "../../middlewares/validationMiddleware";
 import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
@@ -17,6 +18,7 @@ import {
   JobRequirementSchema,
   BookingSchema,
   CreateJobRequirementReqSchema,
+  UpdateJobRequirementDemandReqSchema,
   JobIdParamSchema,
   JobAndRequirementIdParamSchema,
 } from "../../schemas";
@@ -150,6 +152,7 @@ router.patch("/:jobId/cancel", authenticateJWT, requireRole(UserRole.CUSTOMER), 
 router.get("/:jobId/requirements", authenticateJWT, validateParams(JobIdParamSchema), getJobRequirements);
 router.get("/:jobId/requirements/:requirementId", authenticateJWT, validateParams(JobAndRequirementIdParamSchema), getRequirementDetail);
 router.post("/:jobId/requirements", authenticateJWT, requireRole(UserRole.CUSTOMER), validateParams(JobIdParamSchema), validateBody(CreateJobRequirementReqSchema), createJobRequirement);
+router.patch("/:jobId/requirements/:requirementId/demand", authenticateJWT, requireRole(UserRole.CUSTOMER), validateParams(JobAndRequirementIdParamSchema), validateBody(UpdateJobRequirementDemandReqSchema), updateRequirementDemand);
 router.get("/:jobId/bookings", authenticateJWT, validateParams(JobIdParamSchema), getJobBookings);
 
 export default router;

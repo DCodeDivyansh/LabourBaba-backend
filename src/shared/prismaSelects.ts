@@ -430,6 +430,7 @@ export interface JobRequirementDTO {
   skill_type?: string | null;
   worker_count_needed: number;
   worker_count_filled?: number | null;
+  remaining_worker_count?: number;
   rate_per_day?: number | null;
   status?: string | null;
   current_wave?: number | null;
@@ -448,7 +449,10 @@ export function toJobRequirementDTO(req: any): JobRequirementDTO | null {
     worker_count_needed: req.worker_count_needed,
   };
   if (req.skill_type !== undefined) dto.skill_type = req.skill_type;
-  if (req.worker_count_filled !== undefined) dto.worker_count_filled = req.worker_count_filled;
+  if (req.worker_count_filled !== undefined) {
+    dto.worker_count_filled = req.worker_count_filled;
+    dto.remaining_worker_count = Math.max(0, req.worker_count_needed - (req.worker_count_filled || 0));
+  }
   if (req.rate_per_day !== undefined) dto.rate_per_day = req.rate_per_day;
   if (req.status !== undefined) dto.status = req.status;
   if (req.current_wave !== undefined) dto.current_wave = req.current_wave;

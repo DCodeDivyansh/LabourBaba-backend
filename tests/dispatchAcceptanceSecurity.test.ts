@@ -394,7 +394,7 @@ describe("P0 Finding #9 Security Regression Suite: Dispatch Acceptance Invariant
       expect(db.bookings[0].worker_id).toBe(WORKER_A_ID);
       expect(db.bookings[0].otp_hash).toBeDefined();
       expect(db.requirements.get(REQ_ID)?.worker_count_filled).toBe(1);
-      expect(db.requirements.get(REQ_ID)?.status).toBe("filled");
+      expect(db.requirements.get(REQ_ID)?.status?.toUpperCase()).toBe("FILLED");
     });
   });
 
@@ -661,7 +661,7 @@ describe("P0 Finding #9 Security Regression Suite: Dispatch Acceptance Invariant
       expect(db.bookings.length).toBe(1);
       // Verify worker_count_filled equals worker_count_needed (1)
       expect(db.requirements.get(REQ_ID)?.worker_count_filled).toBe(1);
-      expect(db.requirements.get(REQ_ID)?.status).toBe("filled");
+      expect(db.requirements.get(REQ_ID)?.status?.toUpperCase()).toBe("FILLED");
     });
   });
 

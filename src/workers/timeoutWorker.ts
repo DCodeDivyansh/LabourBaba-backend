@@ -1,6 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import prisma from '../config/prisma';
 import { redisConnectionOptions, dispatchQueue } from '../config/bullmq';
+import { RequirementStatus } from '../features/jobs/requirementStateMachine';
 
 interface TimeoutJobData {
   requirementId: string;
@@ -30,7 +31,7 @@ const timeoutWorker = new Worker<TimeoutJobData>(
       return;
     }
 
-    if (req.status === 'filled') {
+    if (req.status?.toUpperCase() === RequirementStatus.FILLED || req.status === 'filled') {
       console.log(`[timeoutWorker] Requirement ${requirementId} already filled — skipping`);
       return;
     }
@@ -64,7 +65,7 @@ const timeoutWorker = new Worker<TimeoutJobData>(
       );
       await prisma.job_requirement.update({
         where: { id: requirementId },
-        data: { status: 'no_workers_available' },
+        data: { status: RequirementStatus.NO_WORKERS_AVAILABLE },
       });
       return;
     }

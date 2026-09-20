@@ -8,6 +8,11 @@ import { customerSummarySelect, bookingSafeSelect, toDispatchDTO, toWorkerPublic
 import { PolicyActor, AuthorizationError, UserRole } from '../../policies';
 
 import { jobStateService, JobAction } from '../jobs/jobStateMachine';
+import {
+  RequirementStatus,
+  RequirementAction,
+  requirementStateService,
+} from '../jobs/requirementStateMachine';
 
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
@@ -18,7 +23,7 @@ async function checkJobComplete(
   const unfilledCount = await tx.job_requirement.count({
     where: {
       job_id: jobId,
-      status: { not: 'filled' },
+      status: { notIn: [RequirementStatus.FILLED, 'filled', 'FILLED'] },
     },
   });
 
@@ -75,7 +80,10 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
     if (!req) {
       throw new DispatchAcceptanceError('Requirement not found', 'REQUIREMENT_NOT_FOUND', 404);
     }
-    if (req.status === 'filled' || (req.worker_count_filled ?? 0) >= req.worker_count_needed) {
+    const isAlreadyFull =
+      req.status?.toUpperCase() === RequirementStatus.FILLED ||
+      (req.worker_count_filled ?? 0) >= req.worker_count_needed;
+    if (isAlreadyFull) {
       throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
     }
 
@@ -194,16 +202,15 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       throw err;
     }
 
-    // Increment filled count and flip status if all slots filled
+    // Increment filled count and transition status through requirementStateService
     const newFilled = (req.worker_count_filled ?? 0) + 1;
     const nowFilled = newFilled >= req.worker_count_needed;
 
-    await tx.job_requirement.update({
-      where: { id: requirementId },
-      data: {
-        worker_count_filled: newFilled,
-        status: nowFilled ? 'filled' : 'dispatching',
-      },
+    await requirementStateService.transition(tx, {
+      requirementId,
+      action: RequirementAction.RECORD_ACCEPTANCE,
+      actor: { id: workerId, role: UserRole.WORKER },
+      newFilledCount: newFilled,
     });
 
     // Problem 1: when filled, expire ALL remaining pending dispatches atomically

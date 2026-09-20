@@ -27,12 +27,15 @@ import {
   VerifyWorkerDocumentReqSchema,
   SuspendWorkerReqSchema,
   CreateJobRequirementReqSchema,
+  UpdateJobRequirementDemandReqSchema,
   LoginWorkerReqSchema,
   RequestDocumentUploadUrlReqSchema,
   WorkerDocumentAccessResponseSchema,
   RegisterWorkerDeviceReqSchema,
   RevokeWorkerDeviceReqSchema,
 } from "../schemas";
+
+export type UpdateJobRequirementDemandReq = z.infer<typeof UpdateJobRequirementDemandReqSchema>;
 
 export type RegisterWorkerDeviceReq = z.infer<typeof RegisterWorkerDeviceReqSchema>;
 export type RevokeWorkerDeviceReq = z.infer<typeof RevokeWorkerDeviceReqSchema>;
