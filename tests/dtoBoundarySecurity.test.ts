@@ -428,6 +428,16 @@ describe("HTTP DTO Boundary Security & Data Exposure Tests (Issue #4)", () => {
         customer_id: MOCK_CUSTOMER_ID,
       });
 
+      (prisma.payment.findFirst as jest.Mock).mockResolvedValue({
+        id: "pay-1",
+        booking_id: MOCK_BOOKING_ID,
+        razorpay_order_id: "order_123",
+        razorpay_payment_id: "pay_123",
+        status: "COMPLETED",
+        amount: 50000,
+        currency: "INR",
+        idempotency_key: "INTERNAL_IDEMPOTENCY_KEY",
+      });
       (prisma.payment.findUnique as jest.Mock).mockResolvedValue({
         id: "pay-1",
         booking_id: MOCK_BOOKING_ID,

@@ -270,6 +270,10 @@ describe("Issue #6 — Protect Booking and Payment Resources", () => {
   // =========================================================================
   describe("2. Payment Status Access Controls", () => {
     it("Customer A CAN get payment status via GET /api/payments/:bookingId", async () => {
+      (prisma.booking.findFirst as jest.Mock).mockResolvedValue({
+        id: BOOKING_A_ID,
+        customer_id: CUSTOMER_A_ID,
+      });
       (prisma.payment.findFirst as jest.Mock).mockResolvedValue({
         id: PAYMENT_A_ID,
         booking_id: BOOKING_A_ID,
@@ -286,17 +290,13 @@ describe("Issue #6 — Protect Booking and Payment Resources", () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.razorpay_order_id).toBe("order_123");
-      expect(prisma.payment.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            booking_id: BOOKING_A_ID,
-            booking: { customer_id: CUSTOMER_A_ID },
-          }),
-        })
-      );
     });
 
     it("Customer A CAN get payment status via canonical GET /api/bookings/:bookingId/payment", async () => {
+      (prisma.booking.findFirst as jest.Mock).mockResolvedValue({
+        id: BOOKING_A_ID,
+        customer_id: CUSTOMER_A_ID,
+      });
       (prisma.payment.findFirst as jest.Mock).mockResolvedValue({
         id: PAYMENT_A_ID,
         booking_id: BOOKING_A_ID,

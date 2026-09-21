@@ -137,6 +137,10 @@ jest.mock("../src/config/prisma", () => ({
       update: jest.fn(),
       updateMany: jest.fn(),
     },
+    audit_log: {
+      create: jest.fn().mockResolvedValue({ id: "audit-1" }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $transaction: jest.fn(async (callback: any) => {
       if (typeof callback === "function") {
         return await callback(prisma);
@@ -201,7 +205,7 @@ function assertNoSensitiveData(resBody: any) {
 
 describe("P0 Security Regression: Sensitive Data & Password Hash Leakage", () => {
   const MOCK_CUSTOMER_ID = "c0000000-0000-0000-0000-000000000001";
-  const MOCK_WORKER_ID = "w0000000-0000-0000-0000-000000000002";
+  const MOCK_WORKER_ID = "00000000-0000-4000-b000-000000000002";
   const MOCK_ADMIN_ID = "a0000000-0000-0000-0000-000000000003";
   const MOCK_BOOKING_ID = "b0000000-0000-0000-0000-000000000004";
 
@@ -220,6 +224,10 @@ describe("P0 Security Regression: Sensitive Data & Password Hash Leakage", () =>
     ((prisma as any).refresh_session.create as jest.Mock).mockResolvedValue({
       id: "a1b2c3d4-e5f6-4890-a234-56789abcdef0",
       expires_at: new Date(Date.now() + 30 * 86400000),
+    });
+    ((prisma as any).audit_log.create as jest.Mock).mockResolvedValue({
+      id: "audit-1",
+      created_at: new Date(),
     });
   });
 
@@ -553,6 +561,9 @@ describe("P0 Security Regression: Sensitive Data & Password Hash Leakage", () =>
               password: SENTINEL_PASSWORD,
               device_token: SENTINEL_DEVICE_TOKEN,
             }),
+          },
+          audit_log: {
+            create: jest.fn().mockResolvedValue({ id: "audit-1" }),
           },
         });
       });

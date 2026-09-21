@@ -105,7 +105,7 @@ export class AuditService {
       ipAddress: record.ip_address,
       userAgent: record.user_agent,
       metadata: record.metadata,
-      createdAt: record.created_at.toISOString(),
+      createdAt: record.created_at ? new Date(record.created_at).toISOString() : new Date().toISOString(),
     };
   }
 
