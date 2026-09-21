@@ -1053,16 +1053,18 @@ describe("P0 Finding #8 Security Regression Suite: BullMQ Dispatch Geographic Fi
       expect(io.to).not.toHaveBeenCalledWith("worker:worker-B-outside");
 
       // 4. job_dispatch records created only for Worker A
-      expect(prisma.job_dispatch.createMany).toHaveBeenCalledWith({
-        data: [
-          expect.objectContaining({
-            requirement_id: requirementId,
-            worker_id: "worker-A-inside",
-            wave_number: 1,
-            status: "pending",
-          }),
-        ],
-      });
+      expect(prisma.job_dispatch.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [
+            expect.objectContaining({
+              requirement_id: requirementId,
+              worker_id: "worker-A-inside",
+              wave_number: 1,
+              status: "pending",
+            }),
+          ],
+        }),
+      );
     });
 
     it("MUST immediately fail closed without notifying workers when job coordinates are missing", async () => {

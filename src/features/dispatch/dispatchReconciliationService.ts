@@ -3,6 +3,7 @@ import { dispatchQueue, timeoutQueue } from '../../config/bullmq';
 import { RequirementStatus } from '../jobs/requirementStateMachine';
 import { JobStatus } from '../jobs/jobStateMachine';
 import { WAVE_TIMEOUT_MS } from '../../workers/dispatchWorker';
+import { generateDispatchOperationId } from './dispatchOperation';
 
 export interface ReconciliationReport {
   scannedRequirements: number;
@@ -117,10 +118,15 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
           // Schedule next wave
           const nextWave = latestWave.wave_number + 1;
           const nextOffset = (latestWave.wave_number) * (req.worker_count_needed * 2);
+          const nextOperationId = generateDispatchOperationId({
+            requirementId: req.id,
+            waveNumber: nextWave,
+          });
 
           await dispatchQueue.add(
             'dispatch-wave',
             {
+              operationId: nextOperationId,
               requirementId: req.id,
               jobId: req.job.id,
               waveNumber: nextWave,
@@ -136,6 +142,10 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
           // ── Case B: Wave is still active and in-flight ─────────────────────────
           // Re-queue BullMQ timeout with remaining delay to ensure it doesn't get lost
           const remainingDelayMs = Math.max(500, waveExpiresAtMs - now);
+          const activeOperationId = generateDispatchOperationId({
+            requirementId: req.id,
+            waveNumber: latestWave.wave_number,
+          });
           console.log(
             `[dispatchReconciliation] Requirement ${req.id} wave ${latestWave.wave_number} is still active — re-queuing timeout in ${remainingDelayMs}ms`,
           );
@@ -143,6 +153,7 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
           await timeoutQueue.add(
             'wave-timeout',
             {
+              operationId: activeOperationId,
               requirementId: req.id,
               jobId: req.job.id,
               waveNumber: latestWave.wave_number,
@@ -160,13 +171,18 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
         }
       } else if (!latestWave) {
         // ── Case C: Requirement has NO waves dispatched yet ────────────────────
+        const wave1OperationId = generateDispatchOperationId({
+          requirementId: req.id,
+          waveNumber: 1,
+        });
         console.log(
-          `[dispatchReconciliation] Requirement ${req.id} has no waves — enqueuing initial wave 1`,
+          `[dispatchReconciliation] Requirement ${req.id} has no waves — enqueuing initial wave 1 (operation ${wave1OperationId})`,
         );
 
         await dispatchQueue.add(
           'dispatch-wave',
           {
+            operationId: wave1OperationId,
             requirementId: req.id,
             jobId: req.job.id,
             waveNumber: 1,

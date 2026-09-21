@@ -561,6 +561,7 @@ export function toDispatchDTO(dispatch: any): DispatchDTO | null {
 
 export interface DispatchWaveDTO {
   id: string;
+  operation_id?: string | null;
   requirement_id: string;
   wave_number: number;
   status: string | null;
@@ -576,6 +577,7 @@ export function toDispatchWaveDTO(wave: any): DispatchWaveDTO | null {
   if (!wave) return null;
   return {
     id: wave.id,
+    operation_id: wave.operation_id !== undefined ? wave.operation_id : null,
     requirement_id: wave.requirement_id,
     wave_number: wave.wave_number,
     status: wave.status !== undefined ? wave.status : null,

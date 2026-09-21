@@ -9,6 +9,10 @@ import {
   EligibleWorkerCandidate,
 } from '../features/dispatch/dispatchCandidate.service';
 import { RequirementStatus } from '../features/jobs/requirementStateMachine';
+import {
+  generateDispatchOperationId,
+  DispatchOperationResult,
+} from '../features/dispatch/dispatchOperation';
 
 export const WAVE_TIMEOUT_MS = 30_000; // 30 seconds
 
@@ -18,14 +22,30 @@ export interface DispatchJobData {
   waveNumber?: number;
   offset?: number;
   correlationId?: string;
+  operationId?: string;
 }
 
 export type NearbyWorker = EligibleWorkerCandidate;
 
-export async function processDispatchJob(data: DispatchJobData): Promise<void> {
+/**
+ * Process a dispatch operation with database-enforced idempotency.
+ *
+ * Invariants:
+ * 1. Deterministic Operation Identity: Derived from (requirementId, waveNumber).
+ * 2. Uniqueness Backstop: Enforced by PostgreSQL UNIQUE(operation_id) on dispatch_wave.
+ * 3. Safe Retries: Returns the same logical DispatchOperationResult without duplicate side effects.
+ * 4. Persist Before Notify: DB commit occurs before downstream notification/timeout queues.
+ */
+export async function processDispatchJob(data: DispatchJobData): Promise<DispatchOperationResult> {
   const { requirementId, jobId, waveNumber = 1, offset = 0 } = data;
+  const operationId = generateDispatchOperationId({
+    requirementId,
+    waveNumber,
+    operationType: 'WAVE_DISPATCH',
+  });
+
   console.log(
-    `[dispatchWorker] Processing requirement=${requirementId} wave=${waveNumber} offset=${offset}`,
+    `[dispatchWorker] Processing requirement=${requirementId} wave=${waveNumber} offset=${offset} operationId=${operationId}`,
   );
 
   // 1. Fetch requirement + parent job for coordinates & status
@@ -44,7 +64,16 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
 
   if (!req) {
     console.warn(`[dispatchWorker] Requirement ${requirementId} not found — skipping`);
-    return;
+    return {
+      operationId,
+      requirementId,
+      jobId,
+      waveNumber,
+      waveId: null,
+      status: 'skipped_not_found',
+      workersDispatchedCount: 0,
+      workerIds: [],
+    };
   }
 
   // Guard against terminal states (filled, cancelled, or already exhausted)
@@ -56,22 +85,52 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
     req.status === 'cancelled'
   ) {
     console.log(`[dispatchWorker] Requirement ${requirementId} in terminal state (${req.status}) — skipping`);
-    return;
+    return {
+      operationId,
+      requirementId,
+      jobId,
+      waveNumber,
+      waveId: null,
+      status: 'skipped_terminal',
+      workersDispatchedCount: 0,
+      workerIds: [],
+    };
   }
 
-  // Guard against duplicate wave execution (idempotency check)
+  // Guard against duplicate wave execution (idempotency check by operation_id and req_wave)
   if (typeof (prisma as any).dispatch_wave?.findFirst === 'function') {
     const existingWave = await prisma.dispatch_wave.findFirst({
       where: {
-        requirement_id: requirementId,
-        wave_number: waveNumber,
+        OR: [
+          { operation_id: operationId },
+          { requirement_id: requirementId, wave_number: waveNumber },
+        ],
       },
     });
     if (existingWave) {
       console.log(
-        `[dispatchWorker] Wave ${waveNumber} already exists for requirement ${requirementId} — skipping duplicate execution`,
+        `[dispatchWorker] Wave ${waveNumber} (operation ${operationId}) already exists for requirement ${requirementId} — returning existing logical result`,
       );
-      return;
+      let existingDispatches: Array<{ worker_id: string }> = [];
+      if (typeof (prisma as any).job_dispatch?.findMany === 'function') {
+        const found = await prisma.job_dispatch.findMany({
+          where: { requirement_id: requirementId, wave_number: waveNumber },
+          select: { worker_id: true },
+        });
+        if (Array.isArray(found)) {
+          existingDispatches = found;
+        }
+      }
+      return {
+        operationId,
+        requirementId,
+        jobId,
+        waveNumber,
+        waveId: existingWave.id,
+        status: 'already_processed',
+        workersDispatchedCount: existingWave.workers_notified ?? existingDispatches.length,
+        workerIds: existingDispatches.map((d) => d.worker_id),
+      };
     }
   }
 
@@ -85,7 +144,16 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
       where: { id: requirementId },
       data: { status: RequirementStatus.NO_WORKERS_AVAILABLE },
     });
-    return;
+    return {
+      operationId,
+      requirementId,
+      jobId,
+      waveNumber,
+      waveId: null,
+      status: 'no_workers',
+      workersDispatchedCount: 0,
+      workerIds: [],
+    };
   }
 
   // 2. Authoritative PostGIS query — nearby online, verified, fresh workers matching skill within wave radius
@@ -111,7 +179,16 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
       where: { id: requirementId },
       data: { status: RequirementStatus.NO_WORKERS_AVAILABLE },
     });
-    return;
+    return {
+      operationId,
+      requirementId,
+      jobId,
+      waveNumber,
+      waveId: null,
+      status: 'no_workers',
+      workersDispatchedCount: 0,
+      workerIds: [],
+    };
   }
 
   // 3. Wave slice — up to (worker_count_needed * 2) workers per wave
@@ -121,9 +198,12 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
 
   // 4. PERSISTENCE FIRST: Write dispatch_wave and job_dispatch rows
   // Database unique constraints backstop against concurrency races
+  let createdWave: any = null;
+
   const executeWrites = async (client: any) => {
-    await client.dispatch_wave.create({
+    createdWave = await client.dispatch_wave.create({
       data: {
+        operation_id: operationId,
         requirement_id: requirementId,
         wave_number: waveNumber,
         workers_notified: waveSize,
@@ -142,6 +222,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
         notified_at: new Date(),
         expires_at: expiresAt,
       })),
+      skipDuplicates: true,
     });
   };
 
@@ -161,11 +242,46 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
     }
   } catch (err: any) {
     // P2002 is Prisma unique constraint violation (or raw 23505)
-    if (err.code === 'P2002' || String(err.message).includes('uniq_dispatch_wave_req_wave')) {
+    if (
+      err.code === 'P2002' ||
+      String(err.message).includes('uniq_dispatch_wave_operation_id') ||
+      String(err.message).includes('uniq_dispatch_wave_req_wave') ||
+      String(err.message).includes('23505')
+    ) {
       console.warn(
-        `[dispatchWorker] Concurrent duplicate wave ${waveNumber} detected for requirement ${requirementId} — safely skipping`,
+        `[dispatchWorker] Concurrent duplicate wave ${waveNumber} (operation ${operationId}) detected for requirement ${requirementId} — safely retrieving committed state`,
       );
-      return;
+      let existingWave: any = null;
+      let existingDispatches: Array<{ worker_id: string }> = [];
+      if (typeof (prisma as any).dispatch_wave?.findFirst === 'function') {
+        existingWave = await prisma.dispatch_wave.findFirst({
+          where: {
+            OR: [
+              { operation_id: operationId },
+              { requirement_id: requirementId, wave_number: waveNumber },
+            ],
+          },
+        });
+      }
+      if (typeof (prisma as any).job_dispatch?.findMany === 'function') {
+        const found = await prisma.job_dispatch.findMany({
+          where: { requirement_id: requirementId, wave_number: waveNumber },
+          select: { worker_id: true },
+        });
+        if (Array.isArray(found)) {
+          existingDispatches = found;
+        }
+      }
+      return {
+        operationId,
+        requirementId,
+        jobId,
+        waveNumber,
+        waveId: existingWave?.id ?? null,
+        status: 'already_processed',
+        workersDispatchedCount: existingWave?.workers_notified ?? existingDispatches.length,
+        workerIds: existingDispatches.map((d) => d.worker_id),
+      };
     }
     console.error(`[dispatchWorker] Failed to persist dispatch state for requirement ${requirementId}:`, err);
     throw err; // Re-throw to trigger BullMQ retry
@@ -177,6 +293,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
     await timeoutQueue.add(
       'wave-timeout',
       {
+        operationId,
         requirementId,
         jobId,
         waveNumber,
@@ -198,17 +315,12 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
   // 6. DURABLE NOTIFICATION ENQUEUE: enqueue a notification job to deliver FCM and
   // Socket.IO events to the dispatched workers. This enqueue happens AFTER the DB
   // transaction has committed and the timeout job has been queued.
-  //
-  // Invariant: DB commit → notificationQueue.add → [notificationWorker] → FCM/Socket.IO
-  //
-  // If the process crashes after the DB commit, BullMQ will re-deliver this notification
-  // job on restart. If FCM/Socket.IO delivery fails inside notificationWorker, BullMQ
-  // retries the notification job — the persisted dispatch state is never affected.
   try {
     await notificationQueue.add(
       DISPATCH_JOB_NAMES.DISPATCH_NOTIFY,
       {
         type: 'dispatch-notify' as const,
+        operationId,
         requirementId,
         jobId,
         waveNumber,
@@ -220,8 +332,6 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
         customerName: req.job.customer.name,
       },
       {
-        // Deterministic jobId: if this enqueue is retried (e.g. after a crash before
-        // the BullMQ job completes), BullMQ will ignore the duplicate and not double-notify.
         jobId: `notify:${requirementId}:wave-${waveNumber}`,
         attempts: 5,
         backoff: { type: 'exponential', delay: 2000 },
@@ -232,25 +342,33 @@ export async function processDispatchJob(data: DispatchJobData): Promise<void> {
       `[dispatchWorker] Failed to enqueue notification job for requirement ${requirementId} wave ${waveNumber}:`,
       err,
     );
-    // Throw so BullMQ retries the dispatch job and re-attempts the notification enqueue.
-    // The DB write has already committed — the next retry will hit the idempotency guard
-    // at the top (existing wave check) and skip re-persisting, then re-attempt the enqueue.
     throw err;
   }
 
   console.log(
-    `[dispatchWorker] Wave ${waveNumber} persisted and notification job enqueued for requirement ${requirementId}. Timeout queued in BullMQ.`,
+    `[dispatchWorker] Wave ${waveNumber} (operation ${operationId}) persisted and notification job enqueued for requirement ${requirementId}. Timeout queued in BullMQ.`,
   );
+
+  return {
+    operationId,
+    requirementId,
+    jobId,
+    waveNumber,
+    waveId: createdWave?.id ?? null,
+    status: 'created',
+    workersDispatchedCount: waveWorkers.length,
+    workerIds: waveWorkers.map((w) => w.id),
+  };
 }
 
-let dispatchWorker: Worker<DispatchJobData> | null = null;
+let dispatchWorker: Worker<DispatchJobData, DispatchOperationResult> | null = null;
 
-export function getDispatchWorker(): Worker<DispatchJobData> {
+export function getDispatchWorker(): Worker<DispatchJobData, DispatchOperationResult> {
   if (!dispatchWorker) {
-    dispatchWorker = new Worker<DispatchJobData>(
+    dispatchWorker = new Worker<DispatchJobData, DispatchOperationResult>(
       'dispatch',
-      async (job: Job<DispatchJobData>) => {
-        await processDispatchJob(job.data);
+      async (job: Job<DispatchJobData, DispatchOperationResult>) => {
+        return await processDispatchJob(job.data);
       },
       {
         connection: redisConnectionOptions,

@@ -14,6 +14,7 @@ import {
 } from '../jobs/requirementStateMachine';
 import { BookingStatus } from '../booking/bookingStateMachine';
 import { bookingConfig } from '../../config/bookingConfig';
+import { generateDispatchOperationId } from './dispatchOperation';
 
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
@@ -401,13 +402,19 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
       const nextWaveNumber = currentWave + 1;
       const nextOffset = currentWave * (req.worker_count_needed * 2);
 
+      const operationId = generateDispatchOperationId({
+        requirementId,
+        waveNumber: nextWaveNumber,
+      });
+
       console.log(
-        `[dispatchServices] Firing wave ${nextWaveNumber} at offset ${nextOffset} via BullMQ`,
+        `[dispatchServices] Firing wave ${nextWaveNumber} (operation ${operationId}) at offset ${nextOffset} via BullMQ`,
       );
       try {
         await dispatchQueue.add(
           'dispatch-wave',
           {
+            operationId,
             requirementId,
             jobId: req.job_id,
             waveNumber: nextWaveNumber,

@@ -3,6 +3,7 @@ import prisma from '../config/prisma';
 import { redisConnectionOptions, dispatchQueue } from '../config/bullmq';
 import { RequirementStatus } from '../features/jobs/requirementStateMachine';
 import { io } from '../server';
+import { generateDispatchOperationId } from '../features/dispatch/dispatchOperation';
 
 export interface TimeoutJobData {
   requirementId: string;
@@ -12,6 +13,7 @@ export interface TimeoutJobData {
   offset: number;
   waveSize: number;
   correlationId?: string;
+  operationId?: string;
 }
 
 export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
@@ -96,13 +98,19 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
 
   // 5. Fire wave 2+ — enqueue next wave in BullMQ with deterministic jobId
   const nextWave = waveNumber + 1;
+  const nextOperationId = generateDispatchOperationId({
+    requirementId,
+    waveNumber: nextWave,
+  });
+
   console.log(
-    `[timeoutWorker] Firing wave ${nextWave} for requirement ${requirementId} at offset ${nextOffset}`,
+    `[timeoutWorker] Firing wave ${nextWave} (operation ${nextOperationId}) for requirement ${requirementId} at offset ${nextOffset}`,
   );
 
   await dispatchQueue.add(
     'dispatch-wave',
     {
+      operationId: nextOperationId,
       requirementId,
       jobId,
       waveNumber: nextWave,

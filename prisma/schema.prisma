@@ -350,6 +350,7 @@ model worker_location {
 
 model dispatch_wave {
   id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  operation_id     String?         @unique(map: "uniq_dispatch_wave_operation_id") @db.VarChar(255)
   requirement_id   String          @db.Uuid
   wave_number      Int
   status           String?         @db.VarChar(30)
@@ -362,6 +363,8 @@ model dispatch_wave {
   job_requirement  job_requirement @relation(fields: [requirement_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wave_requirement")
 
   @@unique([requirement_id, wave_number], map: "uniq_dispatch_wave_req_wave")
+  @@index([operation_id], map: "idx_dispatch_wave_operation_id")
+  @@index([requirement_id, status], map: "idx_dispatch_wave_req_status")
 }
 
 model job_requirement {

@@ -5,6 +5,7 @@ import { bookingSafeSelect } from '../../shared/prismaSelects';
 import { jobPolicy, assertPolicy, AuthenticatedUser, PolicyActor, AuthorizationError, UserRole } from '../../policies';
 import { jobStateService, JobAction, JobStatus, JobTransitionActor } from './jobStateMachine';
 import { RequirementStatus } from './requirementStateMachine';
+import { generateDispatchOperationId } from '../dispatch/dispatchOperation';
 
 export const jobService = {
   async createJob(customerId: string, payload: CreateJobReq) {
@@ -98,9 +99,11 @@ export const jobService = {
     await Promise.all(
       createdRequirements.map(async (req) => {
         try {
+          const operationId = generateDispatchOperationId({ requirementId: req.id, waveNumber: 1 });
           await dispatchQueue.add(
             'dispatch-wave',
             {
+              operationId,
               requirementId: req.id,
               jobId: job.id,
               waveNumber: 1,
