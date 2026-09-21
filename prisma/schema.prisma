@@ -14,7 +14,7 @@ model Worker {
   worker_score        Decimal?                  @default(5.0) @db.Decimal(4, 2)
   is_online           Boolean?                  @default(false)
   aadhaar_last4       String?                   @db.Char(4)
-  verification_status String?                   @default("pending") @db.VarChar(30)
+  verification_status String                    @default("pending") @db.VarChar(30)
   decline_count       Int?                      @default(0)
   timeout_count       Int?                      @default(0)
   device_token        String?
@@ -48,7 +48,7 @@ model booking {
   requirement_id          String                @db.Uuid
   worker_id               String                @db.Uuid
   customer_id             String                @db.Uuid
-  status                  String?               @db.VarChar(30)
+  status                  String                @default("CONFIRMED") @db.VarChar(30)
   otp_hash                String?
   otp_verified            Boolean?              @default(false)
   otp_expires_at          DateTime?             @db.Timestamptz(6)
@@ -66,7 +66,7 @@ model booking {
   confirmed_at            DateTime?             @db.Timestamptz(6)
   confirmed_by            String?               @db.VarChar(100)
   created_at              DateTime              @default(now()) @db.Timestamp(6)
-  updated_at              DateTime              @default(now()) @db.Timestamp(6)
+  updated_at              DateTime              @default(now()) @updatedAt @db.Timestamp(6)
   customer                customer              @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_customer")
   job                     job                   @relation(fields: [job_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_job")
   job_requirement         job_requirement       @relation(fields: [requirement_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_requirement")
@@ -110,10 +110,10 @@ model job {
   longitude       Float?
   location_geo    Unsupported("geography")?
   location        String?
-  status          String?                   @db.VarChar(30)
-  dispatch_status String?                   @db.VarChar(30)
-  created_at      DateTime?                 @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime?                 @default(now()) @db.Timestamptz(6)
+  status          String                    @default("OPEN") @db.VarChar(30)
+  dispatch_status String                    @default("IDLE") @db.VarChar(30)
+  created_at      DateTime                  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime                  @default(now()) @updatedAt @db.Timestamptz(6)
   cancelled_at    DateTime?                 @db.Timestamptz(6)
   cancelled_by    String?                   @db.VarChar(100)
   completed_at    DateTime?                 @db.Timestamptz(6)
@@ -212,7 +212,7 @@ model customer {
   id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   phone        String         @unique @db.VarChar(20)
   name         String         @db.VarChar(150)
-  created_at   DateTime?      @default(now()) @db.Timestamptz(6)
+  created_at   DateTime       @default(now()) @db.Timestamptz(6)
   deleted_at   DateTime?      @db.Timestamptz(6)
   password     String         @db.VarChar(255)
   booking      booking[]
@@ -228,12 +228,12 @@ model job_dispatch {
   worker_id       String          @db.Uuid
   wave_number     Int?
   wave_position   Int?
-  status          String?         @db.VarChar(30)
+  status          String          @default("pending") @db.VarChar(30)
   notified_at     DateTime?       @db.Timestamptz(6)
   expires_at      DateTime?       @db.Timestamptz(6)
   responded_at    DateTime?       @db.Timestamptz(6)
   created_at      DateTime        @default(now()) @db.Timestamp(6)
-  updated_at      DateTime        @default(now()) @db.Timestamp(6)
+  updated_at      DateTime        @default(now()) @updatedAt @db.Timestamp(6)
   job_requirement job_requirement @relation(fields: [requirement_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_dispatch_requirement")
   worker          Worker          @relation(fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_dispatch_worker")
 
@@ -271,8 +271,8 @@ model skill_category {
   id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name                  String                  @unique @db.VarChar(100)
   is_active             Boolean?                @default(true)
-  created_at            DateTime?               @default(now()) @db.Timestamptz(6)
-  updated_at            DateTime?               @default(now()) @db.Timestamptz(6)
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
   worker                Worker[]
   worker_skill          worker_skill[]
   job_requirement       job_requirement[]
@@ -314,7 +314,7 @@ model worker_device {
   last_seen_at DateTime  @default(now()) @db.Timestamptz(6)
   revoked_at   DateTime? @db.Timestamptz(6)
   created_at   DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
   worker       Worker    @relation(fields: [worker_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_device_worker")
 
   @@unique([worker_id, device_id], map: "uq_worker_device_worker_device")
@@ -328,7 +328,7 @@ model worker_document {
   worker_id     String  @db.Uuid
   document_type String? @db.VarChar(50)
   file_url      String?
-  status        String? @db.VarChar(30)
+  status        String  @default("pending") @db.VarChar(30)
   worker        Worker  @relation(fields: [worker_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_document_worker")
 }
 
@@ -348,13 +348,13 @@ model dispatch_wave {
   operation_id     String?         @unique(map: "uniq_dispatch_wave_operation_id") @db.VarChar(255)
   requirement_id   String          @db.Uuid
   wave_number      Int
-  status           String?         @db.VarChar(30)
+  status           String          @default("active") @db.VarChar(30)
   notified_at      DateTime?       @db.Timestamptz(6)
   resolved_at      DateTime?       @db.Timestamptz(6)
   workers_notified Int?            @default(0)
   slots_filled     Int?            @default(0)
   created_at       DateTime        @default(now()) @db.Timestamp(6)
-  updated_at       DateTime        @default(now()) @db.Timestamp(6)
+  updated_at       DateTime        @default(now()) @updatedAt @db.Timestamp(6)
   job_requirement  job_requirement @relation(fields: [requirement_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wave_requirement")
 
   @@unique([requirement_id, wave_number], map: "uniq_dispatch_wave_req_wave")
@@ -370,11 +370,11 @@ model job_requirement {
   worker_count_needed   Int
   worker_count_filled   Int                     @default(0)
   rate_per_day          Int?
-  status                String?                 @db.VarChar(30)
+  status                String                  @default("OPEN") @db.VarChar(30)
   current_wave          Int?                    @default(1)
   wave_size             Int?                    @default(10)
   created_at            DateTime                @default(now()) @db.Timestamp(6)
-  updated_at            DateTime                @default(now()) @db.Timestamp(6)
+  updated_at            DateTime                @default(now()) @updatedAt @db.Timestamp(6)
   booking               booking[]
   dispatch_wave         dispatch_wave[]
   job_dispatch          job_dispatch[]
