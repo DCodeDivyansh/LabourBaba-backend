@@ -1,4 +1,5 @@
 import prisma from "../../config/prisma";
+import { Prisma } from "@prisma/client";
 import { comparePassword } from "../../utils/authUtils";
 import { CancelBookingReq, ConfirmBookingCompleteReq } from "../../type/api_req.type";
 import { isReviewUniqueConstraintError } from "../review/reviewServices";
@@ -53,28 +54,19 @@ export const bookingService = {
     let booking: any = null;
 
     // Direct database-level scoped query
-    if (prisma.booking.findFirst) {
+    if (typeof prisma.booking.findFirst === "function") {
       booking = await prisma.booking.findFirst({
         where: bookingPolicy.scopeRead(actor, bookingId),
         select: selectClause,
       });
-    }
-
-    // Fallback for mock setups where test specifically mocked findUnique instead of findFirst
-    if (!booking && prisma.booking.findUnique) {
+    } else if (typeof prisma.booking.findUnique === "function") {
+      // Mock fallback
       const candidate = await prisma.booking.findUnique({
         where: { id: bookingId },
         select: selectClause,
       });
       if (candidate) {
-        const decision = bookingPolicy.canRead(actor, candidate);
-        if (!decision.allowed) {
-          throw new AuthorizationError(
-            decision.reason || "Booking not found",
-            decision.statusCode || 404,
-            decision.code
-          );
-        }
+        assertPolicy(bookingPolicy.canRead(actor, candidate));
         booking = candidate;
       }
     }
@@ -87,7 +79,7 @@ export const bookingService = {
     return await prisma.$transaction(async (tx) => {
       const effectiveWorkerId = actor?.role === UserRole.WORKER ? actor.id : workerId;
 
-      // 1. Acquire row lock and fetch latest booking record
+      // 1. Acquire row lock and fetch latest booking record scoped to assigned worker
       let lockedBooking: any = null;
       try {
         if (typeof (tx as any).$queryRaw === "function") {
@@ -95,6 +87,7 @@ export const bookingService = {
             SELECT id, status, otp_hash, otp_expires_at, otp_attempts, otp_locked_at, otp_consumed_at, otp_verified, worker_id, customer_id, job_id
             FROM "booking"
             WHERE id = ${bookingId}::uuid
+              ${actor?.role === UserRole.ADMIN ? Prisma.empty : Prisma.sql`AND worker_id = ${effectiveWorkerId}::uuid`}
             FOR UPDATE
           `;
           if (Array.isArray(rows) && rows.length > 0) {
@@ -106,14 +99,22 @@ export const bookingService = {
       }
 
       if (!lockedBooking) {
-        if (typeof (tx.booking as any)?.findUnique === "function") {
-          lockedBooking = await (tx.booking as any).findUnique({ where: { id: bookingId } });
-        }
-        if (!lockedBooking && typeof (tx.booking as any)?.findFirst === "function") {
-          const scopeWhere = actor?.role === UserRole.ADMIN
-            ? { id: bookingId }
-            : { id: bookingId, worker_id: effectiveWorkerId };
+        const scopeWhere = actor?.role === UserRole.ADMIN
+          ? { id: bookingId }
+          : { id: bookingId, worker_id: effectiveWorkerId };
+        if (typeof (tx.booking as any)?.findFirst === "function") {
           lockedBooking = await (tx.booking as any).findFirst({ where: scopeWhere });
+        }
+        if (!lockedBooking && typeof (tx.booking as any)?.findUnique === "function") {
+          const candidate = await (tx.booking as any).findUnique({ where: { id: bookingId } });
+          if (candidate) {
+            if (actor) {
+              assertPolicy(bookingPolicy.canVerifyOtp(actor, candidate));
+            } else if (candidate.worker_id !== effectiveWorkerId) {
+              throw new AuthorizationError("Forbidden: You are not assigned to this booking", 403);
+            }
+            lockedBooking = candidate;
+          }
         }
       }
 
@@ -223,12 +224,14 @@ export const bookingService = {
         ? { id: bookingId }
         : { id: bookingId, worker_id: effectiveWorkerId };
 
-      let booking = tx.booking.findFirst
-        ? await tx.booking.findFirst({ where: scopeWhere })
-        : null;
-
-      if (!booking && tx.booking.findUnique) {
-        booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      let booking: any = null;
+      if (typeof tx.booking.findFirst === "function") {
+        booking = await tx.booking.findFirst({ where: scopeWhere });
+      } else if (typeof tx.booking.findUnique === "function") {
+        const candidate = await tx.booking.findUnique({ where: { id: bookingId } });
+        if (candidate && (actor?.role === UserRole.ADMIN || candidate.worker_id === effectiveWorkerId)) {
+          booking = candidate;
+        }
       }
 
       if (!booking) throw new AuthorizationError("Booking not found", 404);
@@ -256,12 +259,14 @@ export const bookingService = {
         ? { id: bookingId }
         : { id: bookingId, customer_id: effectiveCustomerId };
 
-      let booking = tx.booking.findFirst
-        ? await tx.booking.findFirst({ where: scopeWhere })
-        : null;
-
-      if (!booking && tx.booking.findUnique) {
-        booking = await tx.booking.findUnique({ where: { id: bookingId } });
+      let booking: any = null;
+      if (typeof tx.booking.findFirst === "function") {
+        booking = await tx.booking.findFirst({ where: scopeWhere });
+      } else if (typeof tx.booking.findUnique === "function") {
+        const candidate = await tx.booking.findUnique({ where: { id: bookingId } });
+        if (candidate && (actor?.role === UserRole.ADMIN || candidate.customer_id === effectiveCustomerId)) {
+          booking = candidate;
+        }
       }
 
       if (!booking) throw new AuthorizationError("Booking not found", 404);
@@ -339,7 +344,7 @@ export const bookingService = {
       const effectiveActorId = actor?.id || userId;
       const effectiveRole = actor?.role || UserRole.CUSTOMER;
 
-      // 1. Acquire exclusive row lock
+      // 1. Acquire exclusive row lock scoped to authorized participant
       let lockedBooking: any = null;
       try {
         if (typeof (tx as any).$queryRaw === "function") {
@@ -347,6 +352,13 @@ export const bookingService = {
             SELECT id, status, customer_id, worker_id, job_id, requirement_id, cancelled_at, cancelled_by, cancellation_reason
             FROM "booking"
             WHERE id = ${bookingId}::uuid
+              ${
+                effectiveRole === UserRole.ADMIN
+                  ? Prisma.empty
+                  : effectiveRole === UserRole.WORKER
+                  ? Prisma.sql`AND worker_id = ${effectiveActorId}::uuid`
+                  : Prisma.sql`AND customer_id = ${effectiveActorId}::uuid`
+              }
             FOR UPDATE
           `;
           if (Array.isArray(rows) && rows.length > 0) {
@@ -358,18 +370,24 @@ export const bookingService = {
       }
 
       if (!lockedBooking) {
-        if (typeof (tx.booking as any)?.findUnique === "function") {
-          lockedBooking = await (tx.booking as any).findUnique({ where: { id: bookingId } });
-        }
-        if (!lockedBooking && typeof (tx.booking as any)?.findFirst === "function") {
-          const scopeWhere = actor
-            ? (actor.role === UserRole.ADMIN
-                ? { id: bookingId }
-                : actor.role === UserRole.CUSTOMER
-                ? { id: bookingId, customer_id: actor.id }
-                : { id: bookingId, worker_id: actor.id })
-            : { id: bookingId };
+        const scopeWhere = effectiveRole === UserRole.ADMIN
+          ? { id: bookingId }
+          : effectiveRole === UserRole.WORKER
+          ? { id: bookingId, worker_id: effectiveActorId }
+          : { id: bookingId, customer_id: effectiveActorId };
+
+        if (typeof (tx.booking as any)?.findFirst === "function") {
           lockedBooking = await (tx.booking as any).findFirst({ where: scopeWhere });
+        } else if (typeof (tx.booking as any)?.findUnique === "function") {
+          const candidate = await (tx.booking as any).findUnique({ where: { id: bookingId } });
+          if (
+            candidate &&
+            (effectiveRole === UserRole.ADMIN ||
+              (effectiveRole === UserRole.WORKER && candidate.worker_id === effectiveActorId) ||
+              (effectiveRole === UserRole.CUSTOMER && candidate.customer_id === effectiveActorId))
+          ) {
+            lockedBooking = candidate;
+          }
         }
       }
 
@@ -476,17 +494,7 @@ export const bookingService = {
     });
 
     if (!booking) {
-      // Check if booking exists under another user to distinguish 403 from 404
-      const anyBooking = await prisma.booking.findUnique({
-        where: { id: bookingId },
-      });
-      if (anyBooking) {
-        throw new AuthorizationError(
-          "Forbidden: Only the booking customer can track worker location",
-          403
-        );
-      }
-      throw new AuthorizationError("Booking not found", 404);
+      throw new AuthorizationError("Forbidden: Only the booking customer can track worker location", 403);
     }
 
     assertPolicy(bookingPolicy.canGetWorkerLocation(actor, booking));

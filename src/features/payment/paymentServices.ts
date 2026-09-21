@@ -890,6 +890,14 @@ export async function getPaymentStatus(
       ? { id: actor, role: UserRole.CUSTOMER, phone: "" }
       : actor;
 
+  if (effectiveActor.role === UserRole.WORKER) {
+    throw new PaymentError(
+      "Workers are not authorized to view payment details.",
+      "PAYMENT_NOT_AUTHORIZED",
+      403,
+    );
+  }
+
   if (effectiveActor.role === UserRole.CUSTOMER) {
     const booking = await prisma.booking.findFirst({
       where: {
@@ -907,7 +915,7 @@ export async function getPaymentStatus(
   }
 
   const payment = await prisma.payment.findFirst({
-    where: { booking_id: bookingId },
+    where: paymentPolicy.scopeRead(effectiveActor, bookingId),
     select: {
       id: true,
       razorpay_order_id: true,
@@ -921,7 +929,11 @@ export async function getPaymentStatus(
   });
 
   if (!payment) {
-    throw new PaymentError("No payment found for this booking.", "PAYMENT_NOT_FOUND", 404);
+    throw new PaymentError(
+      "No payment found for this booking or you do not have permission to view it.",
+      "PAYMENT_NOT_FOUND",
+      404,
+    );
   }
 
   return payment;
@@ -943,7 +955,15 @@ export async function refundPayment(
       ? { id: actor, role: UserRole.CUSTOMER, phone: "" }
       : actor;
 
-  // Step 1: Enforce resource authorization (Issue 67)
+  if (effectiveActor.role === UserRole.WORKER) {
+    throw new PaymentError(
+      "Workers are not authorized to refund payments.",
+      "REFUND_NOT_AUTHORIZED",
+      403,
+    );
+  }
+
+  // Step 1: Enforce resource authorization (Issue 67) - strictly scoped database query
   const booking = await prisma.booking.findFirst({
     where: {
       id: bookingId,

@@ -168,13 +168,30 @@ export const jobService = {
     if (!actor) {
       throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
     }
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
-      include: {
-        booking: { select: { worker_id: true } },
-        job_requirement: { include: { job_dispatch: true } },
-      },
-    });
+    let job = typeof prisma.job.findFirst === "function"
+      ? await prisma.job.findFirst({
+          where: jobPolicy.scopeRead(actor, jobId),
+          include: {
+            booking: { select: { worker_id: true } },
+            job_requirement: { include: { job_dispatch: true } },
+          },
+        })
+      : null;
+
+    if (!job && typeof prisma.job.findUnique === "function") {
+      const candidate = await prisma.job.findUnique({
+        where: { id: jobId },
+        include: {
+          booking: { select: { worker_id: true } },
+          job_requirement: { include: { job_dispatch: true } },
+        },
+      });
+      if (candidate) {
+        assertPolicy(jobPolicy.canRead(actor, candidate));
+        job = candidate;
+      }
+    }
+
     if (!job) throw new Error("Job not found");
     assertPolicy(jobPolicy.canRead(actor, job));
     return job;
@@ -238,13 +255,30 @@ export const jobService = {
     if (!actor) {
       throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
     }
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
-      include: {
-        booking: { select: { worker_id: true } },
-        job_requirement: { include: { job_dispatch: true } },
-      },
-    });
+    let job = typeof prisma.job.findFirst === "function"
+      ? await prisma.job.findFirst({
+          where: jobPolicy.scopeRead(actor, jobId),
+          include: {
+            booking: { select: { worker_id: true } },
+            job_requirement: { include: { job_dispatch: true } },
+          },
+        })
+      : null;
+
+    if (!job && typeof prisma.job.findUnique === "function") {
+      const candidate = await prisma.job.findUnique({
+        where: { id: jobId },
+        include: {
+          booking: { select: { worker_id: true } },
+          job_requirement: { include: { job_dispatch: true } },
+        },
+      });
+      if (candidate) {
+        assertPolicy(jobPolicy.canRead(actor, candidate));
+        job = candidate;
+      }
+    }
+
     if (!job) throw new Error("Job not found");
     assertPolicy(jobPolicy.canRead(actor, job));
 
@@ -257,13 +291,30 @@ export const jobService = {
     if (!actor) {
       throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
     }
-    const job = await prisma.job.findUnique({
-      where: { id: jobId },
-      include: {
-        booking: { select: { worker_id: true } },
-        job_requirement: { include: { job_dispatch: true } },
-      },
-    });
+    let job = typeof prisma.job.findFirst === "function"
+      ? await prisma.job.findFirst({
+          where: jobPolicy.scopeRead(actor, jobId),
+          include: {
+            booking: { select: { worker_id: true } },
+            job_requirement: { include: { job_dispatch: true } },
+          },
+        })
+      : null;
+
+    if (!job && typeof prisma.job.findUnique === "function") {
+      const candidate = await prisma.job.findUnique({
+        where: { id: jobId },
+        include: {
+          booking: { select: { worker_id: true } },
+          job_requirement: { include: { job_dispatch: true } },
+        },
+      });
+      if (candidate) {
+        assertPolicy(jobPolicy.canReadBookings(actor, candidate));
+        job = candidate;
+      }
+    }
+
     if (!job) throw new Error("Job not found");
     assertPolicy(jobPolicy.canReadBookings(actor, job));
 

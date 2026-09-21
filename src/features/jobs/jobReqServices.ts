@@ -60,8 +60,12 @@ export const jobReqService = {
     if (!actor) {
       throw new AuthorizationError("Authentication required", 401, "UNAUTHORIZED");
     }
+    const scopedWhere = {
+      ...requirementPolicy.scopeRead(actor, requirementId),
+      job_id: jobId,
+    };
     const req = await prisma.job_requirement.findFirst({
-      where: { id: requirementId, job_id: jobId },
+      where: scopedWhere,
       include: {
         job: { select: { customer_id: true } },
         job_dispatch: { select: { worker_id: true } },
