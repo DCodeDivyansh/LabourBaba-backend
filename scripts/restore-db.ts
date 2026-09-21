@@ -55,8 +55,10 @@ export async function restoreAndVerifyDatabase(options: {
   try {
     const sqlContent = fs.readFileSync(backupPath, "utf-8");
 
-    // Execute restore statements
+    // Execute restore statements with disabled trigger cascade if supported
+    await client.query("SET session_replication_role = 'replica';").catch(() => {});
     await client.query(sqlContent);
+    await client.query("SET session_replication_role = 'origin';").catch(() => {});
     restoreDurationMs = Date.now() - restoreStartTime;
 
     // 3. Post-Restore Verification

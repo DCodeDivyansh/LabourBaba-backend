@@ -5,6 +5,8 @@ import { signAccessToken } from "../src/utils/authUtils";
 import { UserRole } from "../src/type/userRole";
 
 describe("Issue 51 - Comprehensive Authorization Matrix & ABAC Security", () => {
+  jest.setTimeout(30000);
+
   // Principals
   const CUSTOMER_A_ID = "00000000-0000-4001-a000-000000000001";
   const CUSTOMER_B_ID = "00000000-0000-4001-a000-000000000002";

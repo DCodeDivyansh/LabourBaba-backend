@@ -116,6 +116,20 @@ jest.mock("../src/config/prisma", () => ({
       updateMany: jest.fn(),
       create: jest.fn(),
     },
+    audit_log: {
+      create: jest.fn().mockResolvedValue({ id: "mock-audit-id" }),
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+    },
+    admin_audit_log: {
+      create: jest.fn().mockResolvedValue({ id: "mock-audit-id" }),
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+    },
+    refresh_session: {
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $transaction: jest.fn(),
     $executeRaw: jest.fn(),
   },
@@ -196,6 +210,30 @@ describe("API Protection and JWT Validation Tests", () => {
 
     (prisma.worker_document.findMany as jest.Mock).mockResolvedValue([{ id: "doc-uuid", status: "PENDING", worker_id: MOCK_WORKER_ID }]);
     (prisma.worker_document.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+    if ((prisma as any).audit_log?.create) {
+      ((prisma as any).audit_log.create as jest.Mock).mockResolvedValue({
+        id: "mock-audit-id",
+        actor_id: MOCK_ADMIN_ID,
+        actor_role: "admin",
+        action: "WORKER_VERIFIED",
+        target_type: "worker",
+        target_id: MOCK_WORKER_ID,
+      });
+    }
+    if ((prisma as any).admin_audit_log?.create) {
+      ((prisma as any).admin_audit_log.create as jest.Mock).mockResolvedValue({
+        id: "mock-audit-id",
+        actor_id: MOCK_ADMIN_ID,
+        actor_role: "admin",
+        action: "WORKER_VERIFIED",
+        target_type: "worker",
+        target_id: MOCK_WORKER_ID,
+      });
+    }
+    if ((prisma as any).refresh_session?.updateMany) {
+      ((prisma as any).refresh_session.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
+    }
   });
 
   afterEach(() => {
@@ -409,6 +447,13 @@ describe("API Protection and JWT Validation Tests", () => {
         id: MOCK_BOOKING_ID,
         customer_id: MOCK_CUSTOMER_ID,
       });
+      (prisma.payment.findFirst as jest.Mock).mockResolvedValue({
+        id: "payment-uuid",
+        booking_id: MOCK_BOOKING_ID,
+        status: "CREATED",
+        amount: 50000,
+        currency: "INR"
+      });
       (prisma.payment.findUnique as jest.Mock).mockResolvedValue({
         id: "payment-uuid",
         booking_id: MOCK_BOOKING_ID,
@@ -554,7 +599,20 @@ describe("API Protection and JWT Validation Tests", () => {
       });
 
       it("should return 200 when authenticated as admin and successfully update verification", async () => {
-        const updatedWorker = { id: MOCK_WORKER_ID, verification_status: "verified" };
+        const updatedWorker = {
+          id: MOCK_WORKER_ID,
+          name: "Test Worker",
+          phone: "+919999999999",
+          skill_type: "Plumber",
+          skill_category_id: "cat-1",
+          verification_status: "verified",
+          worker_score: 5,
+          is_online: true,
+          aadhaar_last4: "1234",
+          decline_count: 0,
+          timeout_count: 0,
+        };
+        (prisma.worker_document.findMany as jest.Mock).mockResolvedValue([{ id: "doc-1", worker_id: MOCK_WORKER_ID, status: "PENDING" }]);
         (prisma.worker.update as jest.Mock).mockResolvedValue(updatedWorker);
 
         const res = await request(app)
@@ -675,7 +733,21 @@ describe("API Protection and JWT Validation Tests", () => {
       });
 
       it("should return 200 when authenticated as admin and successfully suspend worker", async () => {
-        const suspendedWorker = { id: MOCK_WORKER_ID, verification_status: "suspended", deleted_at: new Date() };
+        const suspendedWorker = {
+          id: MOCK_WORKER_ID,
+          name: "Test Worker",
+          phone: "+919999999999",
+          skill_type: "Plumber",
+          skill_category_id: "cat-1",
+          verification_status: "suspended",
+          deleted_at: new Date(),
+          worker_score: 5,
+          is_online: false,
+          aadhaar_last4: "1234",
+          decline_count: 0,
+          timeout_count: 0,
+        };
+        (prisma.worker.findUnique as jest.Mock).mockResolvedValue(suspendedWorker);
         (prisma.worker.update as jest.Mock).mockResolvedValue(suspendedWorker);
 
         const res = await request(app)

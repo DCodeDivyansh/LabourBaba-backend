@@ -142,7 +142,9 @@ io.use(socketAuthMiddleware);
 registerSocketHandlers(io);
 
 // Register servers with lifecycle manager
-lifecycleManager.registerServers(httpServer, io);
+if (lifecycleManager && typeof lifecycleManager.registerServers === 'function') {
+  lifecycleManager.registerServers(httpServer, io);
+}
 
 import { metricsService } from "./metrics/metrics.service";
 

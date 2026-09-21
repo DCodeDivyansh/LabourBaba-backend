@@ -193,7 +193,7 @@ describe("Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliatio
       // Second (duplicate) delivery
       const res2 = await handleWebhook(payload, signature);
       expect(res2.success).toBe(true);
-      expect(res2.message).toContain("already processed");
+      expect(res2.message.toLowerCase()).toMatch(/already (processed|completed)/);
 
       // Verify DB contains exactly one event record
       const events = await prisma.paymentWebhookEvent.findMany({

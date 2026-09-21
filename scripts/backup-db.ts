@@ -60,19 +60,46 @@ export async function createDatabaseBackup(options?: {
       const sqlChunks: string[] = [];
       sqlChunks.push(`-- LabourBaba Database Backup: ${new Date().toISOString()}\n`);
       sqlChunks.push(`CREATE EXTENSION IF NOT EXISTS postgis;\n`);
+      sqlChunks.push(`SET session_replication_role = 'replica';\n`);
 
-      // Query all public business tables (excluding PostGIS system tables and internal migration table)
+      // Preferred topological order for data dependencies
+      const tableOrder = [
+        'skill_category',
+        'customer',
+        'worker',
+        'worker_device',
+        'worker_document',
+        'job',
+        'job_requirement',
+        'job_dispatch',
+        'dispatch_wave',
+        'booking',
+        'payment',
+        'review',
+        'chat_message',
+        'refresh_session',
+        'otp_challenge',
+        'worker_location',
+        'notification_outbox',
+        'admin_audit_log',
+      ];
+
+      // Query all public business tables
       const tablesRes = await client.query(`
         SELECT table_name 
         FROM information_schema.tables 
         WHERE table_schema = 'public' 
           AND table_type = 'BASE TABLE'
           AND table_name NOT IN ('_prisma_migrations', 'spatial_ref_sys', 'geography_columns', 'geometry_columns')
-        ORDER BY table_name;
       `);
 
-      for (const row of tablesRes.rows) {
-        const table = row.table_name;
+      const availableTables = new Set(tablesRes.rows.map((r: any) => r.table_name));
+      const sortedTables = [
+        ...tableOrder.filter((t) => availableTables.has(t)),
+        ...Array.from(availableTables).filter((t) => !tableOrder.includes(t)),
+      ];
+
+      for (const table of sortedTables) {
         const dataRes = await client.query(`SELECT * FROM "${table}"`);
         if (dataRes.rows.length > 0) {
           for (const item of dataRes.rows) {

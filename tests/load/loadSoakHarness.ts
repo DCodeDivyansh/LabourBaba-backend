@@ -111,12 +111,13 @@ export class LoadSoakHarness {
     let success = 0;
     let failed = 0;
 
-    const customerId = "00000000-0000-4005-b000-000000000001";
-    await prisma.customer.upsert({
-      where: { id: customerId },
-      update: { phone: "+919992000001" },
-      create: { id: customerId, phone: "+919992000001", name: "Load Customer", password: "hash" },
-    });
+    let customer = await prisma.customer.findFirst({ where: { OR: [{ id: "00000000-0000-4005-b000-000000000001" }, { phone: "+919992000001" }] } });
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: { id: "00000000-0000-4005-b000-000000000001", phone: "+919992000001", name: "Load Customer", password: "hash" },
+      });
+    }
+    const customerId = customer.id;
 
     const createdJobIds: string[] = [];
     const startTime = Date.now();

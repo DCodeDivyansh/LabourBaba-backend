@@ -38,7 +38,8 @@ describe("Issues 66 & 67 - Real Provider Refunds & Authorization Hardening", () 
     await prisma.job_requirement.deleteMany({ where: { id: requirementId } }).catch(() => {});
     await prisma.job.deleteMany({ where: { id: jobId } }).catch(() => {});
     await prisma.worker.deleteMany({ where: { id: workerId } }).catch(() => {});
-    await prisma.customer.deleteMany({ where: { id: { in: [customerId, otherCustomerId] } } }).catch(() => {});
+    await prisma.customer.deleteMany({ where: { OR: [{ id: { in: [customerId, otherCustomerId] } }, { phone: { in: ["+919997000001", "+919997000002"] } }] } }).catch(() => {});
+    await prisma.worker.deleteMany({ where: { OR: [{ id: workerId }, { phone: "+919997000003" }] } }).catch(() => {});
 
     let category = await prisma.skill_category.findFirst({ where: { name: "RefundTestSkill" } });
     if (!category) {

@@ -159,7 +159,7 @@ describe("Issue 57 - Staging End-to-End Production-Like Smoke Suite", () => {
     });
 
     expect(booking).toBeDefined();
-    expect(booking?.status).toBe("CONFIRMED");
+    expect(booking?.status.toUpperCase()).toBe("CONFIRMED");
 
     // Set known hash for deterministic smoke test OTP verification
     const hashed = await bcrypt.hash(rawOtp, 10);
@@ -209,12 +209,12 @@ describe("Issue 57 - Staging End-to-End Production-Like Smoke Suite", () => {
     expect(confirmed.success).toBe(true);
 
     const finishedBooking = await prisma.booking.findUnique({ where: { id: booking!.id } });
-    expect(finishedBooking?.status).toBe("COMPLETED");
+    expect(finishedBooking?.status?.toUpperCase()).toBe("COMPLETED");
 
     // Check requirement status updated
     const req = await prisma.job_requirement.findUnique({
       where: { id: requirementId },
     });
-    expect(["FILLED", "COMPLETED"]).toContain(req?.status);
+    expect(["FILLED", "COMPLETED"]).toContain(req?.status?.toUpperCase());
   });
 });

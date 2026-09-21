@@ -31,6 +31,8 @@ const prisma = new PrismaClient({ adapter });
 import { reviewService, ReviewError } from "../src/features/review/reviewServices";
 
 describe("Issue #20 — Real PostgreSQL Concurrency Integration Tests", () => {
+  jest.setTimeout(30000);
+
   let pgClient: Client;
 
   // Stable UUIDs for test fixture

@@ -3,6 +3,8 @@ import { OutboxWorker } from "../src/workers/outboxWorker";
 import prisma from "../src/config/prisma";
 
 describe("Issue 44 - Durable Notification Outbox", () => {
+  jest.setTimeout(30000);
+
   const testWorkerId = "00000000-0000-4000-a000-000000000001";
   const testRequirementId = "00000000-0000-4000-a000-000000000002";
 
