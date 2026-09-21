@@ -41,6 +41,10 @@ jest.mock("../src/config/prisma", () => ({
       create: jest.fn(),
       updateMany: jest.fn(),
     },
+    audit_log: {
+      create: jest.fn().mockResolvedValue({ id: "audit-doc-1", created_at: new Date() }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $transaction: jest.fn((cb) => cb(prisma)),
     $connect: jest.fn().mockResolvedValue(undefined),
     $disconnect: jest.fn().mockResolvedValue(undefined),
@@ -64,6 +68,10 @@ const adminToken   = generateToken({ id: ADMIN_ID, role: UserRole.ADMIN, phone: 
 describe("Issue #8 — Harden Worker-Document Access", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    ((prisma as any).audit_log.create as jest.Mock).mockResolvedValue({
+      id: "audit-doc-1",
+      created_at: new Date(),
+    });
   });
 
   describe("1. Authentication & Token Integrity", () => {
@@ -320,8 +328,14 @@ describe("Issue #8 — Harden Worker-Document Access", () => {
       expect(res.body.data.access_url).toContain("https://storage.labourbaba.com/download/");
 
       // Verify audit log call occurred
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining(`[AUDIT] Admin ${ADMIN_ID} viewed document ${DOC_A_ID} of worker ${WORKER_A_ID}`)
+      expect((prisma as any).audit_log.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: "DOCUMENT_ACCESSED",
+            target_id: DOC_A_ID,
+            actor_id: ADMIN_ID,
+          }),
+        })
       );
 
       // Verify the signed URL itself is NEVER logged

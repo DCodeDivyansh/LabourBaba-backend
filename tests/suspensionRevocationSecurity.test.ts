@@ -109,6 +109,10 @@ jest.mock("../src/config/prisma", () => {
         update: jest.fn(),
         updateMany: jest.fn(),
       },
+      audit_log: {
+        create: jest.fn().mockResolvedValue({ id: "audit-1", created_at: new Date() }),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       $connect: jest.fn().mockResolvedValue(undefined),
       $disconnect: jest.fn().mockResolvedValue(undefined),
       $transaction: jest.fn(),
@@ -132,6 +136,9 @@ describe("P2 Security Suite — Issue #11: Revoke Sessions on Suspension/Deletio
       }
       return cb;
     });
+
+    ((prisma as any).audit_log.create as jest.Mock).mockResolvedValue({ id: "audit-1", created_at: new Date() });
+    ((prisma as any).audit_log.findMany as jest.Mock).mockResolvedValue([]);
 
     (prisma.worker.findUnique as jest.Mock).mockImplementation(async ({ where }: any) => {
       if (where.id) return workerStore.find((w) => w.id === where.id) || null;
@@ -665,30 +672,31 @@ describe("P2 Security Suite — Issue #11: Revoke Sessions on Suspension/Deletio
   // ==========================================================================
   describe("Scenario J: Structured audit logging without credential leakage", () => {
     it("MUST emit structured audit record without passwords, hashes, or tokens", async () => {
-      const consoleSpy = jest.spyOn(console, "log").mockImplementation(() => {});
-
       await adminService.suspendWorker(WORKER_A_ID, { reason: "Security violation" }, ADMIN_ID);
 
-      const auditCalls = consoleSpy.mock.calls.filter((call) =>
-        call.some((arg) => typeof arg === "string" && arg.includes("[AUDIT] Action: WORKER_SUSPENDED"))
+      expect((prisma as any).audit_log.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            action: "WORKER_SUSPENDED",
+            target_id: WORKER_A_ID,
+            actor_id: ADMIN_ID,
+            reason: "Security violation",
+          }),
+        })
       );
 
-      expect(auditCalls.length).toBeGreaterThan(0);
-      const logMessage = auditCalls[0][0];
-
-      // Audit must contain actor, target, old status, new status, reason, timestamp
-      expect(logMessage).toContain(ADMIN_ID);
-      expect(logMessage).toContain(WORKER_A_ID);
-      expect(logMessage).toContain("PrevStatus: verified");
-      expect(logMessage).toContain("NewStatus: suspended");
-      expect(logMessage).toContain("Security violation");
+      const callArgs = ((prisma as any).audit_log.create as jest.Mock).mock.calls.find((call: any) =>
+        call[0]?.data?.target_id === WORKER_A_ID
+      );
+      expect(callArgs).toBeDefined();
+      const metadata = callArgs[0].data.metadata;
+      expect(metadata?.newStatus).toBe("suspended");
 
       // Audit must NEVER contain passwords, hashes, or secrets
-      expect(logMessage).not.toContain("StrongPass123!");
-      expect(logMessage).not.toContain("$2b$");
-      expect(logMessage).not.toContain("eyJ");
-
-      consoleSpy.mockRestore();
+      const serialized = JSON.stringify(callArgs[0]);
+      expect(serialized).not.toContain("StrongPass123!");
+      expect(serialized).not.toContain("$2b$");
+      expect(serialized).not.toContain("eyJ");
     });
   });
 
