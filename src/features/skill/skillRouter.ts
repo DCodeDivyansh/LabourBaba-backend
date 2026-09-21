@@ -1,5 +1,5 @@
 import express from "express";
-import { getSkills, addSkills } from "./skillControllers"
+import { getSkills, addSkills, toggleSkillStatus } from "./skillControllers";
 import { SkillCategorySchema, SkillCategorySchemaReqSchema } from "../../schemas";
 import { validateBody } from "../../middlewares/validationMiddleware";
 import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
@@ -9,7 +9,7 @@ import { z } from "zod";
 registry.registerPath({
   method: "get",
   path: "/api/skill",
-  summary: "Get all skils",
+  summary: "Get all skills",
   tags: ["Skills"],
   responses: {
     200: {
@@ -28,11 +28,12 @@ registry.registerPath({
     },
   },
 });
+
 // Register POST /api/skill/add
 registry.registerPath({
   method: "post",
   path: "/api/skill/add",
-  summary: "Create a new skill category (Admin only)",
+  summary: "Create a new canonical skill category (Admin only)",
   tags: ["Skills"],
   security: [{ bearerAuth: [] }],
   request: {
@@ -65,15 +66,18 @@ registry.registerPath({
     403: {
       description: "Forbidden - Admin role required",
     },
+    409: {
+      description: "Skill already exists in canonical taxonomy",
+    },
     500: {
       description: "Internal server error",
     },
   },
 });
 
-
 const skillRoute = express.Router();
-skillRoute.get("/", getSkills)
-skillRoute.post("/add", authenticateJWT, requireRole(UserRole.ADMIN), validateBody(SkillCategorySchemaReqSchema), addSkills)
+skillRoute.get("/", getSkills);
+skillRoute.post("/add", authenticateJWT, requireRole(UserRole.ADMIN), validateBody(SkillCategorySchemaReqSchema), addSkills);
+skillRoute.patch("/:skillId/status", authenticateJWT, requireRole(UserRole.ADMIN), toggleSkillStatus);
 
-export default skillRoute
+export default skillRoute;

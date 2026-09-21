@@ -7,6 +7,7 @@ import { jobStateService, JobAction, JobStatus, JobTransitionActor } from './job
 import { RequirementStatus } from './requirementStateMachine';
 import { generateDispatchOperationId } from '../dispatch/dispatchOperation';
 import { validateOptionalCoordinatePair } from '../../utils/coordinateValidator';
+import { skillService } from '../skill/skill.service';
 
 export const jobService = {
   async createJob(customerId: string, payload: CreateJobReq) {
@@ -69,9 +70,15 @@ export const jobService = {
 
       if (payload.requirements && payload.requirements.length > 0) {
         for (const req of payload.requirements) {
-          await tx.job_requirement.create({
+          let canonicalSkillId: string | null = (req as any).skill_id || null;
+          if (!canonicalSkillId && req.skill_type) {
+            canonicalSkillId = await skillService.resolveSkillId(req.skill_type);
+          }
+
+          const createdReq = await tx.job_requirement.create({
             data: {
               job_id: job.id,
+              skill_id: canonicalSkillId,
               skill_type: req.skill_type,
               worker_count_needed: req.worker_count_needed,
               rate_per_day: req.rate_per_day,
@@ -79,6 +86,19 @@ export const jobService = {
               worker_count_filled: 0,
             },
           });
+
+          if (canonicalSkillId && typeof (tx as any).job_requirement_skill?.create === "function") {
+            try {
+              await (tx as any).job_requirement_skill.create({
+                data: {
+                  requirement_id: createdReq.id,
+                  skill_id: canonicalSkillId,
+                },
+              });
+            } catch (jrsErr: any) {
+              console.warn(`[jobService] Could not write job_requirement_skill: ${jrsErr?.message}`);
+            }
+          }
         }
       }
       return job;
@@ -87,7 +107,7 @@ export const jobService = {
     // Fetch created requirements with fields needed for dispatch
     const createdRequirements = await prisma.job_requirement.findMany({
       where: { job_id: job.id },
-      select: { id: true, skill_type: true, rate_per_day: true, worker_count_needed: true },
+      select: { id: true, skill_id: true, skill_type: true, rate_per_day: true, worker_count_needed: true },
     });
     console.log("[jobService] requirements", createdRequirements);
 

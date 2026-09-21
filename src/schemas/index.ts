@@ -82,11 +82,20 @@ export const WorkerSchema = z.object({
 export const SkillCategorySchema = z.object({
   id: z.string().uuid().openapi({ description: "Unique UUID of the skill category" }),
   name: z.string().openapi({ example: "Plumbing" }),
+  is_active: z.boolean().optional().openapi({ example: true }),
 }).openapi("SkillCategory");
 
 export const SkillCategorySchemaReqSchema = z.object({
   name: z.string().openapi({ example: "Plumbing" }),
-}).openapi("SkillCategory");
+}).openapi("SkillCategoryReq");
+
+export const WorkerSkillSchema = z.object({
+  id: z.string().uuid(),
+  worker_id: z.string().uuid(),
+  skill_id: z.string().uuid(),
+  created_at: z.date().optional(),
+  skill: SkillCategorySchema.optional(),
+}).openapi("WorkerSkill");
 
 export const JobSchema = z.object({
   id: z.string().uuid(),
@@ -102,6 +111,7 @@ export const JobSchema = z.object({
 export const JobRequirementSchema = z.object({
   id: z.string().uuid(),
   job_id: z.string().uuid(),
+  skill_id: z.string().uuid().nullable().optional(),
   skill_type: z.string().nullable().optional(),
   worker_count_needed: z.number().int(),
   worker_count_filled: z.number().int().nullable().optional(),
@@ -111,6 +121,7 @@ export const JobRequirementSchema = z.object({
   wave_size: z.number().int().nullable().optional(),
   created_at: z.date().nullable().optional(),
   updated_at: z.date().nullable().optional(),
+  skill_category: SkillCategorySchema.nullable().optional(),
 }).openapi("JobRequirement");
 
 export const JobDispatchSchema = z.object({
@@ -185,10 +196,11 @@ export const CreateCustomerReqSchema = z.object({
 
 export const CreateWorkerReqSchema = z.object({
   name: z.string().min(1, "Name is required").openapi({ example: "John Worker" }),
-  skill_category_id: z.string().uuid("Invalid Skill Category UUID"),
+  skill_category_id: z.string().uuid("Invalid Skill Category UUID").optional(),
+  skill_ids: z.array(z.string().uuid("Invalid Skill UUID")).optional(),
   phone: e164PhoneSchema,
   password: z.string().min(6, "Password must be at least 6 characters").openapi({ example: "mysecurepassword" }),
-  skill_type: z.string().min(1, "Skill type is required").openapi({ example: "Plumber" }),
+  skill_type: z.string().optional().openapi({ example: "Plumber" }),
   aadhaar_last4: z.string().length(4, "Aadhaar must be exactly 4 digits").optional(),
   device_token: z.string().optional(),
 }).openapi("CreateWorkerReq");
@@ -213,6 +225,7 @@ export const CreateJobReqSchema = z.object({
   longitude: LongitudeSchema.optional(),
   location: z.string().optional(),
   requirements: z.array(z.object({
+    skill_id: z.string().uuid("Invalid Skill UUID").optional(),
     skill_type: z.string().optional(),
     worker_count_needed: z.number().int().positive(),
     rate_per_day: z.number().int().optional(),
@@ -408,6 +421,8 @@ export const SessionDTOSchema = z.object({
 export const UpdateWorkerProfileReqSchema = z.object({
   name: z.string().optional(),
   phone: optionalE164PhoneSchema,
+  skill_category_id: z.string().uuid("Invalid Skill Category UUID").optional(),
+  skill_ids: z.array(z.string().uuid("Invalid Skill UUID")).optional(),
   skill_type: z.string().optional(),
 }).openapi("UpdateWorkerProfileReq");
 

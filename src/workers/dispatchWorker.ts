@@ -183,6 +183,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
       latitude: req.job.latitude,
       longitude: req.job.longitude,
       radiusMeters,
+      skillId: (req as any).skill_id || null,
       skillType: req.skill_type,
       limit: initialPlan.targetCandidateCount,
       offset: 0,

@@ -422,14 +422,19 @@ export function toAuthUserDTO(user: any): AuthUserDTO | null {
 export interface SkillCategoryDTO {
   id: string;
   name: string;
+  is_active?: boolean | null;
 }
 
 export function toSkillCategoryDTO(skill: any): SkillCategoryDTO | null {
   if (!skill) return null;
-  return {
+  const dto: SkillCategoryDTO = {
     id: skill.id,
     name: skill.name,
   };
+  if (skill.is_active !== undefined) {
+    dto.is_active = skill.is_active;
+  }
+  return dto;
 }
 
 // ── JOB & REQUIREMENT DTOs ──────────────────────────────────────────────────
@@ -437,6 +442,7 @@ export function toSkillCategoryDTO(skill: any): SkillCategoryDTO | null {
 export interface JobRequirementDTO {
   id: string;
   job_id: string;
+  skill_id?: string | null;
   skill_type?: string | null;
   worker_count_needed: number;
   worker_count_filled?: number | null;
@@ -449,6 +455,7 @@ export interface JobRequirementDTO {
   updated_at?: Date | null;
   job_dispatch?: DispatchDTO[];
   job?: JobDTO | null;
+  skill_category?: SkillCategoryDTO | null;
 }
 
 export function toJobRequirementDTO(req: any): JobRequirementDTO | null {
@@ -458,6 +465,7 @@ export function toJobRequirementDTO(req: any): JobRequirementDTO | null {
     job_id: req.job_id,
     worker_count_needed: req.worker_count_needed,
   };
+  if (req.skill_id !== undefined) dto.skill_id = req.skill_id;
   if (req.skill_type !== undefined) dto.skill_type = req.skill_type;
   if (req.worker_count_filled !== undefined) {
     dto.worker_count_filled = req.worker_count_filled;
@@ -469,6 +477,9 @@ export function toJobRequirementDTO(req: any): JobRequirementDTO | null {
   if (req.wave_size !== undefined) dto.wave_size = req.wave_size;
   if (req.created_at !== undefined) dto.created_at = req.created_at;
   if (req.updated_at !== undefined) dto.updated_at = req.updated_at;
+  if (req.skill_category !== undefined) {
+    dto.skill_category = req.skill_category ? toSkillCategoryDTO(req.skill_category) : null;
+  }
   if (Array.isArray(req.job_dispatch)) {
     dto.job_dispatch = req.job_dispatch.map(toDispatchDTO).filter(Boolean) as DispatchDTO[];
   }

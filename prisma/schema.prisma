@@ -33,6 +33,7 @@ model Worker {
   worker_device       worker_device[]
   worker_document     worker_document[]
   worker_location     worker_location[]
+  worker_skill        worker_skill[]
 
   @@index([location_geo], map: "idx_worker_location", type: Gist)
   @@index([last_location_at], map: "idx_worker_last_location_at")
@@ -42,34 +43,34 @@ model Worker {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model booking {
-  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  job_id          String          @db.Uuid
-  requirement_id  String          @db.Uuid
-  worker_id       String          @db.Uuid
-  customer_id     String          @db.Uuid
-  status          String?         @db.VarChar(30)
+  id                      String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  job_id                  String                @db.Uuid
+  requirement_id          String                @db.Uuid
+  worker_id               String                @db.Uuid
+  customer_id             String                @db.Uuid
+  status                  String?               @db.VarChar(30)
   otp_hash                String?
-  otp_verified            Boolean?        @default(false)
-  otp_expires_at          DateTime?       @db.Timestamptz(6)
-  otp_attempts            Int?            @default(0)
-  otp_locked_at           DateTime?       @db.Timestamptz(6)
-  otp_consumed_at         DateTime?       @db.Timestamptz(6)
-  verified_at             DateTime?       @db.Timestamptz(6)
-  verified_by             String?         @db.VarChar(100)
-  started_at              DateTime?       @db.Timestamptz(6)
-  completion_requested_at DateTime?       @db.Timestamptz(6)
-  completed_at            DateTime?       @db.Timestamptz(6)
-  cancelled_at            DateTime?       @db.Timestamptz(6)
-  cancelled_by            String?         @db.VarChar(100)
-  cancellation_reason     String?         @db.Text
-  confirmed_at            DateTime?       @db.Timestamptz(6)
-  confirmed_by            String?         @db.VarChar(100)
-  created_at              DateTime        @default(now()) @db.Timestamp(6)
-  updated_at              DateTime        @default(now()) @db.Timestamp(6)
-  customer                customer        @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_customer")
-  job                     job             @relation(fields: [job_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_job")
-  job_requirement         job_requirement @relation(fields: [requirement_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_requirement")
-  worker                  Worker          @relation(fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_worker")
+  otp_verified            Boolean?              @default(false)
+  otp_expires_at          DateTime?             @db.Timestamptz(6)
+  otp_attempts            Int?                  @default(0)
+  otp_locked_at           DateTime?             @db.Timestamptz(6)
+  otp_consumed_at         DateTime?             @db.Timestamptz(6)
+  verified_at             DateTime?             @db.Timestamptz(6)
+  verified_by             String?               @db.VarChar(100)
+  started_at              DateTime?             @db.Timestamptz(6)
+  completion_requested_at DateTime?             @db.Timestamptz(6)
+  completed_at            DateTime?             @db.Timestamptz(6)
+  cancelled_at            DateTime?             @db.Timestamptz(6)
+  cancelled_by            String?               @db.VarChar(100)
+  cancellation_reason     String?               @db.Text
+  confirmed_at            DateTime?             @db.Timestamptz(6)
+  confirmed_by            String?               @db.VarChar(100)
+  created_at              DateTime              @default(now()) @db.Timestamp(6)
+  updated_at              DateTime              @default(now()) @db.Timestamp(6)
+  customer                customer              @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_customer")
+  job                     job                   @relation(fields: [job_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_job")
+  job_requirement         job_requirement       @relation(fields: [requirement_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_requirement")
+  worker                  Worker                @relation(fields: [worker_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_booking_worker")
   conversation            conversation?
   payment                 payment?
   review                  review?
@@ -165,44 +166,16 @@ model payment {
 }
 
 /// Tracks every Razorpay webhook event received for replay/idempotency protection.
-///
-/// The (provider, providerEventId) unique constraint is the authoritative database-level
-/// guard against duplicate webhook processing. It is safe under:
-///   - provider retry / multiple HTTP deliveries of the same event,
-///   - multiple running application instances,
-///   - concurrent requests carrying the same event,
-///   - process restarts.
-///
-/// Event lifecycle:
-///   PROCESSING → the event was atomically claimed; business processing is in progress.
-///   PROCESSED  → the business transition committed successfully.
-///   FAILED     → processing failed after claim; the event can be investigated.
-///   DUPLICATE  → the unique constraint rejected a second claim; already processed.
-///
-/// Idempotency identity per event type (Razorpay):
-///   payment.captured → providerEventId = payment entity ID (pay_xxx)
-///   payment.failed   → providerEventId = orderId + ":failed"
-///   other events     → providerEventId = orderId + ":" + eventType
-///
-/// The payment entity ID (pay_xxx) is stable: Razorpay reuses the same ID on retries.
-/// Using orderId+":failed" avoids colliding with a later captured payment on the same order.
 model PaymentWebhookEvent {
   id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  /// "razorpay" — identifies the payment provider.
   provider        String    @db.VarChar(50)
-  /// Stable deterministic identifier for this logical provider event.
-  /// See model comment for the identity scheme per event type.
   providerEventId String    @db.VarChar(512)
   eventType       String    @db.VarChar(100)
-  /// PROCESSING | PROCESSED | FAILED
   status          String    @db.VarChar(30)
   failureReason   String?
   receivedAt      DateTime  @default(now()) @db.Timestamptz(6)
   processedAt     DateTime? @db.Timestamptz(6)
 
-  /// Database-level uniqueness: one row per (provider, event identity).
-  /// Concurrent INSERTs of the same event ID will fail with a unique constraint
-  /// violation (Prisma P2002), which the service layer interprets as a safe duplicate.
   @@unique([provider, providerEventId])
   @@index([receivedAt], map: "idx_webhook_event_received_at")
   @@map("payment_webhook_event")
@@ -295,9 +268,29 @@ model notification {
 }
 
 model skill_category {
-  id     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name   String   @unique @db.VarChar(100)
-  worker Worker[]
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String                  @unique @db.VarChar(100)
+  is_active             Boolean?                @default(true)
+  created_at            DateTime?               @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime?               @default(now()) @db.Timestamptz(6)
+  worker                Worker[]
+  worker_skill          worker_skill[]
+  job_requirement       job_requirement[]
+  job_requirement_skill job_requirement_skill[]
+}
+
+model worker_skill {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  worker_id      String         @db.Uuid
+  skill_id       String         @db.Uuid
+  created_at     DateTime       @default(now()) @db.Timestamptz(6)
+  worker         Worker         @relation(fields: [worker_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_worker_skill_worker")
+  skill_category skill_category @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_worker_skill_category")
+
+  @@unique([worker_id, skill_id], map: "uniq_worker_skill")
+  @@index([worker_id], map: "idx_worker_skill_worker")
+  @@index([skill_id], map: "idx_worker_skill_skill")
+  @@map("worker_skill")
 }
 
 /// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
@@ -370,24 +363,42 @@ model dispatch_wave {
 }
 
 model job_requirement {
-  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  job_id              String          @db.Uuid
-  skill_type          String?         @db.VarChar(100)
-  worker_count_needed Int
-  worker_count_filled Int             @default(0)
-  rate_per_day        Int?
-  status              String?         @db.VarChar(30)
-  current_wave        Int?            @default(1)
-  wave_size           Int?            @default(10)
-  created_at          DateTime        @default(now()) @db.Timestamp(6)
-  updated_at          DateTime        @default(now()) @db.Timestamp(6)
-  booking             booking[]
-  dispatch_wave       dispatch_wave[]
-  job_dispatch        job_dispatch[]
-  job                 job             @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_requirement_job")
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  job_id                String                  @db.Uuid
+  skill_id              String?                 @db.Uuid
+  skill_type            String?                 @db.VarChar(100)
+  worker_count_needed   Int
+  worker_count_filled   Int                     @default(0)
+  rate_per_day          Int?
+  status                String?                 @db.VarChar(30)
+  current_wave          Int?                    @default(1)
+  wave_size             Int?                    @default(10)
+  created_at            DateTime                @default(now()) @db.Timestamp(6)
+  updated_at            DateTime                @default(now()) @db.Timestamp(6)
+  booking               booking[]
+  dispatch_wave         dispatch_wave[]
+  job_dispatch          job_dispatch[]
+  job                   job                     @relation(fields: [job_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_requirement_job")
+  skill_category        skill_category?         @relation(fields: [skill_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_requirement_skill_category")
+  job_requirement_skill job_requirement_skill[]
 
   @@index([job_id], map: "idx_requirement_job")
+  @@index([skill_id], map: "idx_requirement_skill_id")
   @@index([status], map: "idx_requirement_status")
+}
+
+model job_requirement_skill {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requirement_id  String          @db.Uuid
+  skill_id        String          @db.Uuid
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  job_requirement job_requirement @relation(fields: [requirement_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_req_skill_requirement")
+  skill_category  skill_category  @relation(fields: [skill_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_req_skill_category")
+
+  @@unique([requirement_id, skill_id], map: "uniq_job_requirement_skill")
+  @@index([requirement_id], map: "idx_job_requirement_skill_req")
+  @@index([skill_id], map: "idx_job_requirement_skill_skill")
+  @@map("job_requirement_skill")
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
@@ -419,42 +430,21 @@ model otp_challenge {
 
 /// Server-side refresh session for authenticated users (workers, customers, admins).
 /// Enables stateful logout, token rotation with reuse detection, and multi-device management.
-///
-/// Token format returned to client (NEVER stored): <session_id>.<64-char-hex-secret>
-/// Only a bcrypt hash of the secret portion is persisted.
-///
-/// Status lifecycle:
-///   ACTIVE  → created on login; valid for use
-///   ROTATED → replaced by a new session via rotation; must never be reused
-///   REVOKED → invalidated by logout, admin action, or reuse detection
-///
-/// Concurrency guarantee:
-///   Rotation uses atomic UPDATE ... WHERE status='ACTIVE' RETURNING *
-///   so exactly one concurrent request can successfully rotate a given token.
 model refresh_session {
   id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  /// Polymorphic: points to Worker.id or customer.id depending on user_role.
   user_id        String    @db.Uuid
-  /// Role of the session owner: worker | customer | admin
   user_role      String    @db.VarChar(20)
-  /// bcrypt hash of the secret (right half of the opaque token). NEVER the raw secret.
   token_hash     String    @db.VarChar(255)
-  /// Shared across all rotations of this session chain. Used for family revocation.
   family_id      String    @db.Uuid
-  /// Physical device identifier, if supplied by the client.
   device_id      String?   @db.VarChar(255)
-  /// HTTP User-Agent string for session management display.
   user_agent     String?   @db.Text
-  /// Client IP address at session creation time.
   ip_address     String?   @db.VarChar(50)
-  /// ACTIVE | ROTATED | REVOKED
   status         String    @default("ACTIVE") @db.VarChar(20)
   created_at     DateTime  @default(now()) @db.Timestamptz(6)
   expires_at     DateTime  @db.Timestamptz(6)
   last_used_at   DateTime? @db.Timestamptz(6)
   rotated_at     DateTime? @db.Timestamptz(6)
   revoked_at     DateTime? @db.Timestamptz(6)
-  /// LOGOUT | REUSE | ADMIN | SUSPENDED
   revoked_reason String?   @db.VarChar(50)
 
   @@index([user_id, status], map: "idx_refresh_session_user_status")

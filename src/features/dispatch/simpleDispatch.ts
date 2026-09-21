@@ -65,6 +65,7 @@ export interface JobForDispatch {
 
 export interface RequirementForDispatch {
   id: string;
+  skill_id?: string | null;
   skill_type?: string | null;
   rate_per_day?: number | null;
   worker_count_needed?: number | null;
@@ -160,6 +161,7 @@ export async function recoverStaleDispatchesOnStartup(): Promise<void> {
 
     dispatchRequirementSimple(job, {
       id: req.id,
+      skill_id: (req as any).skill_id || null,
       skill_type: req.skill_type,
       rate_per_day: req.rate_per_day,
       worker_count_needed: req.worker_count_needed,
@@ -246,7 +248,6 @@ async function getResumeState(requirementId: string): Promise<ResumeState> {
 
   // Resume at the next radius up.
   return { alreadyResolved: false, inFlight: false, nextWaveIndex: maxWave };
-
 }
 
 // ── Core per-requirement dispatch (sequential wave loop) ─────────────────────
@@ -370,41 +371,6 @@ async function dispatchRequirementSimple(
 
 // ── Find available workers via PostGIS ───────────────────────────────────────
 
-/**
- * Returns online workers matching the requirement's skill, excluding anyone
- * already dispatched for this requirement in an earlier wave, ordered by
- * distance (nearest first) where distance is available.
- *
- * TEMPORARY: the ST_DWithin radius filter has been removed for now (per
- * request) so dispatch isn't blocked while the `location_geo` write bug is
- * being tracked down. This means `radiusMeters` is currently unused here —
- * every wave will just match against all online, skill-matching workers,
- * up to `workersPerWave`, since it's no longer radius-limited. Waves will
- * still escalate through the same worker pool (each wave excludes workers
- * already dispatched via the NOT EXISTS check below), but the distinction
- * between "3km wave" and "15km wave" no longer means anything until this
- * is put back. Re-add the ST_DWithin clause once `location_geo` is
- * confirmed to be populated correctly for real workers.
- *
- * NOTE: this also still does not exclude workers who already have a
- * `confirmed` or `in_progress` booking — per earlier request, a worker who
- * has accepted a job can still be dispatched (and notified) for other jobs.
- *
- * Skill matching is restored below using the column/table names from your
- * own original (commented-out) query — I didn't invent new ones. Two
- * things worth confirming against your actual schema:
- *   1. Skill matching now normalizes with LOWER(TRIM(...)) on both sides,
- *      since your top-of-mind note mentions a `skill_category` name mismatch
- *      breaking dispatch before — this should make it whitespace/case safe.
- *   2. If a requirement has no `skill_type` set, the filter is skipped
- *      entirely (dispatches to any online worker) rather than matching
- *      nothing. If that's not the behavior you want for skill-less
- *      requirements, tell me and I'll make it strict instead.
- *
- * Pool size is supplied by the canonical planner: remaining capacity times
- * the centralized worker multiplier. This deprecated fixture has no separate
- * wave-size rule. The SQL LIMIT naturally caps the result at what is available.
- */
 export async function findAvailableWorkers(
   job: JobForDispatch,
   req: RequirementForDispatch,
@@ -431,6 +397,7 @@ export async function findAvailableWorkers(
     latitude: job.latitude,
     longitude: job.longitude,
     radiusMeters,
+    skillId: req.skill_id,
     skillType: req.skill_type,
     limit: poolLimit,
     offset: 0,
@@ -443,13 +410,6 @@ export async function findAvailableWorkers(
 
 // ── Transactional write of dispatch rows ─────────────────────────────────────
 
-/**
- * Writes all job_dispatch rows for a wave inside a single transaction.
- * Retries once after a short delay on failure (handles a transient DB blip
- * without immediately giving up on a radius that actually had workers).
- * Returns false only if both attempts fail, so the caller knows not to send
- * notifications for data that never made it to the database.
- */
 async function writeDispatchRecords(
   req: RequirementForDispatch,
   workers: NearbyWorker[],
@@ -495,21 +455,15 @@ async function notifyWorkers(
   const fcmResults = await Promise.allSettled(
     workers.map((w) =>
       sendFCMToWorker(w.id, {
-        // title/body must NOT be top-level — that makes this a "notification"
-        // message, which Android intercepts and auto-displays instead of
-        // calling IncomingJobFirebaseService.onMessageReceived() while the
-        // app is backgrounded/killed. Everything native needs lives in `data`.
         title: '',
         body: '',
         data: {
-          type: 'incoming_job', // was missing entirely — root cause
+          type: 'incoming_job',
           jobId: String(job.id ?? ''),
           requirementId: String(req.id),
           title: 'New Job',
           body: `${req.skill_type ?? 'A job'} needed`,
           ratePerDay: String(req.rate_per_day ?? ''),
-          // JobForDispatch has no customer name / address on it — defaulting
-          // to '' so the native/JS side don't crash on a missing key. See note below.
           customerName: '',
           location: '',
           expiresAt: expiresAt ? new Date(expiresAt).toISOString() : '',
@@ -555,21 +509,6 @@ async function notifyWorkers(
 
 // ── Wait for acceptance or timeout ───────────────────────────────────────────
 
-/**
- * Polls until either the wave's timeout elapses or a worker accepts —
- * whichever comes first. Uses a fast poll interval for the first
- * `fastPollWindowMs` (acceptance is most likely soon after notification),
- * then backs off to a slower interval for the rest of the wave — roughly
- * the same total query volume as a flat interval, weighted toward
- * responsiveness when it matters most.
- *
- * A single combined query checks both possible "accepted" signals in one
- * round trip instead of two. Polling (rather than DB LISTEN/NOTIFY or an
- * event emitter) is used to stay within the "no new infrastructure"
- * constraint; the accept endpoint elsewhere in the codebase is expected to
- * set job_requirement.status = 'filled' and/or job_dispatch.status =
- * 'accepted' when a worker accepts.
- */
 async function waitForAcceptanceOrTimeout(
   requirementId: string,
   waveNumber: number,

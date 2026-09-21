@@ -21,9 +21,16 @@ export const jobReqService = {
       throw new RequirementInvalidWorkerCountError("worker_count_needed must be an integer >= 1");
     }
 
-    return await prisma.job_requirement.create({
+    let canonicalSkillId: string | null = (payload as any).skill_id || null;
+    if (!canonicalSkillId && payload.skill_type) {
+      const { skillService } = await import("../skill/skill.service");
+      canonicalSkillId = await skillService.resolveSkillId(payload.skill_type);
+    }
+
+    const created = await prisma.job_requirement.create({
       data: {
         job_id: jobId,
+        skill_id: canonicalSkillId,
         skill_type: payload.skill_type,
         worker_count_needed: payload.worker_count_needed,
         rate_per_day: payload.rate_per_day,
@@ -32,6 +39,21 @@ export const jobReqService = {
         worker_count_filled: 0,
       },
     });
+
+    if (canonicalSkillId && typeof (prisma as any).job_requirement_skill?.create === "function") {
+      try {
+        await (prisma as any).job_requirement_skill.create({
+          data: {
+            requirement_id: created.id,
+            skill_id: canonicalSkillId,
+          },
+        });
+      } catch (jrsErr: any) {
+        console.warn(`[jobReqService] Could not write job_requirement_skill: ${jrsErr?.message}`);
+      }
+    }
+
+    return created;
   },
 
   async getRequirementDetail(jobId: string, requirementId: string, actor?: PolicyActor) {

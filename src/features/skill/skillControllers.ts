@@ -1,16 +1,16 @@
 import { Request, Response } from "express";
-import prisma from "../../config/prisma";
-import { toSkillCategoryDTO } from "../../shared/prismaSelects";
+import { skillService, SkillTaxonomyError } from "./skill.service";
 
 export const getSkills = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   try {
-    const skill_category = await prisma.skill_category.findMany();
+    const includeInactive = req.query.include_inactive === "true";
+    const data = await skillService.getSkills({ includeInactive });
     res.status(200).json({
       success: true,
-      data: skill_category.map(toSkillCategoryDTO).filter(Boolean),
+      data,
     });
   } catch (error: any) {
     res.status(500).json({
@@ -20,22 +20,54 @@ export const getSkills = async (
   }
 };
 
-// create expects that all the data is inside the data obejct
 export const addSkills = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
   try {
-    const payload = req.body;
-    console.log(payload);
-    const skill = await prisma.skill_category.create({ data: payload });
+    const { name } = req.body;
+    const skill = await skillService.createSkill(name);
     res.status(200).json({
       success: true,
-      data: toSkillCategoryDTO(skill),
+      data: skill,
+    });
+  } catch (e: any) {
+    if (e instanceof SkillTaxonomyError || e.statusCode) {
+      res.status(e.statusCode || 400).json({
+        success: false,
+        code: e.code || "SKILL_ERROR",
+        message: e.message,
+      });
+      return;
+    }
+    res.status(500).json({
+      success: false,
+      message: e?.message || "An error occurred",
     });
   }
-  catch (e: any) {
-    console.log(e);
+};
+
+export const toggleSkillStatus = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const { skillId } = req.params;
+    const { is_active } = req.body;
+    const skill = await skillService.updateSkillStatus(skillId as string, Boolean(is_active));
+    res.status(200).json({
+      success: true,
+      data: skill,
+    });
+  } catch (e: any) {
+    if (e instanceof SkillTaxonomyError || e.statusCode) {
+      res.status(e.statusCode || 400).json({
+        success: false,
+        code: e.code || "SKILL_ERROR",
+        message: e.message,
+      });
+      return;
+    }
     res.status(500).json({
       success: false,
       message: e?.message || "An error occurred",

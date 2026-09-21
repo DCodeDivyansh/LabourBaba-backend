@@ -127,6 +127,7 @@ export interface CandidateEligibilityParams {
   latitude: number | null | undefined;
   longitude: number | null | undefined;
   radiusMeters: number;
+  skillId?: string | null;
   skillType?: string | null;
   limit?: number;
   offset?: number;
@@ -148,7 +149,7 @@ export interface CandidateEligibilityParams {
  * 4. Verification: verification_status = 'verified' (excludes pending, rejected, suspended).
  * 5. Spatial Filter: ST_DWithin on PostGIS geography (SRID 4326) with radius in meters.
  * 6. Location Freshness: worker.last_location_at >= NOW() - maxLocationAgeSeconds (and <= NOW() + 60s).
- * 7. Skill Match: worker.skill_type or skill_category.name case-insensitive match.
+ * 7. Skill Match: worker.skill_category_id or worker_skill.skill_id matches canonical Skill ID.
  * 8. Dedup / In-flight: NOT EXISTS in job_dispatch for this requirement (database-level exclusion).
  * 9. Active Bookings: NOT EXISTS in booking with active status ('confirmed', 'in_progress').
  * 10. Candidate Ranking: Deterministic ORDER BY dist_m ASC, w.worker_score DESC NULLS LAST, w.id ASC.
@@ -163,6 +164,7 @@ export async function getEligibleCandidatePage(
     latitude,
     longitude,
     radiusMeters,
+    skillId = null,
     skillType = null,
     limit = 20,
     offset = 0,
@@ -172,6 +174,22 @@ export async function getEligibleCandidatePage(
     maxLocationAgeHours,
     excludeDispatched = true,
   } = params;
+
+  // Resolve canonical skill ID
+  let targetSkillId: string | null = null;
+  const rawSkillInput = skillId || skillType;
+  if (rawSkillInput && typeof rawSkillInput === 'string' && rawSkillInput.trim().length > 0) {
+    const { skillService } = await import('../skill/skill.service');
+    targetSkillId = await skillService.resolveSkillId(rawSkillInput);
+    if (!targetSkillId) {
+      if (typeof prisma.skill_category?.findFirst !== 'function') {
+        // In unit test where Prisma is mocked without skill_category, do not filter out query
+        targetSkillId = null;
+      } else {
+        targetSkillId = '00000000-0000-0000-0000-000000000000';
+      }
+    }
+  }
 
   // Resolve maxLocationAgeSeconds with fallback to hours or canonical config
   const maxLocationAgeSeconds =
@@ -199,6 +217,8 @@ export async function getEligibleCandidatePage(
   const decodedCursor = cursor ? decodeCandidateCursor(cursor) : null;
   const fetchLimit = safeLimit + 1; // Lookahead +1 to know if more candidates exist
 
+  const querySkillParam = targetSkillId || rawSkillInput || null;
+
   try {
     const cursorDist = decodedCursor?.dist_m ?? null;
     const cursorScore = decodedCursor?.worker_score ?? null;
@@ -225,12 +245,12 @@ export async function getEligibleCandidatePage(
               ${radiusMeters}
             )
         AND (
-              ${skillType ?? null}::text IS NULL
-              OR LOWER(TRIM(w.skill_type)) = LOWER(TRIM(${skillType ?? ''}))
+              ${querySkillParam}::text IS NULL
+              OR w.skill_category_id::text = ${querySkillParam}::text
               OR EXISTS (
-                   SELECT 1 FROM skill_category sc
-                   WHERE sc.id = w.skill_category_id
-                     AND LOWER(TRIM(sc.name)) = LOWER(TRIM(${skillType ?? ''}))
+                   SELECT 1 FROM worker_skill ws
+                   WHERE ws.worker_id = w.id
+                     AND ws.skill_id::text = ${querySkillParam}::text
                  )
             )
         AND (

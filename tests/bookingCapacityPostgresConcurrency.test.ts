@@ -36,10 +36,10 @@ describe("Issue #24: PostgreSQL booking-capacity concurrency", () => {
 
   afterAll(async () => {
     try {
-      await prisma.booking.deleteMany({ where: { requirement_id: { in: requirementIds } } });
+      await prisma.booking.deleteMany({ where: { OR: [{ requirement_id: { in: requirementIds } }, { job_id: jobId }] } });
       await prisma.job_dispatch.deleteMany({ where: { requirement_id: { in: requirementIds } } });
       await prisma.dispatch_wave.deleteMany({ where: { requirement_id: { in: requirementIds } } });
-      await prisma.job_requirement.deleteMany({ where: { id: { in: requirementIds } } });
+      await prisma.job_requirement.deleteMany({ where: { OR: [{ id: { in: requirementIds } }, { job_id: jobId }] } });
       await prisma.job.deleteMany({ where: { id: jobId } });
       await prisma.worker.deleteMany({ where: { id: { in: workerIds } } });
       await prisma.customer.deleteMany({ where: { id: customerId } });
