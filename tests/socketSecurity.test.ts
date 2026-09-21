@@ -41,6 +41,20 @@ jest.mock("../src/config/prisma", () => {
         create: jest.fn(),
         findMany: jest.fn(),
       },
+      worker_location: {
+        create: jest.fn().mockResolvedValue({ id: "loc-1", worker_id: "22222222-2222-4222-8222-222222222222", updated_at: new Date() }),
+        findFirst: jest.fn(),
+      },
+      $transaction: jest.fn().mockImplementation(async (cb: any) => cb({
+        worker: {
+          findUnique: jest.fn().mockResolvedValue({ id: "22222222-2222-4222-8222-222222222222", deleted_at: null }),
+        },
+        worker_location: {
+          create: jest.fn().mockResolvedValue({ id: "loc-1", worker_id: "22222222-2222-4222-8222-222222222222", updated_at: new Date() }),
+        },
+        $executeRaw: jest.fn().mockResolvedValue(1),
+      })),
+      $executeRaw: jest.fn().mockResolvedValue(1),
       $connect: jest.fn().mockResolvedValue(undefined),
       $disconnect: jest.fn().mockResolvedValue(undefined),
     },

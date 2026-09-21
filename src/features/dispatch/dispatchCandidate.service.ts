@@ -247,11 +247,18 @@ export async function getEligibleCandidatePage(
             )
         AND (
               ${requireLocationFreshness}::boolean = false
-              OR EXISTS (
-                   SELECT 1 FROM worker_location wl
-                   WHERE wl.worker_id = w.id
-                     AND wl.updated_at >= NOW() - (${maxLocationAgeHours} || ' hours')::interval
-                 )
+              OR (
+                w.last_location_at IS NOT NULL
+                AND w.last_location_at >= NOW() - (${maxLocationAgeHours} || ' hours')::interval
+              )
+              OR (
+                w.last_location_at IS NULL
+                AND EXISTS (
+                  SELECT 1 FROM worker_location wl
+                  WHERE wl.worker_id = w.id
+                    AND wl.updated_at >= NOW() - (${maxLocationAgeHours} || ' hours')::interval
+                )
+              )
             )
         AND (
               ${hasCursor}::boolean = false

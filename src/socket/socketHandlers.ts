@@ -19,6 +19,7 @@ import {
 } from "./roomHelpers";
 import { isValidIdentifier } from "../schemas";
 import { setSocketServer } from "./socketLifecycle";
+import { workerLocationService } from "../features/worker_location/worker_location.service";
 
 /**
  * Registers secure Socket.IO event handlers.
@@ -216,6 +217,21 @@ export function registerSocketHandlers(io: Server): void {
               success: false,
               code: "FORBIDDEN",
               message: "Forbidden: Not assigned to this customer",
+            };
+            socket.emit("error", response);
+            callback?.(response);
+            return;
+          }
+
+          // Persist current location canonically to database
+          try {
+            await workerLocationService.updateLocation(user.id, lat, lng);
+          } catch (locErr: any) {
+            console.warn(`[SOCKET] Failed to persist worker location for ${user.id}:`, locErr.message);
+            const response: SocketAckResponse = {
+              success: false,
+              code: "INVALID_REQUEST",
+              message: locErr.message || "Invalid coordinates",
             };
             socket.emit("error", response);
             callback?.(response);

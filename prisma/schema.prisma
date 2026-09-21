@@ -19,6 +19,7 @@ model Worker {
   timeout_count       Int?                      @default(0)
   device_token        String?
   location_geo        Unsupported("geography")?
+  last_location_at    DateTime?                 @db.Timestamptz(6)
   deleted_at          DateTime?                 @db.Timestamptz(6)
   password            String
   name                String
@@ -34,6 +35,7 @@ model Worker {
   worker_location     worker_location[]
 
   @@index([location_geo], map: "idx_worker_location", type: Gist)
+  @@index([last_location_at], map: "idx_worker_last_location_at")
   @@index([is_online], map: "idx_worker_online")
   @@map("worker")
 }

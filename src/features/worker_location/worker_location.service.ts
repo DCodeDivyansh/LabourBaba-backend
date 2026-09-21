@@ -38,6 +38,8 @@ export const workerLocationService = {
       throw new WorkerLocationServiceError("Invalid geographic coordinates", 400);
     }
 
+    const now = new Date();
+
     return await prisma.$transaction(async (tx) => {
       // Verify worker exists and is active (not soft-deleted)
       const worker = await tx.worker.findUnique({
@@ -49,14 +51,26 @@ export const workerLocationService = {
         throw new WorkerLocationServiceError("Worker not found or account is deactivated", 404);
       }
 
-      // 1. Create worker_location historical record
+      // 1. Atomically update canonical current location and timestamp on Worker
+      await tx.$executeRaw`
+        UPDATE worker
+        SET location_geo = ST_SetSRID(
+              ST_MakePoint(${longitude}, ${latitude}),
+              4326
+            )::geography,
+            last_location_at = ${now}
+        WHERE id = ${workerId}::uuid;
+      `;
+
+      // 2. Append to worker_location history as a separate audit/tracking record
       const workerLocation = await tx.worker_location.create({
         data: {
           worker_id: workerId,
+          updated_at: now,
         },
       });
 
-      // 2. Set PostGIS geography on historical record (SRID 4326, Point(lon, lat))
+      // 3. Set PostGIS geography on historical record
       await tx.$executeRaw`
         UPDATE worker_location
         SET location_geo = ST_SetSRID(
@@ -66,21 +80,12 @@ export const workerLocationService = {
         WHERE id = ${workerLocation.id}::uuid;
       `;
 
-      // 3. Set PostGIS geography on current worker record
-      await tx.$executeRaw`
-        UPDATE worker
-        SET location_geo = ST_SetSRID(
-          ST_MakePoint(${longitude}, ${latitude}),
-          4326
-        )::geography
-        WHERE id = ${workerId}::uuid;
-      `;
-
       return toWorkerLocationDTO({
-        worker_id: workerLocation.worker_id,
+        id: workerLocation.id,
+        worker_id: workerId,
         latitude,
         longitude,
-        updated_at: workerLocation.updated_at,
+        updated_at: now,
       });
     });
   },

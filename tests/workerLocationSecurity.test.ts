@@ -88,7 +88,9 @@ describe("P0 Finding #6 Security Regression Suite: Worker Location Identity Spoo
           entry.location_geo = `POINT(${lon} ${lat})`;
         }
       } else if (query.includes("UPDATE worker")) {
-        const [lon, lat, wId] = values;
+        const lon = values[0];
+        const lat = values[1];
+        const wId = values[values.length - 1];
         const worker = simulatedDb.workers.get(wId);
         if (worker) {
           worker.location_geo = `POINT(${lon} ${lat})`;

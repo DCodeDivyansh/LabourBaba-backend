@@ -491,11 +491,32 @@ export const bookingService = {
 
     assertPolicy(bookingPolicy.canGetWorkerLocation(actor, booking));
 
-    const location = await prisma.worker_location.findFirst({
-      where: { worker_id: booking.worker_id },
-      orderBy: { updated_at: "desc" }
-    });
+    const workerCoords = await prisma.$queryRaw<Array<{
+      latitude: number | null;
+      longitude: number | null;
+      updated_at: Date | null;
+    }>>`
+      SELECT ST_Y(location_geo::geometry) AS latitude,
+             ST_X(location_geo::geometry) AS longitude,
+             last_location_at AS updated_at
+      FROM worker
+      WHERE id = ${booking.worker_id}::uuid
+    `;
 
-    return toWorkerLocationDTO(location);
+    const row = workerCoords?.[0];
+    if (!row || row.latitude === null || row.longitude === null) {
+      const location = await prisma.worker_location.findFirst({
+        where: { worker_id: booking.worker_id },
+        orderBy: { updated_at: "desc" }
+      });
+      return toWorkerLocationDTO(location);
+    }
+
+    return toWorkerLocationDTO({
+      worker_id: booking.worker_id,
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude),
+      updated_at: row.updated_at,
+    });
   }
 };

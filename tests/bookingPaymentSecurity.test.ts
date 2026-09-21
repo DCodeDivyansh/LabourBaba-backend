@@ -100,6 +100,7 @@ jest.mock("../src/config/prisma", () => ({
     worker_location: {
       findFirst: jest.fn(),
     },
+    $queryRaw: jest.fn().mockResolvedValue([]),
     $transaction: jest.fn(async (cb: any) =>
       cb({
         booking: {
