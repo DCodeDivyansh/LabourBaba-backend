@@ -1,6 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import prisma from '../config/prisma';
 import { redisConnectionOptions, dispatchQueue } from '../config/bullmq';
+import { registerWorker } from './workerLifecycle';
 import { RequirementStatus } from '../features/jobs/requirementStateMachine';
 import { io } from '../server';
 import { generateDispatchOperationId } from '../features/dispatch/dispatchOperation';
@@ -155,6 +156,8 @@ export function getTimeoutWorker(): Worker<TimeoutJobData> {
         concurrency: 20,
       },
     );
+
+    registerWorker(timeoutWorker);
 
     timeoutWorker.on('failed', (job, err) => {
       console.error(`[timeoutWorker] Job ${job?.id} failed:`, err.message);

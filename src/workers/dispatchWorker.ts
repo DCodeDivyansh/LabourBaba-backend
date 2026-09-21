@@ -1,6 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import prisma from '../config/prisma';
 import { redisConnectionOptions, timeoutQueue, dispatchQueue, notificationQueue, DISPATCH_JOB_NAMES } from '../config/bullmq';
+import { registerWorker } from './workerLifecycle';
 
 import {
   getEligibleDispatchCandidates,
@@ -406,6 +407,8 @@ export function getDispatchWorker(): Worker<DispatchJobData, DispatchOperationRe
         },
       } as any,
     );
+
+    registerWorker(dispatchWorker);
 
     dispatchWorker.on('failed', (job, err) => {
       console.error(`[dispatchWorker] Job ${job?.id} failed:`, err.message);

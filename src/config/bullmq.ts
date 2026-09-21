@@ -1,10 +1,11 @@
 // src/config/bullmq.ts
-// BullMQ bundles its own ioredis. Passing a top-level IORedis instance causes
-// structural type incompatibility between the two ioredis versions.
-// Solution: pass a plain ConnectionOptions object — BullMQ builds its own client.
+// BullMQ bundles its own ioredis. Passing a plain ConnectionOptions object from canonical redis.ts
 import { Queue } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
 import 'dotenv/config';
+import { redisConnectionOptions, assertRedisConfig } from './redis';
+
+export { redisConnectionOptions, assertRedisConfig };
 
 export const DISPATCH_QUEUE_NAME = 'dispatch';
 export const TIMEOUT_QUEUE_NAME = 'timeout';
@@ -26,37 +27,11 @@ export class DispatchQueueUnavailableError extends Error {
 
 /**
  * Validates BullMQ and Redis connection configuration on startup.
- * Throws fast if production environment lacks mandatory Redis coordinates.
+ * Delegates directly to the canonical assertRedisConfig gatekeeper.
  */
 export function assertBullMQConfig(): void {
-  if (process.env.NODE_ENV === 'test') {
-    return;
-  }
-  const host = process.env.REDIS_HOST?.trim();
-  const port = process.env.REDIS_PORT?.trim();
-  if (!host) {
-    throw new Error('[BULLMQ_CONFIG_ERROR] REDIS_HOST is required for BullMQ dispatch engine.');
-  }
-  if (!port || isNaN(Number(port))) {
-    throw new Error('[BULLMQ_CONFIG_ERROR] Valid REDIS_PORT is required for BullMQ dispatch engine.');
-  }
+  assertRedisConfig();
 }
-
-const parseEnvString = (val?: string): string | undefined => {
-  if (!val) return undefined;
-  const trimmed = val.trim().replace(/^['"]|['"]$/g, '');
-  return trimmed.length > 0 ? trimmed : undefined;
-};
-
-export const redisConnectionOptions: ConnectionOptions = {
-  username: parseEnvString(process.env.REDIS_USERNAME),
-  password: parseEnvString(process.env.REDIS_PASSWORD),
-  host: parseEnvString(process.env.REDIS_HOST) || '127.0.0.1',
-  port: Number(process.env.REDIS_PORT) || 6379,
-  maxRetriesPerRequest: null,
-  enableOfflineQueue: false,
-  connectTimeout: 10000,
-};
 
 export const defaultJobOptions = {
   attempts: 3,
@@ -69,12 +44,12 @@ export const defaultJobOptions = {
 };
 
 export const dispatchQueue = new Queue(DISPATCH_QUEUE_NAME, {
-  connection: redisConnectionOptions,
+  connection: redisConnectionOptions as ConnectionOptions,
   defaultJobOptions,
 });
 
 export const timeoutQueue = new Queue(TIMEOUT_QUEUE_NAME, {
-  connection: redisConnectionOptions,
+  connection: redisConnectionOptions as ConnectionOptions,
   defaultJobOptions,
 });
 
@@ -85,7 +60,7 @@ export const timeoutQueue = new Queue(TIMEOUT_QUEUE_NAME, {
  * Failures in delivery are retried by BullMQ and never roll back persisted state.
  */
 export const notificationQueue = new Queue(NOTIFICATION_QUEUE_NAME, {
-  connection: redisConnectionOptions,
+  connection: redisConnectionOptions as ConnectionOptions,
   defaultJobOptions: {
     ...defaultJobOptions,
     attempts: 5, // More retries for notification delivery

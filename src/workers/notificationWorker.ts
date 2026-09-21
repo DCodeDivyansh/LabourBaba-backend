@@ -23,6 +23,7 @@ import { Worker, Job } from 'bullmq';
 import { redisConnectionOptions, NOTIFICATION_QUEUE_NAME } from '../config/bullmq';
 import { sendFCMToWorker } from '../shared/fcm';
 import { io } from '../server';
+import { registerWorker } from './workerLifecycle';
 
 // ── Data Shape ───────────────────────────────────────────────────────────────
 
@@ -135,6 +136,8 @@ export function getNotificationWorker(): Worker<DispatchNotifyJobData> {
         concurrency: 20,
       },
     );
+
+    registerWorker(notificationWorkerInstance);
 
     notificationWorkerInstance.on('failed', (job, err) => {
       console.error(
