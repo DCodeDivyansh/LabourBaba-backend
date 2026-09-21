@@ -184,7 +184,7 @@ export async function createOrder(
   const currency = paymentConfig.currency || "INR";
 
   // Step 4: Check existing payment record for idempotency
-  const existingPayment = await prisma.payment.findFirst({
+  const existingPayment = await prisma.payment.findUnique({
     where: { booking_id: bookingId },
   });
 
@@ -216,82 +216,170 @@ export async function createOrder(
     }
   }
 
-  // Step 5: Invoke real Razorpay provider API (Issue 62)
-  const providerOrder = await razorpayCreateOrder({
-    amountPaise,
-    currency,
-    receipt: bookingId,
-    paymentId: existingPayment?.id ?? "new",
-    bookingId,
-  });
+  // Step 5: Establish durable local payment intent with atomic PostgreSQL claim
+  let paymentRecord: any;
+  let isClaimant = false;
 
-  // Step 6: Persist payment record
-  try {
-    let payment;
-    if (existingPayment && existingPayment.status === PaymentStatus.FAILED) {
-      payment = await prisma.payment.update({
-        where: { id: existingPayment.id },
-        data: {
-          razorpay_order_id: providerOrder.razorpayOrderId,
-          amount: providerOrder.amount,
-          currency: providerOrder.currency,
-          status: PaymentStatus.PENDING,
-          idempotency_key: bookingId,
-        },
-      });
-    } else {
-      payment = await prisma.payment.create({
+  if (!existingPayment) {
+    try {
+      paymentRecord = await prisma.payment.create({
         data: {
           booking_id: bookingId,
+          idempotency_key: bookingId,
+          amount: amountPaise,
+          currency,
+          status: PaymentStatus.PENDING,
+          razorpay_order_id: null,
+        },
+      });
+      isClaimant = true;
+    } catch (createErr: any) {
+      if (
+        createErr?.code === "P2002" ||
+        (createErr instanceof Prisma.PrismaClientKnownRequestError && createErr.code === "P2002")
+      ) {
+        paymentRecord = await prisma.payment.findUnique({ where: { booking_id: bookingId } });
+        isClaimant = false;
+      } else {
+        throw createErr;
+      }
+    }
+  } else if (existingPayment.status === PaymentStatus.FAILED) {
+    // Atomic claim on existing failed record for retry
+    const claimResult = await prisma.payment.updateMany({
+      where: {
+        id: existingPayment.id,
+        status: PaymentStatus.FAILED,
+      },
+      data: {
+        status: PaymentStatus.PENDING,
+        amount: amountPaise,
+        currency,
+        razorpay_order_id: null,
+        updated_at: new Date(),
+      },
+    });
+
+    if (claimResult.count > 0) {
+      paymentRecord = await prisma.payment.findUnique({ where: { id: existingPayment.id } });
+      isClaimant = true;
+    } else {
+      paymentRecord = await prisma.payment.findUnique({ where: { id: existingPayment.id } });
+      isClaimant = false;
+    }
+  } else {
+    // Existing record in PENDING without razorpay_order_id (concurrent creation in progress)
+    paymentRecord = existingPayment;
+    isClaimant = false;
+  }
+
+  // Step 6: Claimant executes external provider order creation
+  if (isClaimant && paymentRecord) {
+    let providerOrder: any;
+    try {
+      providerOrder = await razorpayCreateOrder({
+        amountPaise,
+        currency,
+        receipt: bookingId,
+        paymentId: paymentRecord.id,
+        bookingId,
+      });
+    } catch (providerErr: any) {
+      // Transition intent to FAILED so retries can claim it cleanly
+      await prisma.payment
+        .updateMany({
+          where: { id: paymentRecord.id, razorpay_order_id: null },
+          data: {
+            status: PaymentStatus.FAILED,
+            quarantine_reason: providerErr?.message || "PROVIDER_ORDER_CREATION_FAILED",
+            updated_at: new Date(),
+          },
+        })
+        .catch(() => {});
+      throw providerErr;
+    }
+
+    // Persist provider order ID
+    try {
+      const updatedPayment = await prisma.payment.update({
+        where: { id: paymentRecord.id },
+        data: {
           razorpay_order_id: providerOrder.razorpayOrderId,
           amount: providerOrder.amount,
           currency: providerOrder.currency,
           status: PaymentStatus.PENDING,
-          idempotency_key: bookingId,
+          updated_at: new Date(),
         },
       });
-    }
 
+      return {
+        paymentId: updatedPayment.id,
+        razorpayOrderId: updatedPayment.razorpay_order_id!,
+        amount: updatedPayment.amount!,
+        currency: updatedPayment.currency,
+        status: updatedPayment.status!,
+        bookingId,
+      };
+    } catch (dbErr: any) {
+      logger.error("[PAYMENT_PERSISTENCE_FAILED]", {
+        paymentId: paymentRecord.id,
+        razorpayOrderId: providerOrder.razorpayOrderId,
+        bookingId,
+        error: dbErr?.message,
+      });
+      throw new PaymentError(
+        "Payment order was created with provider but could not be saved. Please retry.",
+        "PAYMENT_PERSISTENCE_FAILED",
+        500,
+      );
+    }
+  }
+
+  // Step 7: Non-claimant contenders resolve to the canonical payment order
+  if (paymentRecord?.razorpay_order_id) {
     return {
-      paymentId: payment.id,
-      razorpayOrderId: payment.razorpay_order_id!,
-      amount: payment.amount!,
-      currency: payment.currency,
-      status: payment.status!,
+      paymentId: paymentRecord.id,
+      razorpayOrderId: paymentRecord.razorpay_order_id,
+      amount: paymentRecord.amount ?? amountPaise,
+      currency: paymentRecord.currency ?? currency,
+      status: paymentRecord.status ?? PaymentStatus.PENDING,
       bookingId,
     };
-  } catch (dbErr: any) {
-    if (
-      (dbErr instanceof Prisma.PrismaClientKnownRequestError && dbErr.code === "P2002") ||
-      dbErr?.code === "P2002"
-    ) {
-      const concurrentPayment = await prisma.payment.findFirst({
-        where: { booking_id: bookingId },
-      });
-      if (concurrentPayment?.razorpay_order_id) {
-        return {
-          paymentId: concurrentPayment.id,
-          razorpayOrderId: concurrentPayment.razorpay_order_id,
-          amount: concurrentPayment.amount ?? amountPaise,
-          currency: concurrentPayment.currency ?? currency,
-          status: concurrentPayment.status ?? PaymentStatus.PENDING,
-          bookingId,
-        };
-      }
-    }
+  }
 
-    logger.error("[PAYMENT_PERSISTENCE_FAILED]", {
-      razorpayOrderId: providerOrder.razorpayOrderId,
-      bookingId,
-      error: dbErr?.message,
+  // Bounded polling for winner to finish provider call
+  const maxPollAttempts = 25;
+  for (let i = 0; i < maxPollAttempts; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const refreshed = await prisma.payment.findUnique({
+      where: { booking_id: bookingId },
     });
 
-    throw new PaymentError(
-      "Payment order was created with provider but could not be saved. Please retry.",
-      "PAYMENT_PERSISTENCE_FAILED",
-      500,
-    );
+    if (refreshed?.razorpay_order_id) {
+      return {
+        paymentId: refreshed.id,
+        razorpayOrderId: refreshed.razorpay_order_id,
+        amount: refreshed.amount ?? amountPaise,
+        currency: refreshed.currency ?? currency,
+        status: refreshed.status ?? PaymentStatus.PENDING,
+        bookingId,
+      };
+    }
+
+    if (refreshed?.status === PaymentStatus.FAILED) {
+      throw new PaymentError(
+        "Payment provider failed to create order. Please try again.",
+        "PAYMENT_ORDER_CREATION_FAILED",
+        502,
+      );
+    }
   }
+
+  throw new PaymentError(
+    "Payment order creation is in progress. Please retry in a moment.",
+    "PAYMENT_ORDER_CREATION_IN_PROGRESS",
+    409,
+  );
 }
 
 // ── Webhook Event Handling (Issues 63, 64, 65, 70) ──────────────────────────────

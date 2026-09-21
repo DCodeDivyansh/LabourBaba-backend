@@ -294,13 +294,14 @@ beforeEach(() => {
     currency: "INR",
     status: "processed",
   });
-  (mockPrisma.payment.create as jest.Mock).mockResolvedValue(makePayment());
+  (mockPrisma.payment.create as jest.Mock).mockResolvedValue(makePayment({ razorpay_order_id: null }));
+  (mockPrisma.payment.update as jest.Mock).mockResolvedValue(makePayment({ razorpay_order_id: RAZORPAY_ORDER_ID }));
   (mockPrisma.payment.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
   (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue(makeBooking());
   (mockPrisma.booking.findUnique as jest.Mock).mockResolvedValue(makeBooking());
   (mockPrisma.booking.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
   (mockPrisma.payment.findFirst as jest.Mock).mockResolvedValue(null);
-  (mockPrisma.payment.findUnique as jest.Mock).mockResolvedValue(makePayment());
+  (mockPrisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
   (mockPrisma.paymentWebhookEvent.create as jest.Mock).mockResolvedValue(makeWebhookEvent());
   (mockPrisma.paymentWebhookEvent.update as jest.Mock).mockResolvedValue(makeWebhookEvent());
   (mockPrisma.notification_outbox.create as jest.Mock).mockResolvedValue({});
@@ -499,7 +500,7 @@ describe("4 & 5. Server-side amount derivation and monetary units", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("6. Successful order creation", () => {
-  it("creates a Razorpay order and persists the real provider order ID", async () => {
+  it("creates a durable local intent, creates Razorpay order, and persists provider order ID", async () => {
     const res = await request(app)
       .post(`/api/payments/${BOOKING_ID}/create-order`)
       .set("Authorization", `Bearer ${customerAToken()}`)
@@ -509,9 +510,14 @@ describe("6. Successful order creation", () => {
     expect(res.body.data.razorpayOrderId).toBe(RAZORPAY_ORDER_ID);
     expect(res.body.data.status).toBe("PENDING");
     expect(res.body.data.amount).toBe(EXPECTED_PAISE);
+
+    // Initial intent creation has status PENDING
     const createCall = (mockPrisma.payment.create as jest.Mock).mock.calls[0][0];
-    expect(createCall.data.razorpay_order_id).toBe(RAZORPAY_ORDER_ID);
     expect(createCall.data.status).toBe("PENDING");
+
+    // Updated with razorpay_order_id
+    const updateCall = (mockPrisma.payment.update as jest.Mock).mock.calls[0][0];
+    expect(updateCall.data.razorpay_order_id).toBe(RAZORPAY_ORDER_ID);
   });
 
   it("provider is called exactly once per successful order", async () => {
@@ -539,7 +545,7 @@ describe("6. Successful order creation", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("7. Provider failure handling", () => {
-  it("provider SDK failure → no payment record created, returns 502", async () => {
+  it("provider SDK failure → marks intent FAILED, returns 502", async () => {
     const { RazorpayProviderError } = jest.requireActual(
       "../src/providers/razorpay/razorpayProvider",
     ) as typeof razorpayProvider;
@@ -551,17 +557,25 @@ describe("7. Provider failure handling", () => {
       .set("Authorization", `Bearer ${customerAToken()}`)
       .send({});
     expect(res.status).toBe(502);
-    expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+    expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "FAILED" }),
+      }),
+    );
   });
 
-  it("provider network timeout → safe error, no DB write", async () => {
+  it("provider network timeout → marks intent FAILED, safe error response", async () => {
     mockCreateOrder.mockRejectedValue(new Error("ECONNRESET"));
     const res = await request(app)
       .post(`/api/payments/${BOOKING_ID}/create-order`)
       .set("Authorization", `Bearer ${customerAToken()}`)
       .send({});
     expect(res.status).toBe(500);
-    expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+    expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "FAILED" }),
+      }),
+    );
   });
 
   it("error response does not leak provider credentials", async () => {
@@ -586,7 +600,7 @@ describe("7. Provider failure handling", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("8. Provider response validation", () => {
-  it("amount mismatch from provider → 502, no DB write", async () => {
+  it("amount mismatch from provider → 502, marks intent FAILED", async () => {
     const { RazorpayProviderError } = jest.requireActual(
       "../src/providers/razorpay/razorpayProvider",
     ) as typeof razorpayProvider;
@@ -599,10 +613,14 @@ describe("8. Provider response validation", () => {
       .send({});
     expect(res.status).toBe(502);
     expect(res.body.code).toBe("PAYMENT_AMOUNT_MISMATCH");
-    expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+    expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "FAILED" }),
+      }),
+    );
   });
 
-  it("currency mismatch from provider → 502, no DB write", async () => {
+  it("currency mismatch from provider → 502, marks intent FAILED", async () => {
     const { RazorpayProviderError } = jest.requireActual(
       "../src/providers/razorpay/razorpayProvider",
     ) as typeof razorpayProvider;
@@ -615,10 +633,14 @@ describe("8. Provider response validation", () => {
       .send({});
     expect(res.status).toBe(502);
     expect(res.body.code).toBe("PAYMENT_CURRENCY_MISMATCH");
-    expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+    expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "FAILED" }),
+      }),
+    );
   });
 
-  it("missing order ID from provider → 502, no DB write", async () => {
+  it("missing order ID from provider → 502, marks intent FAILED", async () => {
     const { RazorpayProviderError } = jest.requireActual(
       "../src/providers/razorpay/razorpayProvider",
     ) as typeof razorpayProvider;
@@ -630,7 +652,11 @@ describe("8. Provider response validation", () => {
       .set("Authorization", `Bearer ${customerAToken()}`)
       .send({});
     expect(res.status).toBe(502);
-    expect(mockPrisma.payment.create).not.toHaveBeenCalled();
+    expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "FAILED" }),
+      }),
+    );
   });
 });
 
@@ -665,7 +691,7 @@ describe("9. Payment state after order creation", () => {
 
 describe("10. Order creation idempotency", () => {
   it("second request returns existing pending order without calling Razorpay again", async () => {
-    (mockPrisma.payment.findFirst as jest.Mock).mockResolvedValue(makePayment());
+    (mockPrisma.payment.findUnique as jest.Mock).mockResolvedValue(makePayment());
     const res = await request(app)
       .post(`/api/payments/${BOOKING_ID}/create-order`)
       .set("Authorization", `Bearer ${customerAToken()}`)
@@ -676,7 +702,7 @@ describe("10. Order creation idempotency", () => {
   });
 
   it("existing COMPLETED payment returns 409", async () => {
-    (mockPrisma.payment.findFirst as jest.Mock).mockResolvedValue(
+    (mockPrisma.payment.findUnique as jest.Mock).mockResolvedValue(
       makePayment({ status: "COMPLETED" }),
     );
     const res = await request(app)
@@ -1186,6 +1212,12 @@ describe("16. Webhook — Payment Integrity (P1–P7)", () => {
 
   // P3: Captured amount does not match local payment amount → quarantined
   it("P3: amount mismatch → payment not marked COMPLETED", async () => {
+    setupTransactionMock({
+      paymentFindUnique: makePayment({ status: "PENDING" }),
+      paymentUpdateMany: { count: 1 },
+      webhookEventCreate: makeWebhookEvent(),
+      webhookEventUpdate: makeWebhookEvent(),
+    });
     const wrongAmountPaise = EXPECTED_PAISE + 10000;
     const body = buildCapturedPayload(RAZORPAY_ORDER_ID, RAZORPAY_PAYMENT_ID, wrongAmountPaise);
     const res = await request(app)
@@ -1199,6 +1231,12 @@ describe("16. Webhook — Payment Integrity (P1–P7)", () => {
 
   // P4: Currency mismatch (not INR) → quarantined
   it("P4: currency mismatch → payment not marked COMPLETED", async () => {
+    setupTransactionMock({
+      paymentFindUnique: makePayment({ status: "PENDING" }),
+      paymentUpdateMany: { count: 1 },
+      webhookEventCreate: makeWebhookEvent(),
+      webhookEventUpdate: makeWebhookEvent(),
+    });
     const mismatchBody = JSON.stringify({
       event: "payment.captured",
       payload: {
@@ -1350,9 +1388,9 @@ describe("18. Webhook — Configuration Tests (Cfg1–Cfg4)", () => {
       .set("X-Razorpay-Signature", "some_sig")
       .send(body);
 
-    // Must return 200 (provider-compatible ack) but must not have processed anything
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
+    // P3 Issue 3: Must fail-closed (500) and reject processing without secret
+    expect(res.status).toBe(500);
+    expect(res.body.code).toBe("WEBHOOK_SECRET_NOT_CONFIGURED");
     // No verification called — we never had a secret
     expect(mockVerifyWebhookSignature).not.toHaveBeenCalled();
     // No DB writes of any kind
