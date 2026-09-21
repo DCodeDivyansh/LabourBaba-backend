@@ -11,6 +11,7 @@ WHERE "status" = 'CANCELLED'
   AND ("cancelled_at" IS NULL OR "cancelled_by" IS NULL OR "cancellation_reason" IS NULL);
 
 -- 2. Add CHECK constraint enforcing complete cancellation audit fields
+ALTER TABLE "booking" DROP CONSTRAINT IF EXISTS "chk_booking_cancellation_audit";
 ALTER TABLE "booking"
 ADD CONSTRAINT "chk_booking_cancellation_audit"
 CHECK (

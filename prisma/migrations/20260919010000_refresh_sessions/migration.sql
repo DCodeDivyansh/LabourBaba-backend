@@ -1,4 +1,4 @@
-﻿-- Issue #10: Server-Side Refresh Sessions
+-- Issue #10: Server-Side Refresh Sessions
 --
 -- Creates the refresh_session table to back server-side session management.
 -- No existing data is affected; this is a pure additive migration.

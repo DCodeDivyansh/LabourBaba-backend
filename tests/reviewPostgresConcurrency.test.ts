@@ -128,11 +128,19 @@ describe("Issue #20 — Real PostgreSQL Concurrency Integration Tests", () => {
    * Helper to create a fresh completed booking for a test run
    */
   async function createCompletedBooking(): Promise<string> {
+    const reqRes = await pgClient.query(
+      `INSERT INTO job_requirement (id, job_id, skill_type, worker_count_needed, status, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, 'Plumber', 1, 'FILLED', NOW(), NOW())
+       RETURNING id`,
+      [jobId]
+    );
+    const freshReqId = reqRes.rows[0].id;
+
     const res = await pgClient.query(
       `INSERT INTO booking (id, job_id, requirement_id, customer_id, worker_id, status, completed_at)
        VALUES (gen_random_uuid(), $1, $2, $3, $4, 'COMPLETED', NOW())
        RETURNING id`,
-      [jobId, requirementId, customerId, workerId]
+      [jobId, freshReqId, customerId, workerId]
     );
     return res.rows[0].id;
   }
@@ -342,12 +350,20 @@ describe("Issue #20 — Real PostgreSQL Concurrency Integration Tests", () => {
   });
 
   it("7. Customer cannot review an incomplete booking (409 Conflict)", async () => {
-    // Create an in-progress booking
+    // Create an in-progress booking with a fresh requirement
+    const reqRes = await pgClient.query(
+      `INSERT INTO job_requirement (id, job_id, skill_type, worker_count_needed, status, created_at, updated_at)
+       VALUES (gen_random_uuid(), $1, 'Plumber', 1, 'OPEN', NOW(), NOW())
+       RETURNING id`,
+      [jobId]
+    );
+    const inProgReqId = reqRes.rows[0].id;
+
     const res = await pgClient.query(
       `INSERT INTO booking (id, job_id, requirement_id, customer_id, worker_id, status)
        VALUES (gen_random_uuid(), $1, $2, $3, $4, 'IN_PROGRESS')
        RETURNING id`,
-      [jobId, requirementId, customerId, workerId]
+      [jobId, inProgReqId, customerId, workerId]
     );
     const inProgressBookingId = res.rows[0].id;
 

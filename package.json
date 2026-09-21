@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "nodemon --exec tsx src/server.ts",
     "build": "tsc",
-    "test": "cross-env NODE_ENV=test jest"
+    "test": "cross-env NODE_ENV=test jest",
+    "migrate:deploy": "prisma migrate deploy",
+    "migrate:status": "prisma migrate status",
+    "migrate:resolve": "prisma migrate resolve",
+    "db:generate": "prisma generate"
   },
   "keywords": [],
   "author": "",
