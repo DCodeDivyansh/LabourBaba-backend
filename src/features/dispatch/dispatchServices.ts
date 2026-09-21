@@ -66,10 +66,19 @@ export class DispatchAcceptanceError extends Error {
 // ── Accept ───────────────────────────────────────────────────────────────────
 
 export const acceptDispatch = async (requirementId: string, workerId: string) => {
-  // Problem 1: atomic transaction with row-lock — only one worker wins
+  // A requirement row is the capacity ledger.  Its lock serializes every
+  // capacity-consuming acceptance for this requirement across all API/worker
+  // processes; the counter update below is the reservation, not a preflight.
+  // The booking is deliberately created only after that reservation, in this
+  // same transaction, so a create failure rolls the reservation back.
+  const otp = generateOTP();
+  const otp_hash = await hashOTP(otp);
+  const otp_expires_at = new Date(Date.now() + bookingConfig.bookingOtpTtlSeconds * 1000);
+
   const result = await prisma.$transaction(async (tx) => {
-    // Row-lock to prevent race conditions when multiple workers accept simultaneously
-    await tx.$queryRaw`
+    // PostgreSQL FOR UPDATE is required here: an application-only read of the
+    // filled counter permits two concurrent callers to observe the final slot.
+    await tx.$queryRaw<{ id: string }[]>`
       SELECT id FROM job_requirement
       WHERE id = ${requirementId}::uuid FOR UPDATE
     `;
@@ -170,12 +179,19 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       );
     }
 
-    // Generate and hash a fresh OTP for job start verification
-    const otp = generateOTP();
-    const otp_hash = await hashOTP(otp);
-    const otp_expires_at = new Date(Date.now() + bookingConfig.bookingOtpTtlSeconds * 1000);
+    // Reserve capacity *before* creating the booking.  The requirement row is
+    // already locked, and the state transition persists filled = previous + 1.
+    // Any later database error aborts this transaction and releases the slot.
+    const newFilled = (req.worker_count_filled ?? 0) + 1;
+    const nowFilled = newFilled >= req.worker_count_needed;
+    await requirementStateService.transition(tx, {
+      requirementId,
+      action: RequirementAction.RECORD_ACCEPTANCE,
+      actor: { id: workerId, role: UserRole.WORKER },
+      newFilledCount: newFilled,
+    });
 
-    // Create booking
+    // Create the booking only after successfully reserving a slot.
     let booking;
     try {
       booking = await tx.booking.create({
@@ -206,17 +222,6 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       }
       throw err;
     }
-
-    // Increment filled count and transition status through requirementStateService
-    const newFilled = (req.worker_count_filled ?? 0) + 1;
-    const nowFilled = newFilled >= req.worker_count_needed;
-
-    await requirementStateService.transition(tx, {
-      requirementId,
-      action: RequirementAction.RECORD_ACCEPTANCE,
-      actor: { id: workerId, role: UserRole.WORKER },
-      newFilledCount: newFilled,
-    });
 
     // Problem 1: when filled, expire ALL remaining pending dispatches atomically
     let expiredWorkerIds: string[] = [];
@@ -257,6 +262,13 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       expiredWorkerIds,
       jobFullyBooked,
     };
+  }, {
+    // The lock queue can legitimately contain many mobile retries. These are
+    // database waits, not business failures; retain a bounded but realistic
+    // budget so Prisma does not turn a capacity race into a transaction-timeout
+    // 500 before the caller can receive SLOTS_FULL.
+    maxWait: 10_000,
+    timeout: 20_000,
   });
 
   // Problem 2: AFTER transaction commits, notify remaining workers via Socket.IO

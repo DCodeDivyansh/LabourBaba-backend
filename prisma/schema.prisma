@@ -372,7 +372,7 @@ model job_requirement {
   job_id              String          @db.Uuid
   skill_type          String?         @db.VarChar(100)
   worker_count_needed Int
-  worker_count_filled Int?            @default(0)
+  worker_count_filled Int             @default(0)
   rate_per_day        Int?
   status              String?         @db.VarChar(30)
   current_wave        Int?            @default(1)

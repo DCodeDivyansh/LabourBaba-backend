@@ -406,11 +406,10 @@ export const bookingService = {
       if (!transitionResult.isIdempotent) {
         // Reconcile requirement capacity from authoritative active bookings
         if (lockedBooking.requirement_id) {
-          try {
-            await requirementStateService.reconcileCapacity(tx, lockedBooking.requirement_id);
-          } catch (capErr: any) {
-            console.warn(`[bookingServices] Note: Could not reconcile requirement capacity: ${capErr?.message}`);
-          }
+          // This is part of the cancellation's durable capacity release. Do
+          // not swallow failures: committing a cancelled booking with stale
+          // capacity can subsequently permit an overbooking.
+          await requirementStateService.reconcileCapacity(tx, lockedBooking.requirement_id);
         }
 
         // Reconcile worker dispatch record

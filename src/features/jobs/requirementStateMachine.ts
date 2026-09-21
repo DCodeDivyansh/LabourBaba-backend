@@ -426,6 +426,17 @@ export const requirementStateService = {
     tx: Prisma.TransactionClient,
     requirementId: string
   ): Promise<RequirementCapacity> {
+    // Capacity release (cancellation) must use the same ledger lock as
+    // acceptance. Without it, a stale active-booking count could overwrite a
+    // concurrent reservation and reopen an already-filled requirement.
+    if (typeof (tx as any).$queryRaw === "function") {
+      await (tx as any).$queryRaw`
+        SELECT id FROM job_requirement
+        WHERE id = ${requirementId}::uuid
+        FOR UPDATE
+      `;
+    }
+
     const req = await tx.job_requirement.findUnique({
       where: { id: requirementId },
     });
