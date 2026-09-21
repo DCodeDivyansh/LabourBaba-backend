@@ -332,7 +332,6 @@ model worker_document {
   worker        Worker  @relation(fields: [worker_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_document_worker")
 }
 
-/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
 model worker_location {
   id           String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   worker_id    String                    @db.Uuid
@@ -341,6 +340,32 @@ model worker_location {
   worker       Worker                    @relation(fields: [worker_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_location_worker")
 
   @@index([worker_id], map: "idx_worker_location_worker")
+  @@index([updated_at], map: "idx_worker_location_updated_at")
+  @@index([worker_id, updated_at], map: "idx_worker_location_worker_updated_at")
+  @@map("worker_location")
+}
+
+/// Durable administrative and security audit log (Issue #49)
+/// Records actor, action, target, reason, correlation ID, and sanitized metadata.
+model audit_log {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actor_id       String   @db.VarChar(100)
+  actor_role     String   @db.VarChar(30)
+  action         String   @db.VarChar(100)
+  target_type    String   @db.VarChar(50)
+  target_id      String   @db.VarChar(100)
+  reason         String?  @db.Text
+  correlation_id String?  @db.VarChar(255)
+  ip_address     String?  @db.VarChar(50)
+  user_agent     String?  @db.Text
+  metadata       Json?
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([action, created_at], map: "idx_audit_log_action_created")
+  @@index([actor_id, created_at], map: "idx_audit_log_actor_created")
+  @@index([target_type, target_id], map: "idx_audit_log_target")
+  @@index([correlation_id], map: "idx_audit_log_correlation")
+  @@map("audit_log")
 }
 
 model dispatch_wave {

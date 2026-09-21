@@ -13,6 +13,8 @@ import { AuthorizationError } from "../../policies";
 import { SESSION_STATUS, REVOKE_REASON } from "../auth/session.types";
 import { disconnectUserSockets } from "../../socket/socketLifecycle";
 import { UserRole } from "../../type/userRole";
+import { auditService } from "../audit/audit.service";
+import { AuditAction } from "../audit/audit.types";
 
 export const adminService = {
   async getWorkers() {
@@ -22,7 +24,7 @@ export const adminService = {
     return workers.map(toWorkerAdminDTO);
   },
 
-  async verifyWorkerDocument(workerId: string, payload: VerifyWorkerDocumentReq) {
+  async verifyWorkerDocument(workerId: string, payload: VerifyWorkerDocumentReq, adminId?: string) {
     return await prisma.$transaction(async (tx) => {
       // Find pending documents
       const docs = await tx.worker_document.findMany({
@@ -43,6 +45,21 @@ export const adminService = {
         data: { verification_status: workerStatus },
         select: workerAdminSelect,
       });
+
+      // Record durable audit log inside the transaction
+      await auditService.recordEvent(tx, {
+        actorId: adminId || "admin-system",
+        actorRole: "admin",
+        action: payload.status === "VERIFIED" ? AuditAction.WORKER_VERIFIED : AuditAction.WORKER_REJECTED,
+        targetType: "worker",
+        targetId: workerId,
+        reason: `Admin updated verification status to ${payload.status}`,
+        metadata: {
+          documentsUpdated: docs.length,
+          verificationStatus: workerStatus,
+        },
+      });
+
       return toWorkerAdminDTO(updated);
     });
   },
@@ -114,19 +131,26 @@ export const adminService = {
           })
         : { count: 0 };
 
+      // Record durable audit log inside the transaction
+      await auditService.recordEvent(tx, {
+        actorId: adminId || "admin-system",
+        actorRole: "admin",
+        action: AuditAction.WORKER_SUSPENDED,
+        targetType: "worker",
+        targetId: workerId,
+        reason: payload.reason || "Administrative suspension",
+        metadata: {
+          prevStatus,
+          newStatus: "suspended",
+          revokedSessions: sessionRevocation.count,
+        },
+      });
+
       return { updated: workerRow, revokedCount: sessionRevocation.count };
     });
 
     // 3. Post-transaction: Force disconnect all active Socket.IO connections for the worker
     disconnectUserSockets(workerId, UserRole.WORKER);
-
-    // 4. Emit durable, structured audit log describing the status change
-    console.log(
-      `[AUDIT] Action: WORKER_SUSPENDED | Actor: ${adminId || "unknown-admin"} (admin) | ` +
-      `Target: ${workerId} | PrevStatus: ${prevStatus} | NewStatus: suspended | ` +
-      `Reason: ${payload.reason || "Administrative suspension"} | ` +
-      `RevokedSessions: ${revokedCount} | Timestamp: ${suspensionTime.toISOString()}`
-    );
 
     return toWorkerAdminDTO(updated);
   },
@@ -151,7 +175,18 @@ export const adminService = {
     const signed = await storageService.getSignedDownloadUrl(key);
 
     // Durable audit logging of privileged admin access without exposing the signed URL
-    console.log(`[AUDIT] Admin ${adminId} viewed document ${documentId} of worker ${workerId} at ${new Date().toISOString()}`);
+    await auditService.recordEvent(prisma, {
+      actorId: adminId,
+      actorRole: "admin",
+      action: AuditAction.DOCUMENT_ACCESSED,
+      targetType: "document",
+      targetId: documentId,
+      reason: "Admin viewed worker document",
+      metadata: {
+        workerId,
+        documentType: doc.document_type,
+      },
+    });
 
     return toWorkerDocumentAccessDTO(doc, signed.url, signed.expiresIn);
   }

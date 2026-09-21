@@ -1,0 +1,101 @@
+groups:
+  - name: labourbaba_marketplace_alerts
+    rules:
+      - alert: Elevated5xxRate
+        expr: (sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))) * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
+          category: availability
+        annotations:
+          summary: "Elevated HTTP 5xx error rate on LabourBaba API"
+          description: "Over 5% of HTTP requests returned 5xx status codes in the last 5 minutes."
+          runbook_url: "docs/runbooks/elevated-5xx.md"
+
+      - alert: DatabaseUnavailable
+        expr: health_ready_database_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "PostgreSQL Database is unreachable"
+          description: "Health readiness probe cannot execute database heartbeat query."
+          runbook_url: "docs/runbooks/database-failure.md"
+
+      - alert: RedisUnavailable
+        expr: health_ready_redis_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Redis Cache / Queue data store is unreachable"
+          description: "Health readiness probe cannot ping Redis instance."
+          runbook_url: "docs/runbooks/redis-failure.md"
+
+      - alert: QueueLagHigh
+        expr: bullmq_waiting_jobs_total > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: background_workers
+        annotations:
+          summary: "BullMQ queue backlog is growing"
+          description: "More than 100 jobs are waiting in queue for over 5 minutes."
+          runbook_url: "docs/runbooks/queue-lag.md"
+
+      - alert: DispatchFailureRateHigh
+        expr: (sum(rate(dispatch_failure_total[5m])) / (sum(rate(dispatch_attempts_total[5m])) + 0.001)) * 100 > 10
+        for: 5m
+        labels:
+          severity: critical
+          category: marketplace
+        annotations:
+          summary: "High Dispatch Failure Rate"
+          description: "Dispatch failure rate exceeds 10% over a 5-minute evaluation window."
+          runbook_url: "docs/runbooks/dispatch-failure.md"
+
+      - alert: StaleLocationSupplyHigh
+        expr: location_exclusions_total{reason="stale_location"} > 50
+        for: 10m
+        labels:
+          severity: warning
+          category: marketplace
+        annotations:
+          summary: "High number of workers excluded due to stale GPS location"
+          description: "Dispatch candidate selection is rejecting significant worker supply due to stale coordinates (>15m old)."
+          runbook_url: "docs/runbooks/stale-location.md"
+
+      - alert: NotificationFailureRateHigh
+        expr: (sum(rate(notification_failure_total[5m])) / (sum(rate(notification_attempts_total[5m])) + 0.001)) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: notifications
+        annotations:
+          summary: "High Push Notification / FCM failure rate"
+          description: "More than 5% of FCM push notifications failed in the last 5 minutes."
+          runbook_url: "docs/runbooks/notification-failure.md"
+
+      - alert: AbnormalOtpAttempts
+        expr: sum(rate(otp_verifications_total{status="failed"}[5m])) > 20
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "Spike in failed OTP verification attempts"
+          description: "Detected more than 20 failed OTP attempts per minute, potential brute force or abuse pattern."
+          runbook_url: "docs/runbooks/abnormal-otp.md"
+
+      - alert: BackupFailure
+        expr: (time() - backup_last_successful_timestamp_seconds) > 86400
+        for: 1h
+        labels:
+          severity: critical
+          category: reliability
+        annotations:
+          summary: "Automated database backup has not succeeded in over 24 hours"
+          description: "Last verified database backup is older than 24 hours. RPO target at risk."
+          runbook_url: "docs/runbooks/backup-failure.md"

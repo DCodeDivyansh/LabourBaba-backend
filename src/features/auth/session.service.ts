@@ -151,6 +151,24 @@ export const sessionService = {
         `[SESSION_AUDIT] REFRESH_TOKEN_REUSE detected for session ${sessionId} (family ${session.family_id}). ` +
         `Revoking entire family.`
       );
+      // Record durable security audit event
+      try {
+        const { auditService } = require("../audit/audit.service");
+        const { AuditAction } = require("../audit/audit.types");
+        await auditService.recordEvent(prisma, {
+          actorId: session.user_id,
+          actorRole: session.user_role === UserRole.WORKER ? "worker" : session.user_role === UserRole.CUSTOMER ? "customer" : "admin",
+          action: AuditAction.REFRESH_TOKEN_REUSE_DETECTED,
+          targetType: "session",
+          targetId: sessionId,
+          reason: "Attempted use of already-rotated or revoked refresh token",
+          metadata: {
+            familyId: session.family_id,
+            previousStatus: session.status,
+          },
+        });
+      } catch {}
+
       // Revoke the entire family as a security response
       await sessionService.revokeFamilyByFamilyId(session.family_id, REVOKE_REASON.REUSE);
       const err: any = new Error("Refresh token already used — potential token theft detected. Please log in again.");

@@ -16,14 +16,34 @@ export const verifyWorker = async (req: Request, res: Response): Promise<void> =
   try {
     const { id } = req.params as any;
     const payload: VerifyWorkerDocumentReq = req.body;
-    const adminId = (req as AuthenticatedRequest).user?.id;
+    const adminId = (req as AuthenticatedRequest).user?.id || "admin-system";
 
-    const worker = await adminService.verifyWorkerDocument(id, payload);
+    const worker = await adminService.verifyWorkerDocument(id, payload, adminId);
 
-    console.log(`[AUDIT] Admin ${adminId} verified worker ${id} with status ${payload.status} at ${new Date().toISOString()}`);
     res.status(200).json({ success: true, data: worker });
   } catch (error: any) {
     res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+export const getAuditLogs = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { auditService } = await import("../audit/audit.service");
+    const { action, actorId, targetType, targetId, correlationId, page, limit } = req.query as any;
+
+    const result = await auditService.queryAuditLogs({
+      action: action ? String(action) : undefined,
+      actorId: actorId ? String(actorId) : undefined,
+      targetType: targetType ? String(targetType) : undefined,
+      targetId: targetId ? String(targetId) : undefined,
+      correlationId: correlationId ? String(correlationId) : undefined,
+      page: page ? parseInt(String(page), 10) : 1,
+      limit: limit ? parseInt(String(limit), 10) : 50,
+    });
+
+    res.status(200).json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

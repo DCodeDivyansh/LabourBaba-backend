@@ -67,6 +67,12 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
       workerId: (req as any).worker?.id,
     };
 
+    // Record HTTP metrics
+    try {
+      const { metricsService } = require('../metrics/metrics.service');
+      metricsService.recordHttpRequest(req.method, req.baseUrl ? `${req.baseUrl}${req.path}` : req.path, statusCode, durationMs);
+    } catch {}
+
     if (statusCode >= 500) {
       reqLogger.error(`HTTP ${req.method} ${req.originalUrl || req.path} ${statusCode} (${durationMs}ms)`, logMeta);
     } else if (statusCode >= 400) {

@@ -144,9 +144,16 @@ registerSocketHandlers(io);
 // Register servers with lifecycle manager
 lifecycleManager.registerServers(httpServer, io);
 
+import { metricsService } from "./metrics/metrics.service";
+
 /**
  * Routes
  */
+app.get("/metrics", (_req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+  res.send(metricsService.formatPrometheus());
+});
+
 app.use("/health", healthRoutes);
 app.use("/api/clients", clientRoute);
 app.use("/api/workers", workerRoutes);
