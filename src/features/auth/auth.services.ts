@@ -14,6 +14,9 @@ import { authConfig } from "../../config/authConfig";
 import { getSmsProvider } from "../../providers/sms/smsProviderFactory";
 import { sessionService } from "./session.service";
 import { REVOKE_REASON } from "./session.types";
+import { OTP_STATUS } from "./auth.types";
+import { logger } from "../../utils/logger";
+import { metricsService } from "../../metrics/metrics.service";
 
 export const authService = {
   /**
@@ -50,15 +53,15 @@ export const authService = {
         throw error;
       }
 
-      // Invalidate any existing active challenges for this phone & purpose
+      // Expire any existing active challenges for this phone & purpose
       await tx.otp_challenge.updateMany({
         where: {
           phone,
           purpose: type,
-          status: "ACTIVE",
+          status: OTP_STATUS.ACTIVE,
         },
         data: {
-          status: "INVALIDATED",
+          status: OTP_STATUS.EXPIRED,
           consumed_at: new Date(),
         },
       });
@@ -70,7 +73,7 @@ export const authService = {
           purpose: type,
           otp_hash,
           expires_at,
-          status: "ACTIVE",
+          status: OTP_STATUS.ACTIVE,
           attempt_count: 0,
         },
       });
@@ -81,22 +84,24 @@ export const authService = {
       const provider = getSmsProvider();
       await provider.sendOtp(phone, plainOtp, type);
     } catch (smsError: any) {
-      // Mark challenge as DELIVERY_FAILED so it cannot be verified if delivery failed
+      // Mark challenge as EXPIRED so it cannot be verified if delivery failed
       await prisma.otp_challenge.update({
         where: { id: challenge.id },
         data: {
-          status: "DELIVERY_FAILED",
+          status: OTP_STATUS.EXPIRED,
           consumed_at: new Date(),
         },
       });
 
-      console.error(`[AUTH] SMS delivery failed for recipient ${maskPhone(phone)}:`, smsError.message);
+      logger.error(`[AUTH] SMS delivery failed for recipient ${maskPhone(phone)}:`, { error: smsError.message });
+      metricsService.incrementCounter("otp_delivery_failed_total", 1, { purpose: type });
       const deliveryErr: any = new Error("Failed to deliver verification code. Please try again later.");
       deliveryErr.code = "SMS_DELIVERY_FAILED";
       throw deliveryErr;
     }
 
-    console.log(`[AUTH_AUDIT] OTP challenge issued for purpose '${type}' to recipient ${maskPhone(phone)}`);
+    logger.info(`[AUTH_AUDIT] OTP challenge issued for purpose '${type}' to recipient ${maskPhone(phone)}`);
+    metricsService.incrementCounter("otp_challenges_created_total", 1, { purpose: type });
     return { success: true, message: "OTP sent successfully." };
   },
 
@@ -115,167 +120,165 @@ export const authService = {
   ) {
     const phone = normalizePhoneToE164(rawPhone);
 
-    return await prisma.$transaction(async (tx) => {
-      // 1. Locate active challenge
-      const whereClause: any = {
-        phone,
-        status: "ACTIVE",
-        consumed_at: null,
-        expires_at: { gt: new Date() },
-      };
+    // 1. Find active challenge
+    const whereClause: any = {
+      phone,
+      status: OTP_STATUS.ACTIVE,
+      expires_at: { gt: new Date() },
+      consumed_at: null,
+    };
 
-      if (type) {
-        whereClause.purpose = type;
+    if (type) {
+      whereClause.purpose = type;
+    }
+
+    const challenge = await prisma.otp_challenge.findFirst({
+      where: whereClause,
+      orderBy: { created_at: "desc" },
+    });
+
+    if (!challenge) {
+      logger.warn(`[AUTH_AUDIT] Verification failed: No active challenge found for ${maskPhone(phone)}`);
+      const error: any = new Error("Invalid or expired OTP");
+      error.code = "OTP_INVALID";
+      throw error;
+    }
+
+    // 2. Check attempt limits
+    if (challenge.attempt_count >= authConfig.otpMaxAttempts || challenge.status === OTP_STATUS.LOCKED) {
+      if (challenge.status !== OTP_STATUS.LOCKED) {
+        await prisma.otp_challenge.update({
+          where: { id: challenge.id },
+          data: { status: OTP_STATUS.LOCKED, consumed_at: new Date() },
+        });
       }
+      logger.warn(`[AUTH_AUDIT] Challenge locked due to attempt limit for ${maskPhone(phone)}`);
+      const error: any = new Error("Maximum verification attempts exceeded. Please request a new OTP.");
+      error.code = "OTP_MAX_ATTEMPTS";
+      throw error;
+    }
 
-      const challenge = await tx.otp_challenge.findFirst({
-        where: whereClause,
-        orderBy: { created_at: "desc" },
+    // 3. Verify OTP hash with bcrypt
+    const isMatch = await comparePassword(otp, challenge.otp_hash);
+
+    if (!isMatch) {
+      // Atomic database-level increment to prevent concurrent attempt bypass
+      const updated = await prisma.otp_challenge.update({
+        where: { id: challenge.id },
+        data: {
+          attempt_count: { increment: 1 },
+        },
       });
 
-      if (!challenge) {
-        console.warn(`[AUTH_AUDIT] Verification failed: No active challenge found for ${maskPhone(phone)}`);
-        const error: any = new Error("Invalid or expired OTP");
-        error.code = "OTP_INVALID";
-        throw error;
-      }
-
-      // 2. Check attempt limits
-      if (challenge.attempt_count >= authConfig.otpMaxAttempts || challenge.status === "LOCKED") {
-        if (challenge.status !== "LOCKED") {
-          await tx.otp_challenge.update({
-            where: { id: challenge.id },
-            data: { status: "LOCKED", consumed_at: new Date() },
-          });
-        }
-        console.warn(`[AUTH_AUDIT] Challenge locked due to attempt limit for ${maskPhone(phone)}`);
-        const error: any = new Error("Maximum verification attempts exceeded. Please request a new OTP.");
-        error.code = "OTP_MAX_ATTEMPTS";
-        throw error;
-      }
-
-      // 3. Verify OTP hash with bcrypt
-      const isMatch = await comparePassword(otp, challenge.otp_hash);
-
-      if (!isMatch) {
-        // Atomic database-level increment to prevent concurrent attempt bypass
-        const updated = await tx.otp_challenge.update({
+      const reachedLimit = updated.attempt_count >= authConfig.otpMaxAttempts;
+      if (reachedLimit) {
+        await prisma.otp_challenge.update({
           where: { id: challenge.id },
           data: {
-            attempt_count: { increment: 1 },
+            status: OTP_STATUS.LOCKED,
+            consumed_at: new Date(),
           },
         });
-
-        const reachedLimit = updated.attempt_count >= authConfig.otpMaxAttempts;
-        if (reachedLimit) {
-          await tx.otp_challenge.update({
-            where: { id: challenge.id },
-            data: {
-              status: "LOCKED",
-              consumed_at: new Date(),
-            },
-          });
-        }
-
-        console.warn(
-          `[AUTH_AUDIT] Incorrect OTP attempt (${updated.attempt_count}/${authConfig.otpMaxAttempts}) for ${maskPhone(phone)}`
-        );
-
-        const error: any = new Error(
-          reachedLimit
-            ? "Maximum verification attempts exceeded. Please request a new OTP."
-            : "Invalid or expired OTP"
-        );
-        error.code = reachedLimit ? "OTP_MAX_ATTEMPTS" : "OTP_INVALID";
-        throw error;
       }
 
-      // 4. Concurrency Guard: Atomic claim to prevent double-consumption
-      const claimResult = await tx.otp_challenge.updateMany({
-        where: {
-          id: challenge.id,
-          status: "ACTIVE",
-          consumed_at: null,
-        },
-        data: {
-          status: "CONSUMED",
-          consumed_at: new Date(),
-        },
-      });
+      logger.warn(
+        `[AUTH_AUDIT] Incorrect OTP attempt (${updated.attempt_count}/${authConfig.otpMaxAttempts}) for ${maskPhone(phone)}`
+      );
 
-      if (claimResult.count === 0) {
-        console.warn(`[AUTH_AUDIT] Race condition detected: Challenge already consumed for ${maskPhone(phone)}`);
-        const error: any = new Error("Invalid or expired OTP");
-        error.code = "OTP_ALREADY_USED";
-        throw error;
-      }
+      const error: any = new Error(
+        reachedLimit
+          ? "Maximum verification attempts exceeded. Please request a new OTP."
+          : "Invalid or expired OTP"
+      );
+      error.code = reachedLimit ? "OTP_MAX_ATTEMPTS" : "OTP_INVALID";
+      throw error;
+    }
 
-      console.log(`[AUTH_AUDIT] OTP challenge successfully verified & consumed for ${maskPhone(phone)}`);
-
-      // 5. User lookup after valid challenge consumption
-      let user = await tx.customer.findUnique({ where: { phone } });
-      let role: UserRole = UserRole.CUSTOMER;
-
-      if (!user) {
-        user = (await tx.worker.findUnique({ where: { phone } })) as any;
-        role = UserRole.WORKER;
-      }
-
-      if (!user) {
-        // If this was a registration purpose OTP, return verified status
-        if (type === "register" || challenge.purpose === "register") {
-          return {
-            verified: true,
-            phone,
-            message: "Phone verified successfully. Please proceed with registration.",
-          };
-        }
-        const error: any = new Error("User not found");
-        error.code = "USER_NOT_FOUND";
-        throw error;
-      }
-
-      // 5.5 Authoritative Account State Check (Issue #11)
-      // A suspended or deleted account MUST NOT be allowed to log in via OTP
-      if (role === UserRole.WORKER) {
-        const worker = user as any;
-        if (worker.deleted_at != null || worker.verification_status === "suspended") {
-          console.warn(`[AUTH_AUDIT] OTP login rejected: Worker ${worker.id} is suspended or deleted`);
-          const error: any = new Error("Account has been suspended or deactivated");
-          error.code = "ACCOUNT_SUSPENDED";
-          throw error;
-        }
-      } else if (role === UserRole.CUSTOMER) {
-        const customer = user as any;
-        if (customer.deleted_at != null) {
-          console.warn(`[AUTH_AUDIT] OTP login rejected: Customer ${customer.id} is inactive or deleted`);
-          const error: any = new Error("Account is inactive or has been deactivated");
-          error.code = "ACCOUNT_INACTIVE";
-          throw error;
-        }
-      }
-
-      // 6. Issue access token (short-lived JWT)
-      const token = signAccessToken({ id: user.id, role, phone: user.phone });
-
-      // 7. Create server-side refresh session and return opaque token
-      //    (outside the OTP transaction to avoid long-running bcrypt inside tx)
-      const sessionResult = await sessionService.createSession({
-        userId: user.id,
-        userRole: role,
-        deviceId: opts?.deviceId,
-        userAgent: opts?.userAgent,
-        ipAddress: opts?.ipAddress,
-      });
-
-      return {
-        user: toAuthUserDTO(user),
-        role,
-        token,
-        refreshToken: sessionResult.rawToken,
-        sessionExpiresAt: sessionResult.expiresAt,
-      };
+    // 4. Concurrency Guard: Atomic conditional claim directly in PostgreSQL
+    // PostgreSQL row lock guarantees exactly ONE concurrent request updates the row
+    const claimResult = await prisma.otp_challenge.updateMany({
+      where: {
+        id: challenge.id,
+        status: OTP_STATUS.ACTIVE,
+        consumed_at: null,
+      },
+      data: {
+        status: OTP_STATUS.CONSUMED,
+        consumed_at: new Date(),
+      },
     });
+
+    if (claimResult.count === 0) {
+      logger.warn(`[AUTH_AUDIT] Race condition detected: Challenge already consumed for ${maskPhone(phone)}`);
+      const error: any = new Error("Invalid or expired OTP");
+      error.code = "OTP_ALREADY_USED";
+      throw error;
+    }
+
+    logger.info(`[AUTH_AUDIT] OTP challenge successfully verified & consumed for ${maskPhone(phone)}`);
+
+    // 5. User lookup after valid challenge consumption
+    let user = await prisma.customer.findUnique({ where: { phone } });
+    let role: UserRole = UserRole.CUSTOMER;
+
+    if (!user) {
+      user = (await prisma.worker.findUnique({ where: { phone } })) as any;
+      role = UserRole.WORKER;
+    }
+
+    if (!user) {
+      // If this was a registration purpose OTP, return verified status
+      if (type === "register" || challenge.purpose === "register") {
+        return {
+          verified: true,
+          phone,
+          message: "Phone verified successfully. Please proceed with registration.",
+        };
+      }
+      const error: any = new Error("User not found");
+      error.code = "USER_NOT_FOUND";
+      throw error;
+    }
+
+    // 5.5 Authoritative Account State Check (Issue #11)
+    // A suspended or deleted account MUST NOT be allowed to log in via OTP
+    if (role === UserRole.WORKER) {
+      const worker = user as any;
+      if (worker.deleted_at != null || worker.verification_status === "suspended") {
+        logger.warn(`[AUTH_AUDIT] OTP login rejected: Worker ${worker.id} is suspended or deleted`);
+        const error: any = new Error("Account has been suspended or deactivated");
+        error.code = "ACCOUNT_SUSPENDED";
+        throw error;
+      }
+    } else if (role === UserRole.CUSTOMER) {
+      const customer = user as any;
+      if (customer.deleted_at != null) {
+        logger.warn(`[AUTH_AUDIT] OTP login rejected: Customer ${customer.id} is inactive or deleted`);
+        const error: any = new Error("Account is inactive or has been deactivated");
+        error.code = "ACCOUNT_INACTIVE";
+        throw error;
+      }
+    }
+
+    // 6. Issue access token (short-lived JWT)
+    const token = signAccessToken({ id: user.id, role, phone: user.phone });
+
+    // 7. Create server-side refresh session and return opaque token
+    const sessionResult = await sessionService.createSession({
+      userId: user.id,
+      userRole: role,
+      deviceId: opts?.deviceId,
+      userAgent: opts?.userAgent,
+      ipAddress: opts?.ipAddress,
+    });
+
+    return {
+      user: toAuthUserDTO(user),
+      role,
+      token,
+      refreshToken: sessionResult.rawToken,
+      sessionExpiresAt: sessionResult.expiresAt,
+    };
   },
 
   /**
@@ -339,18 +342,14 @@ export const authService = {
   /**
    * Revokes the server-side refresh session identified by the opaque refresh token.
    * Idempotent: already-revoked sessions return success silently.
-   *
-   * The caller must supply userId from the authenticated context (access token),
-   * so the client cannot revoke another user's session.
    */
   async logout(rawRefreshToken: string, userId: string) {
     const { revokedCount } = await sessionService.revokeByRawToken(rawRefreshToken, userId);
 
     if (revokedCount > 0) {
-      console.log(`[SESSION] Logout: revoked session for user ${userId}`);
+      logger.info(`[SESSION] Logout: revoked session for user ${userId}`);
     } else {
-      // Token not found or already revoked — treat as idempotent success
-      console.log(`[SESSION] Logout: session already revoked or not found for user ${userId}`);
+      logger.info(`[SESSION] Logout: session already revoked or not found for user ${userId}`);
     }
 
     return { success: true, message: "Logged out successfully" };
@@ -366,13 +365,13 @@ export const authService = {
         OR: [
           { expires_at: { lt: cutoff } },
           {
-            status: { in: ["CONSUMED", "INVALIDATED", "LOCKED", "DELIVERY_FAILED"] },
+            status: { in: [OTP_STATUS.CONSUMED, OTP_STATUS.EXPIRED, OTP_STATUS.LOCKED] },
             created_at: { lt: cutoff },
           },
         ],
       },
     });
-    console.log(`[AUTH_CLEANUP] Purged ${result.count} stale OTP challenge records older than ${authConfig.otpCleanupRetentionDays} days`);
+    logger.info(`[AUTH_CLEANUP] Purged ${result.count} stale OTP challenge records older than ${authConfig.otpCleanupRetentionDays} days`);
     return result;
   },
 };

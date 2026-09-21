@@ -487,7 +487,7 @@ describe("P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & 
       expect(res.status).toBe(502);
       expect(res.body.code).toBe("SMS_DELIVERY_FAILED");
 
-      expect(challengeStore[0].status).toBe("DELIVERY_FAILED");
+      expect(challengeStore[0].status).toBe("EXPIRED");
       expect(challengeStore[0].consumed_at).not.toBeNull();
 
       const verifyRes = await request(app)
