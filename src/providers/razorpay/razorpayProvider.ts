@@ -225,22 +225,28 @@ export function verifyWebhookSignature(
   signature: string,
   secret: string,
 ): boolean {
-  if (!secret || !signature) return false;
+  if (!secret || typeof secret !== "string" || secret.trim() === "") return false;
+  if (!signature || typeof signature !== "string" || signature.trim() === "") return false;
+  if (!rawBody || (typeof rawBody !== "string" && !Buffer.isBuffer(rawBody))) return false;
 
   const body = typeof rawBody === "string" ? rawBody : rawBody.toString("utf8");
 
-  const expectedSignature = crypto
-    .createHmac("sha256", secret)
-    .update(body)
-    .digest("hex");
+  try {
+    const expectedSignature = crypto
+      .createHmac("sha256", secret.trim())
+      .update(body)
+      .digest("hex");
 
-  // Timing-safe comparison
-  const expectedBuf = Buffer.from(expectedSignature, "hex");
-  const receivedBuf = Buffer.from(signature, "hex");
+    // Timing-safe comparison
+    const expectedBuf = Buffer.from(expectedSignature, "hex");
+    const receivedBuf = Buffer.from(signature.trim(), "hex");
 
-  if (expectedBuf.length !== receivedBuf.length) return false;
+    if (expectedBuf.length !== receivedBuf.length || expectedBuf.length === 0) return false;
 
-  return crypto.timingSafeEqual(expectedBuf, receivedBuf);
+    return crypto.timingSafeEqual(expectedBuf, receivedBuf);
+  } catch {
+    return false;
+  }
 }
 
 // ── createRefund ───────────────────────────────────────────────────────────────

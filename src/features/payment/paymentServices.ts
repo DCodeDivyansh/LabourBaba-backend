@@ -336,22 +336,36 @@ export async function handleWebhook(
   rawBody: string | Buffer,
   signature: string,
 ): Promise<{ success: boolean; message: string }> {
-  // Step 1: Obtain webhook secret
+  // Step 1: Obtain webhook secret (fail-closed)
   const webhookSecret =
     process.env.RAZORPAY_WEBHOOK_SECRET ?? paymentConfig.razorpay.webhookSecret;
 
-  if (!webhookSecret) {
-    logger.warn("[SECURITY] RAZORPAY_WEBHOOK_SECRET is not configured. Webhook acknowledged without mutation.");
-    return { success: true, message: "Webhook acknowledged (secret unconfigured)" };
+  if (!webhookSecret || typeof webhookSecret !== "string" || webhookSecret.trim() === "") {
+    logger.error("[SECURITY] RAZORPAY_WEBHOOK_SECRET is not configured or empty. Rejecting webhook request (fail-closed).");
+    throw new PaymentError(
+      "Webhook secret is not configured on server.",
+      "WEBHOOK_SECRET_NOT_CONFIGURED",
+      500,
+    );
   }
 
-  // Step 2: Strict raw-body HMAC-SHA256 signature verification (Issue 63)
-  const isValid = verifyWebhookSignature(rawBody, signature, webhookSecret);
+  // Step 2: Strict raw-body HMAC-SHA256 signature verification (Issue 63 / P3 Issue 3)
+  if (!signature || typeof signature !== "string" || signature.trim() === "") {
+    metricsService.recordWebhookSignatureFailure();
+    logger.warn("[SECURITY] Razorpay webhook missing signature.");
+    throw new PaymentError(
+      "Missing or empty webhook signature.",
+      "WEBHOOK_MISSING_SIGNATURE",
+      401,
+    );
+  }
+
+  const isValid = verifyWebhookSignature(rawBody, signature.trim(), webhookSecret.trim());
   if (!isValid) {
     metricsService.recordWebhookSignatureFailure();
     logger.warn("[SECURITY] Razorpay webhook signature verification failed.", {
       hasSignature: Boolean(signature),
-      rawBodyLength: rawBody.length,
+      rawBodyLength: typeof rawBody === "string" ? rawBody.length : rawBody?.length ?? 0,
     });
     throw new PaymentError(
       "Webhook signature verification failed.",
