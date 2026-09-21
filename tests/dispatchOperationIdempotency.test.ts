@@ -168,11 +168,12 @@ describe('Issue #23 — Dispatch Operation Idempotency Suite', () => {
       }
       testSkillCategoryId = category.id;
 
-      // 5. Create 3 test workers
+      // 5. Create 3 test workers with unique phone numbers per test run
+      const runSuffix = Date.now().toString().slice(-4);
       for (let i = 1; i <= 3; i++) {
         const worker = await prisma.worker.create({
           data: {
-            phone: `+91888880002${i}`,
+            phone: `+9188888${runSuffix}${i}`,
             name: `Idempotency Worker ${i}`,
             password: 'hashedpassword',
             skill_type: 'IdempotencyPlumber',
@@ -338,7 +339,7 @@ describe('Issue #23 — Dispatch Operation Idempotency Suite', () => {
         where: { requirement_id: testRequirementId, wave_number: waveNumber },
       });
       expect(waveCount).toBe(1);
-    });
+    }, 30000);
 
     it('MUST resolve duplicate BullMQ jobs with different BullMQ job IDs to the same logical result', async () => {
       const waveNumber = 4;

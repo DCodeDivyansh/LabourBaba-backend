@@ -78,6 +78,60 @@ export interface EligibleWorkerCandidate {
   dist_m: number;
 }
 
+export interface CandidatePageResult<T = EligibleWorkerCandidate> {
+  candidates: T[];
+  hasMore: boolean;
+  pageSize: number;
+  nextCursor: string | null;
+}
+
+export interface CandidateCursorPayload {
+  dist_m: number;
+  worker_score: number | null;
+  id: string;
+}
+
+/**
+ * Encodes a worker candidate into a secure base64url keyset cursor.
+ */
+export function encodeCandidateCursor(candidate: EligibleWorkerCandidate): string {
+  const payload: CandidateCursorPayload = {
+    dist_m: candidate.dist_m,
+    worker_score: candidate.worker_score !== null ? Number(candidate.worker_score) : null,
+    id: candidate.id,
+  };
+  return Buffer.from(JSON.stringify(payload)).toString('base64url');
+}
+
+/**
+ * Decodes and validates a base64url keyset cursor.
+ * Returns null if the cursor is malformed, invalid, or tampered with.
+ */
+export function decodeCandidateCursor(cursor: string): CandidateCursorPayload | null {
+  try {
+    const raw = Buffer.from(cursor, 'base64url').toString('utf8');
+    const parsed = JSON.parse(raw);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      typeof parsed.dist_m === 'number' &&
+      Number.isFinite(parsed.dist_m) &&
+      typeof parsed.id === 'string' &&
+      parsed.id.length > 0 &&
+      (parsed.worker_score === null || (typeof parsed.worker_score === 'number' && Number.isFinite(parsed.worker_score)))
+    ) {
+      return {
+        dist_m: parsed.dist_m,
+        worker_score: parsed.worker_score !== null ? Number(parsed.worker_score) : null,
+        id: parsed.id,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export interface CandidateEligibilityParams {
   requirementId: string;
   latitude: number | null | undefined;
@@ -86,13 +140,14 @@ export interface CandidateEligibilityParams {
   skillType?: string | null;
   limit?: number;
   offset?: number;
+  cursor?: string | null;
   requireLocationFreshness?: boolean;
   maxLocationAgeHours?: number;
   excludeDispatched?: boolean;
 }
 
 /**
- * Authoritative Candidate Eligibility Query
+ * Authoritative Candidate Eligibility Page Query
  *
  * Enforces all database-level mandatory invariants:
  * 1. Coordinates: Non-null, finite, valid WGS 84 range [-90..90], [-180..180].
@@ -102,13 +157,15 @@ export interface CandidateEligibilityParams {
  * 5. Spatial Filter: ST_DWithin on PostGIS geography (SRID 4326) with radius in meters.
  * 6. Location Freshness: worker_location updated within maxLocationAgeHours window.
  * 7. Skill Match: worker.skill_type or skill_category.name case-insensitive match.
- * 8. Dedup / In-flight: NOT EXISTS in job_dispatch for this requirement.
+ * 8. Dedup / In-flight: NOT EXISTS in job_dispatch for this requirement (database-level exclusion).
  * 9. Active Bookings: NOT EXISTS in booking with active status ('confirmed', 'in_progress').
- * 10. Candidate Ranking: ORDER BY dist_m ASC, w.worker_score DESC NULLS LAST.
+ * 10. Candidate Ranking: Deterministic ORDER BY dist_m ASC, w.worker_score DESC NULLS LAST, w.id ASC.
+ * 11. Pagination & Exhaustion: Uses lookahead (fetch pageSize + 1) to determine hasMore deterministically
+ *     without confusing a short page with complete candidate exhaustion.
  */
-export async function getEligibleDispatchCandidates(
+export async function getEligibleCandidatePage(
   params: CandidateEligibilityParams,
-): Promise<EligibleWorkerCandidate[]> {
+): Promise<CandidatePageResult<EligibleWorkerCandidate>> {
   const {
     requirementId,
     latitude,
@@ -117,26 +174,37 @@ export async function getEligibleDispatchCandidates(
     skillType = null,
     limit = 20,
     offset = 0,
+    cursor = null,
     requireLocationFreshness = true,
     maxLocationAgeHours = getLocationFreshnessHours(),
     excludeDispatched = true,
   } = params;
 
+  const safeLimit = Math.max(1, Math.min(limit, 100));
+
   // Fail closed if coordinates or radius are invalid
-  if (!validateDispatchCoordinates(latitude, longitude)) {
-    return [];
-  }
-  if (!Number.isFinite(radiusMeters) || radiusMeters <= 0) {
-    return [];
+  if (!validateDispatchCoordinates(latitude, longitude) || !Number.isFinite(radiusMeters) || radiusMeters <= 0) {
+    return {
+      candidates: [],
+      hasMore: false,
+      pageSize: safeLimit,
+      nextCursor: null,
+    };
   }
 
-  const safeLimit = Math.max(1, Math.min(limit, 100));
   const safeOffset = Math.max(0, offset);
   const lat = latitude as number;
   const lon = longitude as number;
+  const decodedCursor = cursor ? decodeCandidateCursor(cursor) : null;
+  const fetchLimit = safeLimit + 1; // Lookahead +1 to know if more candidates exist
 
   try {
-    const workers = await prisma.$queryRaw<EligibleWorkerCandidate[]>`
+    const cursorDist = decodedCursor?.dist_m ?? null;
+    const cursorScore = decodedCursor?.worker_score ?? null;
+    const cursorId = decodedCursor?.id ?? null;
+    const hasCursor = decodedCursor !== null;
+
+    const rows = await prisma.$queryRaw<EligibleWorkerCandidate[]>`
       SELECT w.id,
              w.name,
              w.device_token,
@@ -185,19 +253,67 @@ export async function getEligibleDispatchCandidates(
                      AND wl.updated_at >= NOW() - (${maxLocationAgeHours} || ' hours')::interval
                  )
             )
-      ORDER BY dist_m ASC, w.worker_score DESC NULLS LAST
-      LIMIT ${safeLimit}
-      OFFSET ${safeOffset};
+        AND (
+              ${hasCursor}::boolean = false
+              OR (
+                ST_Distance(
+                  w.location_geo,
+                  ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)::geography
+                ) > ${cursorDist}::float
+                OR (
+                  ST_Distance(
+                    w.location_geo,
+                    ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326)::geography
+                  ) = ${cursorDist}::float
+                  AND (
+                    COALESCE(w.worker_score, -1.0) < COALESCE(${cursorScore}::float, -1.0)
+                    OR (
+                      COALESCE(w.worker_score, -1.0) = COALESCE(${cursorScore}::float, -1.0)
+                      AND w.id > ${cursorId}::uuid
+                    )
+                  )
+                )
+              )
+            )
+      ORDER BY dist_m ASC, w.worker_score DESC NULLS LAST, w.id ASC
+      LIMIT ${fetchLimit}
+      OFFSET ${hasCursor ? 0 : safeOffset};
     `;
 
-    return workers;
+    const hasMore = rows.length > safeLimit;
+    const candidates = hasMore ? rows.slice(0, safeLimit) : rows;
+    const nextCursor = hasMore && candidates.length > 0
+      ? encodeCandidateCursor(candidates[candidates.length - 1])
+      : null;
+
+    return {
+      candidates,
+      hasMore,
+      pageSize: safeLimit,
+      nextCursor,
+    };
   } catch (err) {
-    // Fail closed: Never return unverified/un-geocoded candidates on query failure
-    console.error('[dispatchCandidateService] Error querying eligible dispatch candidates:', {
+    console.error('[dispatchCandidateService] Error querying eligible candidate page:', {
       requirementId,
       radiusMeters,
       error: err instanceof Error ? err.message : String(err),
     });
-    return [];
+    return {
+      candidates: [],
+      hasMore: false,
+      pageSize: safeLimit,
+      nextCursor: null,
+    };
   }
+}
+
+/**
+ * Returns eligible candidates matching the criteria, deterministically ordered.
+ * Delegates to getEligibleCandidatePage for unified query and pagination correctness.
+ */
+export async function getEligibleDispatchCandidates(
+  params: CandidateEligibilityParams,
+): Promise<EligibleWorkerCandidate[]> {
+  const pageResult = await getEligibleCandidatePage(params);
+  return pageResult.candidates;
 }

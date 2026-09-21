@@ -4,6 +4,7 @@ import { redisConnectionOptions, timeoutQueue, dispatchQueue, notificationQueue,
 
 import {
   getEligibleDispatchCandidates,
+  getEligibleCandidatePage,
   validateDispatchCoordinates,
   EligibleWorkerCandidate,
 } from '../features/dispatch/dispatchCandidate.service';
@@ -173,6 +174,8 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
   }
 
   // 2. Authoritative PostGIS query — eligibility and pagination stay outside the planner.
+  // Note: Because excludeDispatched=true is enforced in SQL, already-dispatched workers are
+  // removed from the query candidate set. Query offset is 0 for the un-dispatched pool.
   const radiusMeters = initialPlan.radiusMeters;
   const workers =
     (await getEligibleDispatchCandidates({
@@ -182,7 +185,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
       radiusMeters,
       skillType: req.skill_type,
       limit: initialPlan.targetCandidateCount,
-      offset,
+      offset: 0,
       excludeDispatched: true,
     })) || [];
 
@@ -321,6 +324,8 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
         totalWorkersFound: workers.length,
         offset,
         waveSize,
+        hasMoreCandidates: workers.length >= waveSize,
+        candidatesExhausted: workers.length === 0 && initialPlan.isFinalAllowedWave,
       },
       {
         delay: plan.timeoutMs,

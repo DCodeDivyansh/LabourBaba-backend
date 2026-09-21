@@ -10,15 +10,17 @@ export interface TimeoutJobData {
   requirementId: string;
   jobId: string;
   waveNumber: number;
-  totalWorkersFound: number;
-  offset: number;
-  waveSize: number;
+  totalWorkersFound?: number;
+  offset?: number;
+  waveSize?: number;
+  hasMoreCandidates?: boolean;
+  candidatesExhausted?: boolean;
   correlationId?: string;
   operationId?: string;
 }
 
 export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
-  const { requirementId, jobId, waveNumber, totalWorkersFound, offset, waveSize } = data;
+  const { requirementId, jobId, waveNumber, totalWorkersFound = 0, offset = 0, waveSize = 0 } = data;
 
   console.log(
     `[timeoutWorker] Wave ${waveNumber} timeout for requirement=${requirementId}`,
@@ -72,25 +74,28 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
   });
 
   const nextWave = waveNumber + 1;
+  const isCandidatesExhausted =
+    data.candidatesExhausted !== undefined
+      ? data.candidatesExhausted
+      : data.hasMoreCandidates !== undefined
+      ? !data.hasMoreCandidates && nextWave > 4
+      : offset + waveSize >= totalWorkersFound;
+
   const nextPlan = planDispatchWave({
     // `waveSize` fallback preserves compatibility with legacy timeout payload
     // tests; persisted requirements always supply worker_count_needed.
     workerCountNeeded: req.worker_count_needed ?? waveSize,
     workersAlreadyAssigned: req.worker_count_filled ?? 0,
     waveNumber: nextWave,
-    // The current payload's total is the candidate set observed by this
-    // operation. Issue #26 may replace it with explicit pagination metadata.
-    candidatesExhausted: offset + waveSize >= totalWorkersFound,
+    candidatesExhausted: isCandidatesExhausted,
   });
 
-  // 4. Pagination offset remains payload-compatible; whether another wave is
-  // allowed is owned solely by the canonical planner.
   const nextOffset = offset + waveSize;
 
   if (!nextPlan.canDispatch || !nextPlan.shouldTryNextWave) {
     // No more workers available for this requirement
     console.log(
-      `[timeoutWorker] No more workers for requirement ${requirementId} (offset ${nextOffset} >= total ${totalWorkersFound}). Marking no_workers_available.`,
+      `[timeoutWorker] No more workers for requirement ${requirementId} in wave ${nextWave}. Marking no_workers_available.`,
     );
     await prisma.job_requirement.update({
       where: { id: requirementId },

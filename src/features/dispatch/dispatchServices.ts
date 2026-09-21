@@ -345,6 +345,80 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
     console.error('[dispatchServices] Failed to emit worker:accepted:', err);
   }
 
+
+  // Problem 2: AFTER transaction commits, notify remaining workers via Socket.IO
+  // This runs outside the transaction so it doesn't block or rollback on socket errors
+  if (result.nowFilled && result.expiredWorkerIds.length > 0) {
+    try {
+      for (const losingWorkerId of result.expiredWorkerIds) {
+        io?.to(`worker:${losingWorkerId}`)?.emit('job:closed', {
+          requirementId,
+          jobId: result.jobId,
+          reason: 'filled',
+        });
+      }
+      console.log(
+        `[dispatchServices] Notified ${result.expiredWorkerIds.length} workers that requirement ${requirementId} is filled`,
+      );
+    } catch (err) {
+      console.error('[dispatchServices] Failed to emit job:closed:', err);
+    }
+  }
+
+  // Notify the customer's website in real-time that a worker accepted the
+  // job, with enough worker detail to render a card (name/phone/rating).
+  // Only whitelisted fields are sent - never the password hash or other
+  // sensitive worker data. This also supports the multi-worker case: the
+  // frontend should append this worker to its list rather than replace it,
+  // since more worker:accepted events may follow for other requirements.
+  try {
+    const coords = await prisma.$queryRaw<any[]>`
+      SELECT
+        ST_X(location_geo::geometry) AS longitude,
+        ST_Y(location_geo::geometry) AS latitude
+      FROM worker
+      WHERE id = ${workerId}::uuid;
+    `;
+
+    const worker = await prisma.worker.findUnique({
+      where: { id: workerId },
+      select: { id: true, name: true, phone: true, skill_type: true, worker_score: true },
+    });
+
+    const workerWithLoc = worker ? toWorkerPublicDTO({
+      id: worker.id,
+      name: worker.name,
+      phone: worker.phone,
+      skill_type: worker.skill_type,
+      worker_score: worker.worker_score,
+      latitude: coords[0]?.latitude || null,
+      longitude: coords[0]?.longitude || null,
+    }) : null;
+
+    io.to(`customer:${result.customerId}`).emit('worker:accepted', {
+      jobId: result.jobId,
+      requirementId,
+      bookingId: result.booking.id,
+      otp: result.otp,
+      worker: workerWithLoc,
+      requirement: {
+        id: requirementId,
+        skill_type: result.skillType,
+        worker_count_needed: result.needed,
+        worker_count_filled: result.newFilled,
+        status: result.nowFilled ? 'filled' : 'dispatching',
+      },
+    });
+
+    if (result.jobFullyBooked) {
+      io.to(`customer:${result.customerId}`).emit('job:fully_booked', {
+        jobId: result.jobId,
+      });
+    }
+  } catch (err) {
+    console.error('[dispatchServices] Failed to emit worker:accepted:', err);
+  }
+
   return result;
 };
 
@@ -424,7 +498,10 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
         });
         return { success: true, message: 'Job declined' };
       }
-      const nextOffset = currentWave * nextPlan.targetCandidateCount;
+
+      // Note: Because excludeDispatched=true is enforced in SQL, already-dispatched
+      // workers are removed from the query candidate set. Offset is 0 for the un-dispatched pool.
+      const nextOffset = 0;
 
       const operationId = generateDispatchOperationId({
         requirementId,
@@ -471,7 +548,6 @@ export const getIncomingDispatches = async (workerId: string) => {
   });
   return dispatches.map(toDispatchDTO);
 };
-
 
 // ── Get Single Dispatch Detail (for expired/tapped-notification checks) ─────
 export const getDispatchDetail = async (requirementId: string, workerId: string) => {
@@ -530,5 +606,5 @@ export const dispatchService = {
     declineDispatch(requirementId, workerId),
   getWaves: (requirementId: string, actor?: PolicyActor) => getWaves(requirementId, actor),
   getDispatchDetail: (requirementId: string, workerId: string) =>
-    getDispatchDetail(requirementId, workerId), // ⬅ NEW
+    getDispatchDetail(requirementId, workerId),
 };

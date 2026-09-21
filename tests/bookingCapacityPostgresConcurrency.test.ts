@@ -117,9 +117,10 @@ describe("Issue #24: PostgreSQL booking-capacity concurrency", () => {
       `,
     ]);
 
-    expect(successful).toHaveLength(capacity);
-    expect(bookingCount).toBe(capacity);
-    expect(freshRequirement.worker_count_filled).toBe(capacity);
+    const expectedSuccessful = Math.min(capacity, workerCount);
+    expect(successful).toHaveLength(expectedSuccessful);
+    expect(bookingCount).toBe(expectedSuccessful);
+    expect(freshRequirement.worker_count_filled).toBe(expectedSuccessful);
     expect(freshRequirement.worker_count_filled!).toBeLessThanOrEqual(freshRequirement.worker_count_needed);
     expect(freshRequirement.worker_count_needed - freshRequirement.worker_count_filled!).toBeGreaterThanOrEqual(0);
     expect(Number(duplicateCount[0].duplicates)).toBe(0);
