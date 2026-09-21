@@ -130,7 +130,38 @@ If Redis or BullMQ becomes unavailable:
 
 ---
 
-## 9. Dispatch Operation Idempotency (Issue #23)
+## 9. Canonical Wave Algorithm (Issue #25)
+
+`planDispatchWave()` in `src/features/dispatch/wavePlanner.ts` is the sole
+wave-sizing authority. It is pure: the same demand, filled count, wave number,
+candidate-page availability, and configuration always produce the same plan.
+
+The centralized configuration is `src/config/dispatchWaveConfig.ts`:
+
+| Variable | Default | Unit | Meaning / validation |
+|---|---:|---|---|
+| `DISPATCH_WAVE_WORKER_MULTIPLIER` | 2 | factor | Candidates targeted = remaining capacity × multiplier; positive integer. |
+| `DISPATCH_WAVE_RADII_METERS` | `3000,5000,10000,15000` | metres | Radius by 1-based wave; final configured radius is the cap. |
+| `DISPATCH_WAVE_TIMEOUT_MS` | 30000 | milliseconds | Persisted dispatch acceptance deadline; positive integer. |
+| `DISPATCH_MAX_WAVES` | number of radii | count | Inclusive terminal wave; cannot exceed the supplied radius list. |
+
+For example, a requirement needing five workers with four already assigned has
+one remaining slot. With multiplier two, every permitted wave targets two
+candidates, not ten. A candidate page smaller than the target is dispatched as
+returned; it does **not** itself prove global exhaustion. The currently
+persisted timeout payload carries the candidate set observed by its operation;
+Issue #26 will replace that proxy with explicit pagination exhaustion metadata.
+A zero candidate result on the final permitted wave transitions the requirement to
+`NO_WORKERS_AVAILABLE`; earlier waves may advance to the next configured radius.
+
+BullMQ dispatch, timeout escalation, decline escalation, reconciliation, and
+the deprecated non-production test fixture all consume this configuration/planner.
+Timeout jobs are delayed by the plan timeout, and maximum waves stop retry loops.
+Queue retries use the same `(requirementId, waveNumber)` input and therefore
+produce the same plan; existing operation IDs and unique database constraints
+remain the idempotency backstop.
+
+## 10. Dispatch Operation Idempotency (Issue #23)
 
 **Added in Issue #23 (Audit #43, #75).** Every dispatch wave is uniquely identified by a deterministic **operation ID** derived from its business inputs.
 
@@ -184,4 +215,3 @@ A retry of a dispatch operation that has already been executed returns a `Dispat
 - Same `waveId`, `operationId`, and `workerIds` as the original execution
 - No new database rows written
 - No new notifications sent
-

@@ -15,6 +15,7 @@ import {
 import { BookingStatus } from '../booking/bookingStateMachine';
 import { bookingConfig } from '../../config/bookingConfig';
 import { generateDispatchOperationId } from './dispatchOperation';
+import { planDispatchWave } from './wavePlanner';
 
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
@@ -393,7 +394,7 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
   if (pendingCount === 0) {
     const req = await prisma.job_requirement.findUnique({
       where: { id: requirementId },
-      select: { status: true, job_id: true, worker_count_needed: true },
+      select: { status: true, job_id: true, worker_count_needed: true, worker_count_filled: true },
     });
 
     if (req && req.status !== 'filled') {
@@ -412,7 +413,18 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
 
       // Re-queue with next offset via BullMQ
       const nextWaveNumber = currentWave + 1;
-      const nextOffset = currentWave * (req.worker_count_needed * 2);
+      const nextPlan = planDispatchWave({
+        workerCountNeeded: req.worker_count_needed,
+        workersAlreadyAssigned: req.worker_count_filled ?? 0,
+        waveNumber: nextWaveNumber,
+      });
+      if (!nextPlan.canDispatch) {
+        await prisma.job_requirement.update({
+          where: { id: requirementId }, data: { status: RequirementStatus.NO_WORKERS_AVAILABLE },
+        });
+        return { success: true, message: 'Job declined' };
+      }
+      const nextOffset = currentWave * nextPlan.targetCandidateCount;
 
       const operationId = generateDispatchOperationId({
         requirementId,

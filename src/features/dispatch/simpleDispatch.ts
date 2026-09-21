@@ -20,6 +20,8 @@ import {
   getEligibleDispatchCandidates,
   validateDispatchCoordinates,
 } from './dispatchCandidate.service';
+import { dispatchWaveConfig } from '../../config/dispatchWaveConfig';
+import { planDispatchWave } from './wavePlanner';
 
 // ── Configuration ────────────────────────────────────────────────────────────
 
@@ -38,18 +40,13 @@ interface DispatchConfig {
 }
 
 const DISPATCH_CONFIG: DispatchConfig = {
-  timeoutMs: 30_000,
+  timeoutMs: dispatchWaveConfig.timeoutMs,
   fastPollMs: 1_000,
   fastPollWindowMs: 10_000,
   slowPollMs: 5_000,
-  workersPerWave: 20,
+  workersPerWave: dispatchWaveConfig.workerMultiplier,
   writeRetryDelayMs: 500,
-  waves: [
-    { radius: 3_000 },
-    { radius: 5_000 },
-    { radius: 10_000 },
-    { radius: 15_000 },
-  ],
+  waves: dispatchWaveConfig.radiusMetersByWave.map((radius) => ({ radius })),
 };
 
 interface NearbyWorker {
@@ -291,7 +288,12 @@ async function dispatchRequirementSimple(
     waveIndex++
   ) {
     const waveNumber = waveIndex + 1;
-    const { radius } = DISPATCH_CONFIG.waves[waveIndex];
+    const plan = planDispatchWave({
+      workerCountNeeded: req.worker_count_needed ?? req.workers_needed ?? 0,
+      workersAlreadyAssigned: 0,
+      waveNumber,
+    });
+    const radius = plan.radiusMeters;
     const waveStart = Date.now();
 
     const workers = await findAvailableWorkers(job, req, radius);
@@ -309,7 +311,7 @@ async function dispatchRequirementSimple(
       continue;
     }
 
-    const expiresAt = new Date(Date.now() + DISPATCH_CONFIG.timeoutMs);
+    const expiresAt = new Date(Date.now() + plan.timeoutMs);
     const writeOk = await writeDispatchRecords(req, workers, waveNumber, expiresAt);
 
     if (!writeOk) {
@@ -399,13 +401,9 @@ async function dispatchRequirementSimple(
  *      nothing. If that's not the behavior you want for skill-less
  *      requirements, tell me and I'll make it strict instead.
  *
- * Pool size per wave is now `workers_needed * 4` (so a requirement needing
- * 3 workers pulls up to 12 candidates per wave) rather than the flat
- * `DISPATCH_CONFIG.workersPerWave`. If `workers_needed` is missing or not a
- * positive number, it falls back to `DISPATCH_CONFIG.workersPerWave` so a
- * bad/missing value doesn't quietly starve dispatch down to 4 candidates.
- * The SQL `LIMIT` naturally caps this at whatever's actually available —
- * if only 2 online workers match, you get 2, never more than exist.
+ * Pool size is supplied by the canonical planner: remaining capacity times
+ * the centralized worker multiplier. This deprecated fixture has no separate
+ * wave-size rule. The SQL LIMIT naturally caps the result at what is available.
  */
 export async function findAvailableWorkers(
   job: JobForDispatch,
@@ -422,10 +420,11 @@ export async function findAvailableWorkers(
   }
 
   const needed = req.worker_count_needed ?? req.workers_needed;
-  const poolLimit =
-    needed && needed > 0
-      ? needed * 2
-      : DISPATCH_CONFIG.workersPerWave;
+  const poolLimit = planDispatchWave({
+    workerCountNeeded: needed ?? 0,
+    workersAlreadyAssigned: 0,
+    waveNumber: 1,
+  }).targetCandidateCount || DISPATCH_CONFIG.workersPerWave;
 
   const workers = await getEligibleDispatchCandidates({
     requirementId: req.id,

@@ -4,6 +4,7 @@ import { redisConnectionOptions, dispatchQueue } from '../config/bullmq';
 import { RequirementStatus } from '../features/jobs/requirementStateMachine';
 import { io } from '../server';
 import { generateDispatchOperationId } from '../features/dispatch/dispatchOperation';
+import { planDispatchWave } from '../features/dispatch/wavePlanner';
 
 export interface TimeoutJobData {
   requirementId: string;
@@ -70,10 +71,23 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
     data: { status: 'exhausted', resolved_at: new Date() },
   });
 
-  // 4. Calculate next wave offset
+  const nextWave = waveNumber + 1;
+  const nextPlan = planDispatchWave({
+    // `waveSize` fallback preserves compatibility with legacy timeout payload
+    // tests; persisted requirements always supply worker_count_needed.
+    workerCountNeeded: req.worker_count_needed ?? waveSize,
+    workersAlreadyAssigned: req.worker_count_filled ?? 0,
+    waveNumber: nextWave,
+    // The current payload's total is the candidate set observed by this
+    // operation. Issue #26 may replace it with explicit pagination metadata.
+    candidatesExhausted: offset + waveSize >= totalWorkersFound,
+  });
+
+  // 4. Pagination offset remains payload-compatible; whether another wave is
+  // allowed is owned solely by the canonical planner.
   const nextOffset = offset + waveSize;
 
-  if (nextOffset >= totalWorkersFound) {
+  if (!nextPlan.canDispatch || !nextPlan.shouldTryNextWave) {
     // No more workers available for this requirement
     console.log(
       `[timeoutWorker] No more workers for requirement ${requirementId} (offset ${nextOffset} >= total ${totalWorkersFound}). Marking no_workers_available.`,
@@ -97,7 +111,6 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
   }
 
   // 5. Fire wave 2+ — enqueue next wave in BullMQ with deterministic jobId
-  const nextWave = waveNumber + 1;
   const nextOperationId = generateDispatchOperationId({
     requirementId,
     waveNumber: nextWave,

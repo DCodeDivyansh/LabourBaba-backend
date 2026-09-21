@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma';
+import { dispatchWaveConfig } from '../../config/dispatchWaveConfig';
 
 export interface DispatchWaveConfig {
   waveNumber: number;
@@ -12,22 +13,17 @@ export interface DispatchWaveConfig {
  * Wave 3: 10,000 meters (10 km)
  * Wave 4+: 15,000 meters (15 km)
  */
-export const DISPATCH_WAVE_CONFIG: DispatchWaveConfig[] = [
-  { waveNumber: 1, radiusMeters: 3_000 },
-  { waveNumber: 2, radiusMeters: 5_000 },
-  { waveNumber: 3, radiusMeters: 10_000 },
-  { waveNumber: 4, radiusMeters: 15_000 },
-];
+export const DISPATCH_WAVE_CONFIG: DispatchWaveConfig[] = dispatchWaveConfig.radiusMetersByWave.map(
+  (radiusMeters, index) => ({ waveNumber: index + 1, radiusMeters }),
+);
 
 /**
  * Maps a wave number to its authoritative dispatch radius in meters.
  * Defaults to 15,000m for wave 4 and beyond.
  */
 export function getWaveRadiusMeters(waveNumber: number): number {
-  if (waveNumber <= 1) return 3_000;
-  if (waveNumber === 2) return 5_000;
-  if (waveNumber === 3) return 10_000;
-  return 15_000;
+  const index = Math.max(1, Math.min(waveNumber, dispatchWaveConfig.maxWaves)) - 1;
+  return dispatchWaveConfig.radiusMetersByWave[index];
 }
 
 /**

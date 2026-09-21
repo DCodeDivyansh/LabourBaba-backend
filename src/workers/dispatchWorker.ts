@@ -4,7 +4,6 @@ import { redisConnectionOptions, timeoutQueue, dispatchQueue, notificationQueue,
 
 import {
   getEligibleDispatchCandidates,
-  getWaveRadiusMeters,
   validateDispatchCoordinates,
   EligibleWorkerCandidate,
 } from '../features/dispatch/dispatchCandidate.service';
@@ -13,8 +12,11 @@ import {
   generateDispatchOperationId,
   DispatchOperationResult,
 } from '../features/dispatch/dispatchOperation';
+import { planDispatchWave } from '../features/dispatch/wavePlanner';
+import { dispatchWaveConfig } from '../config/dispatchWaveConfig';
 
-export const WAVE_TIMEOUT_MS = 30_000; // 30 seconds
+/** @deprecated Import dispatchWaveConfig.timeoutMs or planDispatchWave instead. */
+export const WAVE_TIMEOUT_MS = dispatchWaveConfig.timeoutMs;
 
 export interface DispatchJobData {
   requirementId: string;
@@ -156,8 +158,22 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
     };
   }
 
-  // 2. Authoritative PostGIS query — nearby online, verified, fresh workers matching skill within wave radius
-  const radiusMeters = getWaveRadiusMeters(waveNumber);
+  // The planner owns all wave sizing/radius/timeout decisions. Candidate
+  // selection only receives the resulting deterministic query parameters.
+  const initialPlan = planDispatchWave({
+    workerCountNeeded: req.worker_count_needed,
+    workersAlreadyAssigned: req.worker_count_filled ?? 0,
+    waveNumber,
+  });
+  if (!initialPlan.canDispatch) {
+    return {
+      operationId, requirementId, jobId, waveNumber, waveId: null,
+      status: 'skipped_terminal', workersDispatchedCount: 0, workerIds: [],
+    };
+  }
+
+  // 2. Authoritative PostGIS query — eligibility and pagination stay outside the planner.
+  const radiusMeters = initialPlan.radiusMeters;
   const workers =
     (await getEligibleDispatchCandidates({
       requirementId,
@@ -165,13 +181,18 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
       longitude: req.job.longitude,
       radiusMeters,
       skillType: req.skill_type,
-      limit: 30,
+      limit: initialPlan.targetCandidateCount,
       offset,
       excludeDispatched: true,
     })) || [];
 
-  const totalWorkersFound = workers.length;
-  if (totalWorkersFound === 0) {
+  const plan = planDispatchWave({
+    workerCountNeeded: req.worker_count_needed,
+    workersAlreadyAssigned: req.worker_count_filled ?? 0,
+    waveNumber,
+    availableCandidates: workers.length,
+  });
+  if (!plan.canDispatch) {
     console.log(
       `[dispatchWorker] No eligible workers found for requirement ${requirementId} in wave ${waveNumber} (radius: ${radiusMeters}m) at offset ${offset}`,
     );
@@ -191,10 +212,10 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
     };
   }
 
-  // 3. Wave slice — up to (worker_count_needed * 2) workers per wave
-  const waveSize = Math.min(req.worker_count_needed * 2, totalWorkersFound);
+  // 3. Slice exactly to the canonical target; multiplier applies to remaining capacity.
+  const waveSize = plan.targetCandidateCount;
   const waveWorkers = workers.slice(0, waveSize);
-  const expiresAt = new Date(Date.now() + WAVE_TIMEOUT_MS);
+  const expiresAt = new Date(Date.now() + plan.timeoutMs);
 
   // 4. PERSISTENCE FIRST: Write dispatch_wave and job_dispatch rows
   // Database unique constraints backstop against concurrency races
@@ -297,12 +318,12 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
         requirementId,
         jobId,
         waveNumber,
-        totalWorkersFound,
+        totalWorkersFound: workers.length,
         offset,
         waveSize,
       },
       {
-        delay: WAVE_TIMEOUT_MS,
+        delay: plan.timeoutMs,
         jobId: `wave-timeout:${requirementId}:wave-${waveNumber}`,
       },
     );

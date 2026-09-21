@@ -2,7 +2,8 @@ import prisma from '../../config/prisma';
 import { dispatchQueue, timeoutQueue } from '../../config/bullmq';
 import { RequirementStatus } from '../jobs/requirementStateMachine';
 import { JobStatus } from '../jobs/jobStateMachine';
-import { WAVE_TIMEOUT_MS } from '../../workers/dispatchWorker';
+import { dispatchWaveConfig } from '../../config/dispatchWaveConfig';
+import { planDispatchWave } from './wavePlanner';
 import { generateDispatchOperationId } from './dispatchOperation';
 
 export interface ReconciliationReport {
@@ -89,7 +90,7 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
 
       if (latestWave && latestWave.status === 'active') {
         const notifiedAtMs = latestWave.notified_at ? new Date(latestWave.notified_at).getTime() : 0;
-        const waveExpiresAtMs = notifiedAtMs + WAVE_TIMEOUT_MS;
+        const waveExpiresAtMs = notifiedAtMs + dispatchWaveConfig.timeoutMs;
 
         if (waveExpiresAtMs <= now) {
           // ── Case A: Wave expired while system was down ────────────────────────
@@ -117,7 +118,18 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
 
           // Schedule next wave
           const nextWave = latestWave.wave_number + 1;
-          const nextOffset = (latestWave.wave_number) * (req.worker_count_needed * 2);
+          const nextPlan = planDispatchWave({
+            workerCountNeeded: req.worker_count_needed,
+            workersAlreadyAssigned: req.worker_count_filled ?? 0,
+            waveNumber: nextWave,
+          });
+          if (!nextPlan.canDispatch) {
+            await prisma.job_requirement.update({
+              where: { id: req.id }, data: { status: RequirementStatus.NO_WORKERS_AVAILABLE },
+            });
+            continue;
+          }
+          const nextOffset = (latestWave.wave_number) * (latestWave.workers_notified ?? nextPlan.targetCandidateCount);
           const nextOperationId = generateDispatchOperationId({
             requirementId: req.id,
             waveNumber: nextWave,
@@ -158,8 +170,8 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
               jobId: req.job.id,
               waveNumber: latestWave.wave_number,
               totalWorkersFound: latestWave.workers_notified ?? 30,
-              offset: (latestWave.wave_number - 1) * (req.worker_count_needed * 2),
-              waveSize: latestWave.workers_notified ?? (req.worker_count_needed * 2),
+              offset: (latestWave.wave_number - 1) * (latestWave.workers_notified ?? 0),
+              waveSize: latestWave.workers_notified ?? 0,
             },
             {
               delay: remainingDelayMs,
