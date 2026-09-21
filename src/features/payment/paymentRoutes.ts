@@ -24,6 +24,7 @@ import {
 } from "./paymentController";
 import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
 import { validateBody, validateParams } from "../../middlewares/validationMiddleware";
+import { paymentOrderRateLimiter, paymentRefundRateLimiter } from "../../middlewares/rateLimiter";
 import { CreatePaymentReqSchema, PaymentSchema, BookingIdParamSchema } from "../../schemas";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
@@ -167,6 +168,7 @@ router.post(
   "/:bookingId/create-order",
   authenticateJWT,
   requireRole(UserRole.CUSTOMER),
+  paymentOrderRateLimiter,
   validateParams(BookingIdParamSchema),
   validateBody(CreatePaymentReqSchema),
   createOrderHandler,
@@ -190,6 +192,7 @@ router.post(
   "/:bookingId/refund",
   authenticateJWT,
   requireRole(UserRole.CUSTOMER, UserRole.ADMIN),
+  paymentRefundRateLimiter,
   validateParams(BookingIdParamSchema),
   refundPaymentHandler,
 );

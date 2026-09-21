@@ -23,6 +23,8 @@ import {
 import { Prisma } from "@prisma/client";
 import { paymentPolicy, assertPolicy, AuthenticatedUser, UserRole } from "../../policies";
 import { auditService } from "../audit/audit.service";
+import { outboxService } from "../../services/outboxService";
+import { metricsService } from "../../metrics/metrics.service";
 import { logger } from "../../utils/logger";
 
 // ── Payment Status & State Machine ─────────────────────────────────────────────
@@ -346,7 +348,11 @@ export async function handleWebhook(
   // Step 2: Strict raw-body HMAC-SHA256 signature verification (Issue 63)
   const isValid = verifyWebhookSignature(rawBody, signature, webhookSecret);
   if (!isValid) {
-    logger.warn("[SECURITY] Razorpay webhook signature verification failed.");
+    metricsService.recordWebhookSignatureFailure();
+    logger.warn("[SECURITY] Razorpay webhook signature verification failed.", {
+      hasSignature: Boolean(signature),
+      rawBodyLength: rawBody.length,
+    });
     throw new PaymentError(
       "Webhook signature verification failed.",
       "WEBHOOK_INVALID_SIGNATURE",
@@ -422,7 +428,7 @@ interface CapturedParams {
 }
 
 /**
- * Processes payment.captured with full reconciliation & transactional idempotency (Issue 64, 65, 70).
+ * Processes payment.captured with full reconciliation & transactional idempotency (Issue 64, 65, 70, 71).
  */
 async function processPaymentCaptured(params: CapturedParams): Promise<{ success: boolean; message: string }> {
   const { providerEventId, eventType, razorpayOrderId, razorpayPaymentId, capturedAmount, capturedCurrency } = params;
@@ -471,6 +477,7 @@ async function processPaymentCaptured(params: CapturedParams): Promise<{ success
             quarantine_reason: `Amount mismatch: local=${localPayment.amount}p, provider=${capturedAmount}p`,
           },
         });
+        metricsService.recordPaymentQuarantined("amount_mismatch");
         logger.error("[PAYMENT_AMOUNT_MISMATCH]", {
           paymentId: localPayment.id,
           localAmount: localPayment.amount,
@@ -499,6 +506,7 @@ async function processPaymentCaptured(params: CapturedParams): Promise<{ success
             quarantine_reason: `Currency mismatch: local=${localPayment.currency}, provider=${capturedCurrency}`,
           },
         });
+        metricsService.recordPaymentQuarantined("currency_mismatch");
         return { message: "Event acknowledged (currency mismatch flagged for review)" };
       }
 
@@ -511,7 +519,55 @@ async function processPaymentCaptured(params: CapturedParams): Promise<{ success
         { razorpay_payment_id: razorpayPaymentId },
       );
 
-      // 6. Mark Webhook Event PROCESSED
+      // 6. Dual-write durable notification outbox inside same transaction (Issue 71)
+      if (transitioned) {
+        metricsService.recordPaymentCaptured(capturedAmount || localPayment.amount || 0);
+
+        const booking = await tx.booking.findUnique({
+          where: { id: localPayment.booking_id },
+          select: { customer_id: true, worker_id: true },
+        });
+
+        if (booking?.customer_id) {
+          await outboxService.createOutboxEvent(tx, {
+            eventType: "PAYMENT_COMPLETED",
+            aggregateType: "payment",
+            aggregateId: localPayment.id,
+            recipientType: "customer",
+            recipientId: booking.customer_id,
+            payload: {
+              paymentId: localPayment.id,
+              bookingId: localPayment.booking_id,
+              amount: localPayment.amount,
+              currency: localPayment.currency,
+              title: "Payment Successful",
+              body: `Your payment of ₹${(localPayment.amount ?? 0) / 100} has been confirmed.`,
+            },
+            idempotencyKey: `PAYMENT_COMPLETED:payment:${localPayment.id}:${booking.customer_id}`,
+          }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
+        }
+
+        if (booking?.worker_id) {
+          await outboxService.createOutboxEvent(tx, {
+            eventType: "PAYMENT_COMPLETED",
+            aggregateType: "payment",
+            aggregateId: localPayment.id,
+            recipientType: "worker",
+            recipientId: booking.worker_id,
+            payload: {
+              paymentId: localPayment.id,
+              bookingId: localPayment.booking_id,
+              amount: localPayment.amount,
+              currency: localPayment.currency,
+              title: "Payment Received",
+              body: `Payment of ₹${(localPayment.amount ?? 0) / 100} received for booking.`,
+            },
+            idempotencyKey: `PAYMENT_COMPLETED:payment:${localPayment.id}:${booking.worker_id}`,
+          }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
+        }
+      }
+
+      // 7. Mark Webhook Event PROCESSED
       await tx.paymentWebhookEvent.update({
         where: { id: webhookEvent.id },
         data: {
@@ -576,6 +632,30 @@ async function processPaymentFailed(params: {
         if (!transitioned) msg = "already transitioned";
       } catch {
         msg = "already transitioned";
+      }
+
+      if (msg === "Payment failed") {
+        metricsService.recordPaymentFailed("provider_failed");
+        const booking = await tx.booking.findUnique({
+          where: { id: localPayment.booking_id },
+          select: { customer_id: true },
+        });
+        if (booking?.customer_id) {
+          await outboxService.createOutboxEvent(tx, {
+            eventType: "PAYMENT_FAILED",
+            aggregateType: "payment",
+            aggregateId: localPayment.id,
+            recipientType: "customer",
+            recipientId: booking.customer_id,
+            payload: {
+              paymentId: localPayment.id,
+              bookingId: localPayment.booking_id,
+              title: "Payment Failed",
+              body: "Your payment attempt failed. Please try again.",
+            },
+            idempotencyKey: `PAYMENT_FAILED:payment:${localPayment.id}:${booking.customer_id}`,
+          }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
+        }
       }
 
       await tx.paymentWebhookEvent.update({
@@ -644,6 +724,31 @@ async function processRefundProcessed(params: {
             updated_at: new Date(),
           },
         });
+
+        metricsService.recordRefundCreated(refundAmount || localPayment.amount || 0);
+
+        const booking = await tx.booking.findUnique({
+          where: { id: localPayment.booking_id },
+          select: { customer_id: true },
+        });
+        if (booking?.customer_id) {
+          await outboxService.createOutboxEvent(tx, {
+            eventType: "REFUND_COMPLETED",
+            aggregateType: "payment",
+            aggregateId: localPayment.id,
+            recipientType: "customer",
+            recipientId: booking.customer_id,
+            payload: {
+              paymentId: localPayment.id,
+              bookingId: localPayment.booking_id,
+              refundId,
+              amount: refundAmount,
+              title: "Refund Processed",
+              body: `Your refund of ₹${(refundAmount || localPayment.amount || 0) / 100} has been processed.`,
+            },
+            idempotencyKey: `REFUND_COMPLETED:payment:${localPayment.id}:${booking.customer_id}`,
+          }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
+        }
       }
 
       await tx.paymentWebhookEvent.update({
@@ -810,17 +915,40 @@ export async function refundPayment(
       receipt: `rfnd_${bookingId.substring(0, 30)}`,
     });
 
-    // Step 5: Update state to REFUNDED on provider success
-    await prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        status: PaymentStatus.REFUNDED,
-        razorpay_refund_id: providerRefund.razorpayRefundId,
-        refund_amount: providerRefund.amount,
-        refund_status: providerRefund.status,
-        updated_at: new Date(),
-      },
+    // Step 5: Update state to REFUNDED and dual-write outbox event on provider success (Issue 71)
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: PaymentStatus.REFUNDED,
+          razorpay_refund_id: providerRefund.razorpayRefundId,
+          refund_amount: providerRefund.amount,
+          refund_status: providerRefund.status,
+          updated_at: new Date(),
+        },
+      });
+
+      if (booking?.customer_id) {
+        await outboxService.createOutboxEvent(tx, {
+          eventType: "REFUND_COMPLETED",
+          aggregateType: "payment",
+          aggregateId: payment.id,
+          recipientType: "customer",
+          recipientId: booking.customer_id,
+          payload: {
+            paymentId: payment.id,
+            bookingId,
+            refundId: providerRefund.razorpayRefundId,
+            amount: providerRefund.amount,
+            title: "Refund Processed",
+            body: `Your refund of ₹${providerRefund.amount / 100} has been processed.`,
+          },
+          idempotencyKey: `REFUND_COMPLETED:payment:${payment.id}:${booking.customer_id}`,
+        }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
+      }
     });
+
+    metricsService.recordRefundCreated(providerRefund.amount);
 
     // Record audit event
     await auditService.recordEvent(prisma, {

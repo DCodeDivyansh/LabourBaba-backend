@@ -10,6 +10,10 @@ interface MemoryRateLimitRecord {
 
 const memoryStore = new Map<string, MemoryRateLimitRecord>();
 
+export function clearRateLimitStore(): void {
+  memoryStore.clear();
+}
+
 export interface RateLimitOptions {
   windowSeconds: number;
   maxLimit: number;
@@ -207,6 +211,24 @@ export const workerLocationRateLimiter = createRateLimiter({
   keyPrefix: "worker_location",
   errorMessage: "Location update frequency too high. Updates throttled.",
   dimension: "worker",
+});
+
+// Payment Order Creation: 10 requests per 15 minutes per customer user/IP
+export const paymentOrderRateLimiter = createRateLimiter({
+  windowSeconds: 15 * 60,
+  maxLimit: 10,
+  keyPrefix: "payment_order",
+  errorMessage: "Too many payment order attempts. Please wait before creating another order.",
+  dimension: "user",
+});
+
+// Payment Refund Requests: 5 refund requests per 15 minutes per customer user/IP
+export const paymentRefundRateLimiter = createRateLimiter({
+  windowSeconds: 15 * 60,
+  maxLimit: 5,
+  keyPrefix: "payment_refund",
+  errorMessage: "Too many refund requests. Please wait before initiating another refund.",
+  dimension: "user",
 });
 
 export function resetAllMemoryRateLimiters(): void {

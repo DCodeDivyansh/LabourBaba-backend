@@ -50,6 +50,17 @@ export class OutboxService {
       `${dto.eventType}:${dto.aggregateType}:${dto.aggregateId}:${dto.recipientId}`;
 
     try {
+      const existing = await (tx as any).notification_outbox.findUnique({
+        where: { idempotency_key: idempotencyKey },
+      });
+      if (existing) {
+        logger.warn(`[OUTBOX_DUPLICATE] Outbox event with key ${idempotencyKey} already exists. Skipping duplicate.`, {
+          idempotencyKey,
+          correlationId,
+        });
+        return existing;
+      }
+
       const record = await (tx as any).notification_outbox.create({
         data: {
           event_type: dto.eventType,

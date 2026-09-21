@@ -43,6 +43,7 @@ import { generateToken } from "../src/utils/authUtils";
 import { UserRole } from "../src/middlewares/authMiddleware";
 import * as razorpayProvider from "../src/providers/razorpay/razorpayProvider";
 import crypto from "crypto";
+import { clearRateLimitStore } from "../src/middlewares/rateLimiter";
 
 // ── Prisma mock ────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,14 @@ jest.mock("../src/config/prisma", () => {
   const mockBooking = {
     findFirst: jest.fn(),
     findUnique: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+  };
+  const mockNotificationOutbox = {
+    create: jest.fn().mockResolvedValue({}),
+  };
+  const mockAuditLog = {
+    create: jest.fn().mockResolvedValue({}),
   };
 
   return {
@@ -70,10 +79,15 @@ jest.mock("../src/config/prisma", () => {
       booking: mockBooking,
       payment: mockPayment,
       paymentWebhookEvent: mockPaymentWebhookEvent,
+      notification_outbox: mockNotificationOutbox,
+      audit_log: mockAuditLog,
       $transaction: jest.fn(async (callback: (tx: any) => Promise<any>) => {
         return callback({
+          booking: mockBooking,
           payment: mockPayment,
           paymentWebhookEvent: mockPaymentWebhookEvent,
+          notification_outbox: mockNotificationOutbox,
+          audit_log: mockAuditLog,
         });
       }),
     },
@@ -237,9 +251,26 @@ function setupTransactionMock(overrides: {
       : jest.fn().mockResolvedValue(overrides.webhookEventCreate ?? makeWebhookEvent()),
     update: jest.fn().mockResolvedValue(overrides.webhookEventUpdate ?? makeWebhookEvent()),
   };
+  const txBooking = {
+    findUnique: jest.fn().mockResolvedValue(makeBooking()),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    update: jest.fn().mockResolvedValue({}),
+  };
+  const txOutbox = {
+    create: jest.fn().mockResolvedValue({}),
+  };
+  const txAudit = {
+    create: jest.fn().mockResolvedValue({}),
+  };
 
   (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-    return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
+    return callback({
+      payment: txPayment,
+      paymentWebhookEvent: txWebhookEvent,
+      booking: txBooking,
+      notification_outbox: txOutbox,
+      auditLog: txAudit,
+    });
   });
 
   return { txPayment, txWebhookEvent };
@@ -251,6 +282,7 @@ function setupTransactionMock(overrides: {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  clearRateLimitStore();
   process.env.RAZORPAY_WEBHOOK_SECRET = WEBHOOK_SECRET;
 
   // Default happy-path DB state for order-creation tests
@@ -263,9 +295,16 @@ beforeEach(() => {
     status: "processed",
   });
   (mockPrisma.payment.create as jest.Mock).mockResolvedValue(makePayment());
+  (mockPrisma.payment.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
   (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue(makeBooking());
+  (mockPrisma.booking.findUnique as jest.Mock).mockResolvedValue(makeBooking());
+  (mockPrisma.booking.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
   (mockPrisma.payment.findFirst as jest.Mock).mockResolvedValue(null);
   (mockPrisma.payment.findUnique as jest.Mock).mockResolvedValue(makePayment());
+  (mockPrisma.paymentWebhookEvent.create as jest.Mock).mockResolvedValue(makeWebhookEvent());
+  (mockPrisma.paymentWebhookEvent.update as jest.Mock).mockResolvedValue(makeWebhookEvent());
+  (mockPrisma.notification_outbox.create as jest.Mock).mockResolvedValue({});
+  (mockPrisma.audit_log.create as jest.Mock).mockResolvedValue({});
 
   // Default: signature verification passes
   mockVerifyWebhookSignature.mockReturnValue(true);
@@ -965,30 +1004,27 @@ describe("15. Webhook — DB Idempotency / Replay Protection (R1–R3)", () => {
     const p2002 = Object.assign(new Error("Unique constraint"), { code: "P2002" });
 
     // First delivery — succeeds (transaction mock set up for first call)
-    (mockPrisma.$transaction as jest.Mock)
-      .mockImplementationOnce(async (callback: any) => {
-        const txPayment = {
-          findUnique: jest.fn().mockResolvedValue(makePayment({ status: "PENDING" })),
-          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-        };
-        const txWebhookEvent = {
-          create: jest.fn().mockResolvedValue(makeWebhookEvent()),
-          update: jest.fn().mockResolvedValue(makeWebhookEvent()),
-        };
-        return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
-      })
-      // Second delivery — P2002 on webhook event create
-      .mockImplementationOnce(async (callback: any) => {
-        const txPayment = {
-          findUnique: jest.fn(),
-          updateMany: jest.fn(),
-        };
-        const txWebhookEvent = {
-          create: jest.fn().mockRejectedValue(p2002),
-          update: jest.fn(),
-        };
-        return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
+    setupTransactionMock({
+      paymentFindUnique: makePayment({ status: "PENDING" }),
+      paymentUpdateMany: { count: 1 },
+      webhookEventCreate: makeWebhookEvent(),
+      webhookEventUpdate: makeWebhookEvent(),
+    });
+
+    // Second delivery — P2002 on webhook event create
+    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
+      const txWebhookEvent = {
+        create: jest.fn().mockRejectedValue(p2002),
+        update: jest.fn(),
+      };
+      return callback({
+        payment: { findUnique: jest.fn(), updateMany: jest.fn() },
+        paymentWebhookEvent: txWebhookEvent,
+        booking: { findUnique: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
+        notification_outbox: { create: jest.fn().mockResolvedValue({}) },
+        audit_log: { create: jest.fn().mockResolvedValue({}) },
       });
+    });
 
     const res1 = await request(app)
       .post("/api/payments/webhook")
@@ -1017,16 +1053,11 @@ describe("15. Webhook — DB Idempotency / Replay Protection (R1–R3)", () => {
     const p2002 = Object.assign(new Error("Unique constraint"), { code: "P2002" });
 
     // First delivery succeeds
-    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = {
-        findUnique: jest.fn().mockResolvedValue(makePayment({ status: "PENDING" })),
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      };
-      const txWebhookEvent = {
-        create: jest.fn().mockResolvedValue(makeWebhookEvent()),
-        update: jest.fn().mockResolvedValue(makeWebhookEvent()),
-      };
-      return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
+    setupTransactionMock({
+      paymentFindUnique: makePayment({ status: "PENDING" }),
+      paymentUpdateMany: { count: 1 },
+      webhookEventCreate: makeWebhookEvent(),
+      webhookEventUpdate: makeWebhookEvent(),
     });
 
     const first = await request(app)
@@ -1044,7 +1075,13 @@ describe("15. Webhook — DB Idempotency / Replay Protection (R1–R3)", () => {
           create: jest.fn().mockRejectedValue(p2002),
           update: jest.fn(),
         };
-        return callback({ payment: { findUnique: jest.fn(), updateMany: jest.fn() }, paymentWebhookEvent: txWebhookEvent });
+        return callback({
+          payment: { findUnique: jest.fn(), updateMany: jest.fn() },
+          paymentWebhookEvent: txWebhookEvent,
+          booking: { findUnique: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
+          notification_outbox: { create: jest.fn().mockResolvedValue({}) },
+          audit_log: { create: jest.fn().mockResolvedValue({}) },
+        });
       });
       const dup = await request(app)
         .post("/api/payments/webhook")
@@ -1083,14 +1120,26 @@ describe("15. Webhook — DB Idempotency / Replay Protection (R1–R3)", () => {
           create: jest.fn().mockResolvedValue(makeWebhookEvent()),
           update: jest.fn().mockResolvedValue(makeWebhookEvent()),
         };
-        return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
+        return callback({
+          payment: txPayment,
+          paymentWebhookEvent: txWebhookEvent,
+          booking: { findUnique: jest.fn().mockResolvedValue(makeBooking()), updateMany: jest.fn(), update: jest.fn() },
+          notification_outbox: { create: jest.fn().mockResolvedValue({}) },
+          audit_log: { create: jest.fn().mockResolvedValue({}) },
+        });
       })
       .mockImplementationOnce(async (callback: any) => {
         const txWebhookEvent = {
           create: jest.fn().mockRejectedValue(p2002),
           update: jest.fn(),
         };
-        return callback({ payment: { findUnique: jest.fn(), updateMany: jest.fn() }, paymentWebhookEvent: txWebhookEvent });
+        return callback({
+          payment: { findUnique: jest.fn(), updateMany: jest.fn() },
+          paymentWebhookEvent: txWebhookEvent,
+          booking: { findUnique: jest.fn(), updateMany: jest.fn(), update: jest.fn() },
+          notification_outbox: { create: jest.fn().mockResolvedValue({}) },
+          audit_log: { create: jest.fn().mockResolvedValue({}) },
+        });
       });
 
     const [res1, res2] = await Promise.all([
@@ -1111,54 +1160,34 @@ describe("15. Webhook — DB Idempotency / Replay Protection (R1–R3)", () => {
     expect(res2.status).toBe(200);
 
     // The combined messages must contain exactly one capture and one duplicate
-    const allMessages = [res1.body.message, res2.body.message];
-    const captureCount = allMessages.filter((m: string) => m === "Payment captured").length;
-    const dupCount = allMessages.filter((m: string) => m?.includes("already processed")).length;
-    expect(captureCount).toBe(1);
-    expect(dupCount).toBe(1);
+    const messages = [res1.body.message, res2.body.message];
+    expect(messages).toContain("Payment captured");
+    expect(messages.some((m: string) => m.includes("already processed"))).toBe(true);
   });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SECTION 16 — Payment integrity (P1–P7)
+// SECTION 16 — Webhook payment integrity tests (P1–P7)
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe("16. Webhook — Payment Integrity (P1–P7)", () => {
-  // P1: Unknown provider order → no payment mutation
+  // P1: Unknown provider order ID → returns 200 (retry safe), payment not created
   it("P1: unknown provider order ID → payment unchanged", async () => {
-    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = { findUnique: jest.fn().mockResolvedValue(null), updateMany: jest.fn() };
-      const txWebhookEvent = {
-        create: jest.fn().mockResolvedValue(makeWebhookEvent()),
-        update: jest.fn().mockResolvedValue(makeWebhookEvent()),
-      };
-      return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
-    });
-    const body = buildCapturedPayload("order_UNKNOWN", RAZORPAY_PAYMENT_ID);
+    (mockPrisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
+    const body = buildCapturedPayload("order_unknown_999", RAZORPAY_PAYMENT_ID);
     const res = await request(app)
       .post("/api/payments/webhook")
       .set("Content-Type", "application/json")
       .set("X-Razorpay-Signature", "valid_sig")
       .send(body);
     expect(res.status).toBe(200);
+    expect(res.body.message).toContain("no matching local payment");
   });
 
-  // P3: Amount mismatch → payment NOT marked COMPLETED
+  // P3: Captured amount does not match local payment amount → quarantined
   it("P3: amount mismatch → payment not marked COMPLETED", async () => {
-    // Webhook says amount=1 but local payment has amount=50000
-    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = {
-        findUnique: jest.fn().mockResolvedValue(makePayment({ amount: EXPECTED_PAISE })),
-        update: jest.fn().mockResolvedValue({}),
-        updateMany: jest.fn(),
-      };
-      const txWebhookEvent = {
-        create: jest.fn().mockResolvedValue(makeWebhookEvent()),
-        update: jest.fn().mockResolvedValue(makeWebhookEvent()),
-      };
-      return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
-    });
-    const body = buildCapturedPayload(RAZORPAY_ORDER_ID, RAZORPAY_PAYMENT_ID, 1);
+    const wrongAmountPaise = EXPECTED_PAISE + 10000;
+    const body = buildCapturedPayload(RAZORPAY_ORDER_ID, RAZORPAY_PAYMENT_ID, wrongAmountPaise);
     const res = await request(app)
       .post("/api/payments/webhook")
       .set("Content-Type", "application/json")
@@ -1168,20 +1197,8 @@ describe("16. Webhook — Payment Integrity (P1–P7)", () => {
     expect(res.body.message).toContain("amount mismatch");
   });
 
-  // P4: Currency mismatch → payment NOT marked COMPLETED
+  // P4: Currency mismatch (not INR) → quarantined
   it("P4: currency mismatch → payment not marked COMPLETED", async () => {
-    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = {
-        findUnique: jest.fn().mockResolvedValue(makePayment({ currency: "INR" })),
-        update: jest.fn().mockResolvedValue({}),
-        updateMany: jest.fn(),
-      };
-      const txWebhookEvent = {
-        create: jest.fn().mockResolvedValue(makeWebhookEvent()),
-        update: jest.fn().mockResolvedValue(makeWebhookEvent()),
-      };
-      return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
-    });
     const mismatchBody = JSON.stringify({
       event: "payment.captured",
       payload: {
@@ -1206,16 +1223,11 @@ describe("16. Webhook — Payment Integrity (P1–P7)", () => {
 
   // P5/P6: Valid event → exactly one state transition
   it("P5/P6: valid captured event → exactly one PENDING→COMPLETED transition", async () => {
-    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = {
-        findUnique: jest.fn().mockResolvedValue(makePayment({ status: "PENDING" })),
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      };
-      const txWebhookEvent = {
-        create: jest.fn().mockResolvedValue(makeWebhookEvent()),
-        update: jest.fn().mockResolvedValue(makeWebhookEvent()),
-      };
-      return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
+    setupTransactionMock({
+      paymentFindUnique: makePayment({ status: "PENDING" }),
+      paymentUpdateMany: { count: 1 },
+      webhookEventCreate: makeWebhookEvent(),
+      webhookEventUpdate: makeWebhookEvent(),
     });
     const body = buildCapturedPayload(RAZORPAY_ORDER_ID, RAZORPAY_PAYMENT_ID);
     const res = await request(app)
@@ -1229,16 +1241,11 @@ describe("16. Webhook — Payment Integrity (P1–P7)", () => {
 
   // P7: Already-completed payment receiving duplicate capture → safe/idempotent
   it("P7: already-completed payment + duplicate webhook → idempotent 200, no second update", async () => {
-    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = {
-        findUnique: jest.fn().mockResolvedValue(makePayment({ status: "COMPLETED", razorpay_payment_id: RAZORPAY_PAYMENT_ID })),
-        updateMany: jest.fn().mockResolvedValue({ count: 0 }), // WHERE status=PENDING matches nothing
-      };
-      const txWebhookEvent = {
-        create: jest.fn().mockResolvedValue(makeWebhookEvent()),
-        update: jest.fn().mockResolvedValue(makeWebhookEvent()),
-      };
-      return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
+    setupTransactionMock({
+      paymentFindUnique: makePayment({ status: "COMPLETED", razorpay_payment_id: RAZORPAY_PAYMENT_ID }),
+      paymentUpdateMany: { count: 0 },
+      webhookEventCreate: makeWebhookEvent(),
+      webhookEventUpdate: makeWebhookEvent(),
     });
     const body = buildCapturedPayload(RAZORPAY_ORDER_ID, RAZORPAY_PAYMENT_ID);
     const res = await request(app)
@@ -1259,16 +1266,11 @@ describe("16. Webhook — Payment Integrity (P1–P7)", () => {
 
 describe("17. Webhook — State Machine", () => {
   it("payment.captured marks PENDING payment as COMPLETED", async () => {
-    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = {
-        findUnique: jest.fn().mockResolvedValue(makePayment({ status: "PENDING" })),
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      };
-      const txWebhookEvent = {
-        create: jest.fn().mockResolvedValue(makeWebhookEvent()),
-        update: jest.fn().mockResolvedValue(makeWebhookEvent()),
-      };
-      return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
+    setupTransactionMock({
+      paymentFindUnique: makePayment({ status: "PENDING" }),
+      paymentUpdateMany: { count: 1 },
+      webhookEventCreate: makeWebhookEvent(),
+      webhookEventUpdate: makeWebhookEvent(),
     });
     const body = buildCapturedPayload(RAZORPAY_ORDER_ID, RAZORPAY_PAYMENT_ID);
     const res = await request(app)
@@ -1281,16 +1283,11 @@ describe("17. Webhook — State Machine", () => {
   });
 
   it("payment.failed marks PENDING payment as FAILED", async () => {
-    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = {
-        findUnique: jest.fn().mockResolvedValue(makePayment({ status: "PENDING" })),
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      };
-      const txWebhookEvent = {
-        create: jest.fn().mockResolvedValue(makeWebhookEvent()),
-        update: jest.fn().mockResolvedValue(makeWebhookEvent()),
-      };
-      return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
+    setupTransactionMock({
+      paymentFindUnique: makePayment({ status: "PENDING" }),
+      paymentUpdateMany: { count: 1 },
+      webhookEventCreate: makeWebhookEvent(),
+      webhookEventUpdate: makeWebhookEvent(),
     });
     const body = buildFailedPayload(RAZORPAY_ORDER_ID);
     const res = await request(app)
@@ -1304,16 +1301,11 @@ describe("17. Webhook — State Machine", () => {
 
   it("payment.failed on a COMPLETED payment is blocked (COMPLETED state not re-writable)", async () => {
     // updateMany WHERE status=PENDING will not match a COMPLETED payment → count=0
-    (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = {
-        findUnique: jest.fn().mockResolvedValue(makePayment({ status: "COMPLETED" })),
-        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
-      };
-      const txWebhookEvent = {
-        create: jest.fn().mockResolvedValue(makeWebhookEvent()),
-        update: jest.fn().mockResolvedValue(makeWebhookEvent()),
-      };
-      return callback({ payment: txPayment, paymentWebhookEvent: txWebhookEvent });
+    setupTransactionMock({
+      paymentFindUnique: makePayment({ status: "COMPLETED" }),
+      paymentUpdateMany: { count: 0 },
+      webhookEventCreate: makeWebhookEvent(),
+      webhookEventUpdate: makeWebhookEvent(),
     });
     const body = buildFailedPayload(RAZORPAY_ORDER_ID);
     const res = await request(app)

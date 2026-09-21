@@ -184,6 +184,32 @@ export class MetricsService {
     this.incrementCounter("security_audit_events_total", 1, { action, role: actorRole });
   }
 
+  recordPaymentCreated(): void {
+    this.incrementCounter("payments_created_total");
+  }
+
+  recordPaymentCaptured(amountPaise: number): void {
+    this.incrementCounter("payments_captured_total");
+    this.incrementCounter("payments_captured_amount_paise_total", amountPaise);
+  }
+
+  recordPaymentFailed(reason: string = "unknown"): void {
+    this.incrementCounter("payments_failed_total", 1, { reason });
+  }
+
+  recordRefundCreated(amountPaise: number): void {
+    this.incrementCounter("refunds_created_total");
+    this.incrementCounter("refunds_amount_paise_total", amountPaise);
+  }
+
+  recordWebhookSignatureFailure(): void {
+    this.incrementCounter("webhook_signature_failures_total");
+  }
+
+  recordPaymentQuarantined(reason: string): void {
+    this.incrementCounter("payments_quarantined_total", 1, { reason: reason.slice(0, 30) });
+  }
+
   /**
    * Formats all collected metrics in standard Prometheus exposition format.
    */
