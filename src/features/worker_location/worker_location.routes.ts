@@ -53,11 +53,14 @@ registry.registerPath({
   },
 });
 
+import { workerLocationRateLimiter } from "../../middlewares/rateLimiter";
+
 const workerLocationRoute = express.Router();
 workerLocationRoute.post(
   "/add",
   authenticateJWT,
   requireRole(UserRole.WORKER),
+  workerLocationRateLimiter,
   validateBody(UpdateWorkerLocationReqSchema),
   addLocation
 );

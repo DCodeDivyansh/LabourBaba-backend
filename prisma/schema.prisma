@@ -453,3 +453,32 @@ model refresh_session {
   @@index([status, expires_at], map: "idx_refresh_session_status_expires")
   @@map("refresh_session")
 }
+
+/// Durable transactional notification outbox (Issue #44)
+/// Guaranteed atomic persistence with business state transitions before asynchronous delivery to FCM / Socket.IO.
+model notification_outbox {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_type      String    @db.VarChar(50)
+  aggregate_type  String    @db.VarChar(50)
+  aggregate_id    String    @db.Uuid
+  recipient_type  String    @db.VarChar(30)
+  recipient_id    String    @db.Uuid
+  payload         Json
+  status          String    @default("PENDING") @db.VarChar(30)
+  attempts        Int       @default(0)
+  max_attempts    Int       @default(5)
+  available_at    DateTime  @default(now()) @db.Timestamptz(6)
+  processed_at    DateTime? @db.Timestamptz(6)
+  failed_at       DateTime? @db.Timestamptz(6)
+  last_error      String?   @db.Text
+  idempotency_key String?   @unique(map: "uniq_notification_outbox_idempotency_key") @db.VarChar(255)
+  correlation_id  String?   @db.VarChar(255)
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([status, available_at], map: "idx_outbox_status_available")
+  @@index([aggregate_type, aggregate_id], map: "idx_outbox_aggregate")
+  @@index([recipient_id], map: "idx_outbox_recipient")
+  @@map("notification_outbox")
+}
+

@@ -7,6 +7,8 @@
  * - Request and correlation ID context propagation via child loggers.
  */
 
+import { getRequestContext } from './requestContext';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const SENSITIVE_KEYS = new Set([
@@ -122,7 +124,10 @@ export class Logger {
   }
 
   private write(level: LogLevel, message: string, meta?: LogContext | Record<string, unknown>): void {
+    const asyncCtx = getRequestContext();
     const mergedMeta = {
+      ...(asyncCtx?.requestId ? { requestId: asyncCtx.requestId, request_id: asyncCtx.requestId } : {}),
+      ...(asyncCtx?.correlationId ? { correlationId: asyncCtx.correlationId, correlation_id: asyncCtx.correlationId } : {}),
       ...this.defaultContext,
       ...(meta || {}),
     };

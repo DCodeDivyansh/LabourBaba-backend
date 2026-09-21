@@ -113,10 +113,16 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
   const ipKey = `ratelimit:otp:req:ip:${hashIdentifier(ip)}`;
   const ipResult = await incrementRateLimit(ipKey, authConfig.otpMaxRequestsPerIp, windowSeconds);
   if (!ipResult.allowed) {
+    res.setHeader("Retry-After", String(windowSeconds));
     res.status(429).json({
       success: false,
       code: "OTP_RATE_LIMITED",
       message: "Too many OTP requests from this IP. Please try again later.",
+      error: {
+        code: "OTP_RATE_LIMITED",
+        message: "Too many OTP requests from this IP. Please try again later.",
+        request_id: req.id,
+      },
     });
     return;
   }
@@ -126,10 +132,16 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
     const phoneKey = `ratelimit:otp:req:phone:${hashIdentifier(phone)}`;
     const phoneResult = await incrementRateLimit(phoneKey, authConfig.otpMaxRequestsPerPhone, windowSeconds);
     if (!phoneResult.allowed) {
+      res.setHeader("Retry-After", String(windowSeconds));
       res.status(429).json({
         success: false,
         code: "OTP_RATE_LIMITED",
         message: "Too many OTP requests for this phone number. Please wait before requesting another.",
+        error: {
+          code: "OTP_RATE_LIMITED",
+          message: "Too many OTP requests for this phone number. Please wait before requesting another.",
+          request_id: req.id,
+        },
       });
       return;
     }
@@ -140,10 +152,16 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
     const deviceKey = `ratelimit:otp:req:device:${hashIdentifier(deviceId)}`;
     const deviceResult = await incrementRateLimit(deviceKey, authConfig.otpMaxRequestsPerDevice, windowSeconds);
     if (!deviceResult.allowed) {
+      res.setHeader("Retry-After", String(windowSeconds));
       res.status(429).json({
         success: false,
         code: "OTP_RATE_LIMITED",
         message: "Too many OTP requests from this device. Please wait before requesting another.",
+        error: {
+          code: "OTP_RATE_LIMITED",
+          message: "Too many OTP requests from this device. Please wait before requesting another.",
+          request_id: req.id,
+        },
       });
       return;
     }
@@ -169,10 +187,16 @@ export async function otpVerifyRateLimiter(req: Request, res: Response, next: Ne
   const ipKey = `ratelimit:otp:verify:ip:${hashIdentifier(ip)}`;
   const ipResult = await incrementRateLimit(ipKey, authConfig.otpMaxVerifyAttemptsPerIp, windowSeconds);
   if (!ipResult.allowed) {
+    res.setHeader("Retry-After", String(windowSeconds));
     res.status(429).json({
       success: false,
       code: "OTP_RATE_LIMITED",
       message: "Too many verification attempts from this IP. Please try again later.",
+      error: {
+        code: "OTP_RATE_LIMITED",
+        message: "Too many verification attempts from this IP. Please try again later.",
+        request_id: req.id,
+      },
     });
     return;
   }
@@ -182,10 +206,16 @@ export async function otpVerifyRateLimiter(req: Request, res: Response, next: Ne
     const phoneKey = `ratelimit:otp:verify:phone:${hashIdentifier(phone)}`;
     const phoneResult = await incrementRateLimit(phoneKey, authConfig.otpMaxVerifyAttemptsPerPhone, windowSeconds);
     if (!phoneResult.allowed) {
+      res.setHeader("Retry-After", String(windowSeconds));
       res.status(429).json({
         success: false,
         code: "OTP_RATE_LIMITED",
         message: "Too many verification attempts for this phone number. Please try again later.",
+        error: {
+          code: "OTP_RATE_LIMITED",
+          message: "Too many verification attempts for this phone number. Please try again later.",
+          request_id: req.id,
+        },
       });
       return;
     }
@@ -196,10 +226,16 @@ export async function otpVerifyRateLimiter(req: Request, res: Response, next: Ne
     const deviceKey = `ratelimit:otp:verify:device:${hashIdentifier(deviceId)}`;
     const deviceResult = await incrementRateLimit(deviceKey, authConfig.otpMaxVerifyAttemptsPerDevice, windowSeconds);
     if (!deviceResult.allowed) {
+      res.setHeader("Retry-After", String(windowSeconds));
       res.status(429).json({
         success: false,
         code: "OTP_RATE_LIMITED",
         message: "Too many verification attempts from this device. Please try again later.",
+        error: {
+          code: "OTP_RATE_LIMITED",
+          message: "Too many verification attempts from this device. Please try again later.",
+          request_id: req.id,
+        },
       });
       return;
     }

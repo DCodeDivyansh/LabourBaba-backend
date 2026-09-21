@@ -15,7 +15,10 @@ import { dispatchQueue, timeoutQueue, notificationQueue } from '../config/bullmq
 import { closeAllWorkers } from '../workers/workerLifecycle';
 import { assertJwtConfig, assertProductionAuthConfig } from '../config/authConfig';
 import { assertProductionPaymentConfig } from '../config/paymentConfig';
+import { assertFcmConfig } from '../shared/fcm';
 import { reconcileDispatchState } from '../features/dispatch/dispatchReconciliationService';
+import { outboxService } from '../services/outboxService';
+import { outboxWorker } from '../workers/outboxWorker';
 import { authService } from '../features/auth/auth.services';
 import { logger } from '../utils/logger';
 
@@ -53,6 +56,7 @@ export class LifecycleManager {
     assertProductionAuthConfig();
     assertProductionPaymentConfig();
     assertRedisConfig();
+    assertFcmConfig();
     logger.info('[LIFECYCLE] Configuration successfully validated.');
 
     // 2. Initialize and verify PostgreSQL connectivity
@@ -66,12 +70,13 @@ export class LifecycleManager {
     }
     logger.info('[LIFECYCLE] Redis connectivity confirmed.');
 
-    // 4. Authoritative startup reconciliation: reconstruct orphaned dispatch wave states
+    // 4. Authoritative startup reconciliation: reconstruct orphaned dispatch wave states & recover stale outbox
     try {
       await reconcileDispatchState();
-      logger.info('[LIFECYCLE] Dispatch state reconciliation completed.');
+      await outboxService.reconcileStaleEvents();
+      logger.info('[LIFECYCLE] Dispatch state and notification outbox reconciliation completed.');
     } catch (err: any) {
-      logger.error('[LIFECYCLE] Dispatch reconciliation failed:', { error: err.message });
+      logger.error('[LIFECYCLE] Startup reconciliation failed:', { error: err.message });
       if (process.env.NODE_ENV === 'production') {
         throw err;
       }
@@ -121,11 +126,12 @@ export class LifecycleManager {
     }
 
     try {
-      // 1. Clear scheduled background timers
+      // 1. Clear scheduled background timers & stop outbox worker
       if (this.otpCleanupTimer) {
         clearInterval(this.otpCleanupTimer);
         this.otpCleanupTimer = null;
       }
+      await outboxWorker.stop();
 
       // 2. Stop accepting new HTTP requests
       if (this.httpServer && this.httpServer.listening) {

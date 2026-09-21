@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import cors from "cors";
+import helmet from "helmet";
 import dotenv from "dotenv";
 
 import workerRoutes from "./features/worker/workerRoutes";
@@ -20,6 +21,7 @@ import healthRoutes from "./features/health/healthRoutes";
 
 import { setupSwagger } from "./config/swagger";
 import { requestLogger } from "./middlewares/requestLogger";
+import { requestTimeout } from "./middlewares/requestTimeout";
 import { errorHandler } from "./middlewares/errorHandler";
 import { lifecycleManager } from "./lifecycle/lifecycleManager";
 import { logger } from "./utils/logger";
@@ -31,8 +33,20 @@ const httpServer = createServer(app);
 
 const port = process.env.PORT || 5000;
 
+// 1. Explicit Trusted Proxy Configuration (Issue #43)
+const trustProxyConfig = process.env.TRUST_PROXY || (process.env.NODE_ENV === "production" ? 1 : false);
+app.set("trust proxy", trustProxyConfig);
+
+// 2. Helmet Security Headers (Issue #43)
+app.use(
+  helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === "production" ? undefined : false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
 /**
- * Allowed Origins
+ * Allowed Origins (Issue #43)
  */
 const allowedOrigins = [
   process.env.FRONT_END_URL,
@@ -41,10 +55,10 @@ const allowedOrigins = [
   "https://labourbaba.com",
   "https://www.labourbaba.in",
   "https://www.labourbaba.com"
-].filter(Boolean);
+].filter(Boolean) as string[];
 
 /**
- * Express CORS
+ * Express CORS (Issue #43)
  */
 app.use(
   cors({
@@ -60,7 +74,7 @@ app.use(
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-Correlation-ID"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-Correlation-ID", "X-Device-ID"],
   })
 );
 
@@ -73,14 +87,27 @@ declare global {
   }
 }
 
-app.use(express.json({
-  verify: (req: any, _res, buf) => {
-    req.rawBody = buf;
-  },
-}));
-
-// Canonical structured request logging (Issue #39)
+// 3. Request Logging & Correlation Context (Issue #41)
 app.use(requestLogger);
+
+// 4. Bounded Request Timeout (Issue #43)
+app.use(requestTimeout({ timeoutMs: process.env.NODE_ENV === "test" ? 10000 : 30000 }));
+
+// 5. Explicit Body Limit Parsers (1MB limit with rawBody preservation for webhooks) (Issue #43)
+app.use(
+  express.json({
+    limit: "1mb",
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "1mb",
+  })
+);
 
 /**
  * Socket.IO
@@ -155,12 +182,13 @@ app.use((req: Request, res: Response) => {
  */
 app.use(errorHandler);
 
-// Issue #22: import notification worker so BullMQ consumer starts on bootstrap
+// Issue #22 & #44: Background notification and outbox workers
 import "./workers/notificationWorker";
+import "./workers/outboxWorker";
 
 async function startServer() {
   try {
-    // Execute authoritative, validated startup sequence (Issue #38)
+    // Execute authoritative, validated startup sequence (Issue #38 & #45)
     await lifecycleManager.startup();
 
     httpServer.listen(port, () => {

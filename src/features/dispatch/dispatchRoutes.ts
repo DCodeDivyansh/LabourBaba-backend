@@ -70,9 +70,11 @@ registry.registerPath({
   responses: { 200: { description: "Success", content: { "application/json": { schema: z.object({ success: z.boolean(), data: JobDispatchSchema }) } } } }
 });
 
+import { dispatchActionRateLimiter } from "../../middlewares/rateLimiter";
+
 router.get("/incoming", authenticateJWT, requireRole(UserRole.WORKER), getIncoming);
-router.post("/:requirementId/accept", authenticateJWT, requireRole(UserRole.WORKER), validateParams(RequirementIdParamSchema), acceptJob);
-router.post("/:requirementId/decline", authenticateJWT, requireRole(UserRole.WORKER), validateParams(RequirementIdParamSchema), declineJob);
+router.post("/:requirementId/accept", authenticateJWT, requireRole(UserRole.WORKER), dispatchActionRateLimiter, validateParams(RequirementIdParamSchema), acceptJob);
+router.post("/:requirementId/decline", authenticateJWT, requireRole(UserRole.WORKER), dispatchActionRateLimiter, validateParams(RequirementIdParamSchema), declineJob);
 router.get("/:requirementId/waves", authenticateJWT, validateParams(RequirementIdParamSchema), getWaves);
 router.get("/:requirementId", authenticateJWT, requireRole(UserRole.WORKER), validateParams(RequirementIdParamSchema), getDispatchDetail);
 

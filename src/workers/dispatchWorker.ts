@@ -250,6 +250,38 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
       })),
       skipDuplicates: true,
     });
+
+    // Durable Notification Outbox (Issue #44): Record outbox rows inside the same transaction
+    if (typeof client.notification_outbox?.createMany === 'function') {
+      try {
+        await client.notification_outbox.createMany({
+          data: waveWorkers.map((w) => ({
+            event_type: 'incoming_job',
+            aggregate_type: 'requirement',
+            aggregate_id: requirementId,
+            recipient_type: 'worker',
+            recipient_id: w.id,
+            payload: {
+              jobId,
+              requirementId,
+              waveNumber,
+              title: 'New Job',
+              body: req.skill_type || 'New Job Opportunity',
+              ratePerDay: req.rate_per_day,
+              location: req.job?.location || null,
+              customerName: req.job?.customer?.name || 'Customer',
+              expiresAt: expiresAt.toISOString(),
+            },
+            idempotency_key: `incoming_job:${requirementId}:${waveNumber}:${w.id}`,
+            correlation_id: data.correlationId || null,
+            status: 'PENDING',
+          })),
+          skipDuplicates: true,
+        });
+      } catch (outboxErr: any) {
+        console.warn(`[dispatchWorker] Note on outbox creation: ${outboxErr.message}`);
+      }
+    }
   };
 
   try {

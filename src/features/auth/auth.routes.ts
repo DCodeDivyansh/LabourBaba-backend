@@ -197,11 +197,13 @@ registry.registerPath({
   },
 });
 
+import { authEndpointRateLimiter } from "../../middlewares/rateLimiter";
+
 // ── Routes ───────────────────────────────────────────────────────────────────
 
 router.post("/send-otp", otpRequestRateLimiter, validateBody(SendOtpReqSchema), sendOtp);
 router.post("/verify-otp", otpVerifyRateLimiter, validateBody(AuthVerifyOtpReqSchema), verifyOtp);
-router.post("/refresh", validateBody(RefreshTokenReqSchema), refreshToken);
+router.post("/refresh", authEndpointRateLimiter, validateBody(RefreshTokenReqSchema), refreshToken);
 
 // Logout requires authentication to identify the session owner
 router.post("/logout", authenticateJWT, validateBody(LogoutReqSchema), logout);

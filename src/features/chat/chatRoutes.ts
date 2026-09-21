@@ -27,6 +27,8 @@ registry.registerPath({
   responses: { 201: { description: "Created", content: { "application/json": { schema: z.object({ success: z.boolean(), data: MessageSchema }) } } } }
 });
 
+import { chatMessageRateLimiter } from "../../middlewares/rateLimiter";
+
 router.get(
   "/:bookingId/messages",
   authenticateJWT,
@@ -37,6 +39,7 @@ router.get(
 router.post(
   "/:bookingId/messages",
   authenticateJWT,
+  chatMessageRateLimiter,
   validateParams(BookingIdParamSchema),
   validateBody(SendChatMessageBodySchema),
   sendMessage
