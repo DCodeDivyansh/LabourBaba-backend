@@ -242,3 +242,158 @@ export function verifyWebhookSignature(
 
   return crypto.timingSafeEqual(expectedBuf, receivedBuf);
 }
+
+// ── createRefund ───────────────────────────────────────────────────────────────
+
+export interface CreateRefundParams {
+  /** Real Razorpay payment ID (pay_xxx) to refund. */
+  razorpayPaymentId: string;
+  /** Optional refund amount in paise. If omitted, Razorpay executes a full refund. */
+  amountPaise?: number;
+  /** Notes metadata for reconciliation. */
+  notes?: Record<string, string>;
+  /** Optional receipt reference identifier. */
+  receipt?: string;
+}
+
+export interface RazorpayRefundResult {
+  /** Real Razorpay refund ID (e.g. "rfnd_abc123"). */
+  razorpayRefundId: string;
+  paymentId: string;
+  amount: number;
+  currency: string;
+  status: string; // "processed" | "pending" | "failed"
+}
+
+/**
+ * Executes a real provider refund via the Razorpay API.
+ */
+export async function createRefund(
+  params: CreateRefundParams,
+): Promise<RazorpayRefundResult> {
+  const { razorpayPaymentId, amountPaise, notes, receipt } = params;
+
+  if (!razorpayPaymentId || typeof razorpayPaymentId !== "string" || razorpayPaymentId.trim() === "") {
+    throw new RazorpayProviderError(
+      "Valid Razorpay payment ID is required for refund.",
+      "REFUND_INVALID_PAYMENT_ID",
+      422,
+    );
+  }
+
+  if (amountPaise !== undefined && (!Number.isInteger(amountPaise) || amountPaise <= 0)) {
+    throw new RazorpayProviderError(
+      "Refund amount must be a positive integer in paise.",
+      "REFUND_AMOUNT_INVALID",
+      422,
+    );
+  }
+
+  const razorpay = getRazorpayInstance();
+
+  try {
+    const refundPayload: any = {
+      notes: notes ?? {},
+    };
+    if (amountPaise !== undefined) {
+      refundPayload.amount = amountPaise;
+    }
+    if (receipt) {
+      refundPayload.receipt = receipt.substring(0, 40);
+    }
+
+    const refund = await (razorpay.payments as any).refund(
+      razorpayPaymentId,
+      refundPayload,
+    );
+
+    if (!refund || typeof refund.id !== "string" || refund.id.trim() === "") {
+      throw new RazorpayProviderError(
+        "Payment provider returned an invalid refund ID.",
+        "REFUND_PROVIDER_RESPONSE_INVALID",
+        502,
+      );
+    }
+
+    return {
+      razorpayRefundId: refund.id,
+      paymentId: refund.payment_id || razorpayPaymentId,
+      amount: Number(refund.amount || amountPaise || 0),
+      currency: (refund.currency || "INR").toUpperCase(),
+      status: refund.status || "processed",
+    };
+  } catch (sdkErr: any) {
+    if (sdkErr instanceof RazorpayProviderError) throw sdkErr;
+    const safeCode = sdkErr?.error?.code ?? sdkErr?.statusCode ?? "UNKNOWN";
+    const safeDesc = sdkErr?.error?.description ?? sdkErr?.message ?? "Refund provider failure";
+    console.error(
+      `[razorpayProvider] Razorpay refund failed: code=${safeCode}, description=${safeDesc}`,
+    );
+    throw new RazorpayProviderError(
+      `Payment provider failed to process refund: ${safeDesc}`,
+      "REFUND_PROVIDER_FAILED",
+      502,
+    );
+  }
+}
+
+// ── fetchOrder & fetchPayment (Reconciliation) ────────────────────────────────
+
+/**
+ * Fetches order details directly from Razorpay for reconciliation.
+ */
+export async function fetchOrder(orderId: string): Promise<{
+  id: string;
+  amount: number;
+  currency: string;
+  status: string; // "created" | "attempted" | "paid"
+  attempts: number;
+}> {
+  const razorpay = getRazorpayInstance();
+  try {
+    const order = await razorpay.orders.fetch(orderId);
+    return {
+      id: order.id,
+      amount: Number(order.amount),
+      currency: (order.currency || "INR").toUpperCase(),
+      status: order.status,
+      attempts: Number(order.attempts || 0),
+    };
+  } catch (err: any) {
+    throw new RazorpayProviderError(
+      `Failed to fetch provider order: ${err?.message || "unknown"}`,
+      "FETCH_ORDER_FAILED",
+      502,
+    );
+  }
+}
+
+/**
+ * Fetches payment details directly from Razorpay for reconciliation.
+ */
+export async function fetchPayment(paymentId: string): Promise<{
+  id: string;
+  orderId: string;
+  amount: number;
+  currency: string;
+  status: string; // "created" | "authorized" | "captured" | "refunded" | "failed"
+}> {
+  const razorpay = getRazorpayInstance();
+  try {
+    const payment = await razorpay.payments.fetch(paymentId);
+    return {
+      id: payment.id,
+      orderId: (payment as any).order_id,
+      amount: Number(payment.amount),
+      currency: (payment.currency || "INR").toUpperCase(),
+      status: payment.status,
+    };
+  } catch (err: any) {
+    throw new RazorpayProviderError(
+      `Failed to fetch provider payment: ${err?.message || "unknown"}`,
+      "FETCH_PAYMENT_FAILED",
+      502,
+    );
+  }
+}
+

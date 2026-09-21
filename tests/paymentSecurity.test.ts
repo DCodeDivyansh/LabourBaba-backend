@@ -46,49 +46,52 @@ import crypto from "crypto";
 
 // ── Prisma mock ────────────────────────────────────────────────────────────────
 
-jest.mock("../src/config/prisma", () => ({
-  __esModule: true,
-  default: {
-    booking: {
-      findFirst: jest.fn(),
+jest.mock("../src/config/prisma", () => {
+  const mockPayment = {
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    updateMany: jest.fn(),
+  };
+  const mockPaymentWebhookEvent = {
+    create: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  };
+  const mockBooking = {
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
+  };
+
+  return {
+    __esModule: true,
+    default: {
+      booking: mockBooking,
+      payment: mockPayment,
+      paymentWebhookEvent: mockPaymentWebhookEvent,
+      $transaction: jest.fn(async (callback: (tx: any) => Promise<any>) => {
+        return callback({
+          payment: mockPayment,
+          paymentWebhookEvent: mockPaymentWebhookEvent,
+        });
+      }),
     },
-    payment: {
-      findFirst: jest.fn(),
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      updateMany: jest.fn(),
-    },
-    // DB-backed idempotency table mock
-    paymentWebhookEvent: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
-    },
-    // Transaction: executes the callback with the same mock objects
-    $transaction: jest.fn(async (callback: (tx: any) => Promise<any>) => {
-      return callback({
-        payment: {
-          findFirst: jest.fn(),
-          findUnique: jest.fn(),
-          create: jest.fn(),
-          update: jest.fn(),
-          updateMany: jest.fn(),
-        },
-        paymentWebhookEvent: {
-          create: jest.fn(),
-          update: jest.fn(),
-        },
-      });
-    }),
-  },
-}));
+  };
+});
 
 // ── Razorpay provider mock ─────────────────────────────────────────────────────
 
 jest.mock("../src/providers/razorpay/razorpayProvider", () => ({
   ...jest.requireActual("../src/providers/razorpay/razorpayProvider"),
   createOrder: jest.fn(),
+  createRefund: jest.fn().mockResolvedValue({
+    razorpayRefundId: "rfnd_test123",
+    paymentId: "pay_TestXYZ999",
+    amount: 50000,
+    currency: "INR",
+    status: "processed",
+  }),
   verifyWebhookSignature: jest.fn(),
 }));
 
@@ -152,7 +155,7 @@ function makePayment(overrides: Record<string, any> = {}): Record<string, any> {
     id: PAYMENT_ID,
     booking_id: BOOKING_ID,
     razorpay_order_id: RAZORPAY_ORDER_ID,
-    razorpay_payment_id: null,
+    razorpay_payment_id: overrides.status === "COMPLETED" ? RAZORPAY_PAYMENT_ID : overrides.razorpay_payment_id ?? null,
     status: "PENDING",
     amount: EXPECTED_PAISE,
     currency: "INR",
@@ -205,6 +208,7 @@ function signPayload(body: string, secret: string): string {
 
 const mockPrisma = prisma as jest.Mocked<typeof prisma>;
 const mockCreateOrder = razorpayProvider.createOrder as jest.Mock;
+const mockCreateRefund = razorpayProvider.createRefund as jest.Mock;
 const mockVerifyWebhookSignature = razorpayProvider.verifyWebhookSignature as jest.Mock;
 
 // ── Transaction mock helper ────────────────────────────────────────────────────
@@ -224,6 +228,7 @@ function setupTransactionMock(overrides: {
 } = {}) {
   const txPayment = {
     findUnique: jest.fn().mockResolvedValue(overrides.paymentFindUnique ?? makePayment()),
+    update: jest.fn().mockResolvedValue({}),
     updateMany: jest.fn().mockResolvedValue(overrides.paymentUpdateMany ?? { count: 1 }),
   };
   const txWebhookEvent = {
@@ -250,6 +255,13 @@ beforeEach(() => {
 
   // Default happy-path DB state for order-creation tests
   mockCreateOrder.mockResolvedValue(makeProviderOrder());
+  mockCreateRefund.mockResolvedValue({
+    razorpayRefundId: "rfnd_test123",
+    paymentId: RAZORPAY_PAYMENT_ID,
+    amount: EXPECTED_PAISE,
+    currency: "INR",
+    status: "processed",
+  });
   (mockPrisma.payment.create as jest.Mock).mockResolvedValue(makePayment());
   (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue(makeBooking());
   (mockPrisma.payment.findFirst as jest.Mock).mockResolvedValue(null);
@@ -258,9 +270,10 @@ beforeEach(() => {
   // Default: signature verification passes
   mockVerifyWebhookSignature.mockReturnValue(true);
 
-  // Note: $transaction mock is NOT set here by default.
-  // Each webhook test that needs $transaction must call setupTransactionMock() itself.
-  // This avoids the beforeEach consuming a mock intended for a specific test.
+  // Default $transaction mock
+  (mockPrisma.$transaction as jest.Mock).mockImplementation(async (callback: any) => {
+    return callback(mockPrisma);
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1134,7 +1147,11 @@ describe("16. Webhook — Payment Integrity (P1–P7)", () => {
   it("P3: amount mismatch → payment not marked COMPLETED", async () => {
     // Webhook says amount=1 but local payment has amount=50000
     (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = { findUnique: jest.fn().mockResolvedValue(makePayment({ amount: EXPECTED_PAISE })), updateMany: jest.fn() };
+      const txPayment = {
+        findUnique: jest.fn().mockResolvedValue(makePayment({ amount: EXPECTED_PAISE })),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn(),
+      };
       const txWebhookEvent = {
         create: jest.fn().mockResolvedValue(makeWebhookEvent()),
         update: jest.fn().mockResolvedValue(makeWebhookEvent()),
@@ -1154,7 +1171,11 @@ describe("16. Webhook — Payment Integrity (P1–P7)", () => {
   // P4: Currency mismatch → payment NOT marked COMPLETED
   it("P4: currency mismatch → payment not marked COMPLETED", async () => {
     (mockPrisma.$transaction as jest.Mock).mockImplementationOnce(async (callback: any) => {
-      const txPayment = { findUnique: jest.fn().mockResolvedValue(makePayment({ currency: "INR" })), updateMany: jest.fn() };
+      const txPayment = {
+        findUnique: jest.fn().mockResolvedValue(makePayment({ currency: "INR" })),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn(),
+      };
       const txWebhookEvent = {
         create: jest.fn().mockResolvedValue(makeWebhookEvent()),
         update: jest.fn().mockResolvedValue(makeWebhookEvent()),
@@ -1400,8 +1421,8 @@ describe("18. Webhook — Configuration Tests (Cfg1–Cfg4)", () => {
 
 describe("19. Payment status ownership", () => {
   it("customer A can retrieve their payment status", async () => {
-    (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue({ id: BOOKING_ID });
-    (mockPrisma.payment.findUnique as jest.Mock).mockResolvedValue(makePayment());
+    (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue({ id: BOOKING_ID, customer_id: CUSTOMER_A_ID });
+    (mockPrisma.payment.findFirst as jest.Mock).mockResolvedValue(makePayment());
     const res = await request(app)
       .get(`/api/payments/${BOOKING_ID}`)
       .set("Authorization", `Bearer ${customerAToken()}`);
@@ -1433,7 +1454,7 @@ describe("20. Refund ownership and lifecycle", () => {
   });
 
   it("cannot refund a PENDING payment (409)", async () => {
-    (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue({ id: BOOKING_ID });
+    (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue({ id: BOOKING_ID, customer_id: CUSTOMER_A_ID });
     (mockPrisma.payment.findUnique as jest.Mock).mockResolvedValue(
       makePayment({ status: "PENDING" }),
     );
@@ -1446,9 +1467,9 @@ describe("20. Refund ownership and lifecycle", () => {
   });
 
   it("can refund a COMPLETED payment", async () => {
-    (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue({ id: BOOKING_ID });
+    (mockPrisma.booking.findFirst as jest.Mock).mockResolvedValue({ id: BOOKING_ID, customer_id: CUSTOMER_A_ID });
     (mockPrisma.payment.findUnique as jest.Mock).mockResolvedValue(
-      makePayment({ status: "COMPLETED" }),
+      makePayment({ status: "COMPLETED", razorpay_payment_id: RAZORPAY_PAYMENT_ID }),
     );
     (mockPrisma.payment.update as jest.Mock).mockResolvedValue(
       makePayment({ status: "REFUNDED" }),

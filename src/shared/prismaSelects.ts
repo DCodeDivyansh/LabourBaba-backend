@@ -608,6 +608,9 @@ export interface PaymentDTO {
   booking_id: string;
   razorpay_order_id: string | null;
   razorpay_payment_id?: string | null;
+  razorpay_refund_id?: string | null;
+  refund_amount?: number | null;
+  refund_status?: string | null;
   status: string | null;
   amount: number | null;
   currency?: string | null;
@@ -624,6 +627,15 @@ export function toPaymentDTO(payment: any): PaymentDTO | null {
   };
   if (payment.razorpay_payment_id !== undefined) {
     dto.razorpay_payment_id = payment.razorpay_payment_id;
+  }
+  if (payment.razorpay_refund_id !== undefined) {
+    dto.razorpay_refund_id = payment.razorpay_refund_id;
+  }
+  if (payment.refund_amount !== undefined) {
+    dto.refund_amount = payment.refund_amount;
+  }
+  if (payment.refund_status !== undefined) {
+    dto.refund_status = payment.refund_status;
   }
   if (payment.currency !== undefined) {
     dto.currency = payment.currency;

@@ -19,6 +19,7 @@ import { assertFcmConfig } from '../shared/fcm';
 import { reconcileDispatchState } from '../features/dispatch/dispatchReconciliationService';
 import { outboxService } from '../services/outboxService';
 import { outboxWorker } from '../workers/outboxWorker';
+import { paymentReconciliationWorker } from '../workers/paymentReconciliationWorker';
 import { authService } from '../features/auth/auth.services';
 import { logger } from '../utils/logger';
 
@@ -126,12 +127,13 @@ export class LifecycleManager {
     }
 
     try {
-      // 1. Clear scheduled background timers & stop outbox worker
+      // 1. Clear scheduled background timers & stop outbox worker & reconciliation worker
       if (this.otpCleanupTimer) {
         clearInterval(this.otpCleanupTimer);
         this.otpCleanupTimer = null;
       }
       await outboxWorker.stop();
+      paymentReconciliationWorker.stop();
 
       // 2. Stop accepting new HTTP requests
       if (this.httpServer && this.httpServer.listening) {

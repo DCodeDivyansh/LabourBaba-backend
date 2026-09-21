@@ -170,8 +170,9 @@ export const refundPaymentHandler = async (
   try {
     const actor = req.user!;
     const { bookingId } = req.params as any;
+    const { amount, reason } = req.body ?? {};
 
-    const result = await refundPayment(bookingId, actor);
+    const result = await refundPayment(bookingId, actor, amount, reason);
     res.status(200).json(result);
   } catch (error) {
     handlePaymentError(error, res);
