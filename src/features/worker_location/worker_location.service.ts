@@ -1,5 +1,6 @@
 import prisma from "../../config/prisma";
 import { toWorkerLocationDTO } from "../../shared/prismaSelects";
+import { validateCoordinatePair } from "../../utils/coordinateValidator";
 
 export class WorkerLocationServiceError extends Error {
   statusCode: number;
@@ -25,18 +26,13 @@ export const workerLocationService = {
       throw new WorkerLocationServiceError("Authenticated worker ID is required", 401);
     }
 
-    if (
-      typeof latitude !== "number" ||
-      typeof longitude !== "number" ||
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude) ||
-      latitude < -90 ||
-      latitude > 90 ||
-      longitude < -180 ||
-      longitude > 180
-    ) {
-      throw new WorkerLocationServiceError("Invalid geographic coordinates", 400);
+    const validation = validateCoordinatePair(latitude, longitude);
+    if (!validation.isValid) {
+      throw new WorkerLocationServiceError(`Invalid geographic coordinates: ${validation.error || "out of bounds"}`, 400);
     }
+
+    const lat = validation.latitude!;
+    const lon = validation.longitude!;
 
     const now = new Date();
 
@@ -55,7 +51,7 @@ export const workerLocationService = {
       await tx.$executeRaw`
         UPDATE worker
         SET location_geo = ST_SetSRID(
-              ST_MakePoint(${longitude}, ${latitude}),
+              ST_MakePoint(${lon}, ${lat}),
               4326
             )::geography,
             last_location_at = ${now}
@@ -74,7 +70,7 @@ export const workerLocationService = {
       await tx.$executeRaw`
         UPDATE worker_location
         SET location_geo = ST_SetSRID(
-          ST_MakePoint(${longitude}, ${latitude}),
+          ST_MakePoint(${lon}, ${lat}),
           4326
         )::geography
         WHERE id = ${workerLocation.id}::uuid;
@@ -83,8 +79,8 @@ export const workerLocationService = {
       return toWorkerLocationDTO({
         id: workerLocation.id,
         worker_id: workerId,
-        latitude,
-        longitude,
+        latitude: lat,
+        longitude: lon,
         updated_at: now,
       });
     });

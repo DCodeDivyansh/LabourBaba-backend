@@ -3,6 +3,7 @@ import { dispatchWaveConfig } from '../../config/dispatchWaveConfig';
 import { locationFreshnessConfig } from '../../config/locationFreshnessConfig';
 import { isLocationFresh, getFreshnessCutoffDate } from './locationFreshnessPolicy';
 import { locationFreshnessTelemetry } from './locationFreshnessTelemetry';
+import { validateCoordinatePair } from '../../utils/coordinateValidator';
 
 export interface DispatchWaveConfig {
   waveNumber: number;
@@ -50,28 +51,13 @@ export function getLocationFreshnessHours(): number {
 }
 
 /**
- * Strict coordinate validator.
+ * Strict coordinate validator for dispatch operations.
+ * Delegates to the authoritative validateCoordinatePair.
  * Validates that latitude is in [-90, 90] and longitude is in [-180, 180].
  * (0, 0) is strictly valid (Null Island) and must not be rejected by falsy checks.
  */
 export function validateDispatchCoordinates(latitude: unknown, longitude: unknown): boolean {
-  if (
-    latitude === null ||
-    latitude === undefined ||
-    longitude === null ||
-    longitude === undefined ||
-    typeof latitude !== 'number' ||
-    typeof longitude !== 'number' ||
-    !Number.isFinite(latitude) ||
-    !Number.isFinite(longitude) ||
-    latitude < -90 ||
-    latitude > 90 ||
-    longitude < -180 ||
-    longitude > 180
-  ) {
-    return false;
-  }
-  return true;
+  return validateCoordinatePair(latitude, longitude).isValid;
 }
 
 export interface EligibleWorkerCandidate {

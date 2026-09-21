@@ -198,16 +198,36 @@ export const LoginWorkerReqSchema = z.object({
   password: z.string().min(1, "Password is required").openapi({ example: "mysecurepassword" }),
 }).openapi("LoginWorkerReq");
 
+export const LatitudeSchema = z.number({ message: "Latitude must be a valid number" })
+  .finite("Latitude must be a finite number")
+  .min(-90, "Latitude must be between -90 and 90")
+  .max(90, "Latitude must be between -90 and 90");
+
+export const LongitudeSchema = z.number({ message: "Longitude must be a valid number" })
+  .finite("Longitude must be a finite number")
+  .min(-180, "Longitude must be between -180 and 180")
+  .max(180, "Longitude must be between -180 and 180");
+
 export const CreateJobReqSchema = z.object({
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
+  latitude: LatitudeSchema.optional(),
+  longitude: LongitudeSchema.optional(),
   location: z.string().optional(),
   requirements: z.array(z.object({
     skill_type: z.string().optional(),
     worker_count_needed: z.number().int().positive(),
     rate_per_day: z.number().int().optional(),
   })).optional(),
-}).strict().openapi("CreateJobReq");
+}).strict().refine(
+  (data) => {
+    const hasLat = data.latitude !== undefined && data.latitude !== null;
+    const hasLon = data.longitude !== undefined && data.longitude !== null;
+    return (hasLat && hasLon) || (!hasLat && !hasLon);
+  },
+  {
+    message: "Latitude and longitude must be provided together as a pair",
+    path: ["longitude"],
+  }
+).openapi("CreateJobReq");
 
 export const ApplyJobReqSchema = z.object({
   job_id: z.string().uuid("Invalid job UUID"),
@@ -273,21 +293,15 @@ export const SendChatMessageBodySchema = z.object({
 }).strict().openapi("SendChatMessageBody");
 
 export const UpdateWorkerLocationReqSchema = z.object({
-  latitude: z.number({ message: "Latitude must be a valid number" })
-    .finite("Latitude must be a finite number")
-    .min(-90, "Latitude must be between -90 and 90")
-    .max(90, "Latitude must be between -90 and 90"),
-  longitude: z.number({ message: "Longitude must be a valid number" })
-    .finite("Longitude must be a finite number")
-    .min(-180, "Longitude must be between -180 and 180")
-    .max(180, "Longitude must be between -180 and 180"),
+  latitude: LatitudeSchema,
+  longitude: LongitudeSchema,
   location: z.string().optional(),
 }).strict().openapi("UpdateWorkerLocationReq");
 
 export const LocateWorkerReqSchema = z.object({
   id: z.string().uuid("Invalid worker UUID").openapi({ example: "123e4567-e89b-12d3-a456-426614174000" }),
-  lon: z.number().openapi({ example: 72.8777 }),
-  lat: z.number().openapi({ example: 19.0760 }),
+  lon: LongitudeSchema.openapi({ example: 72.8777 }),
+  lat: LatitudeSchema.openapi({ example: 19.0760 }),
 }).openapi("LocateWorkerReq");
 
 export const UploadWorkerDocumentReqSchema = z.object({

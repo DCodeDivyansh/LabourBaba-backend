@@ -20,6 +20,7 @@ import {
 import { isValidIdentifier } from "../schemas";
 import { setSocketServer } from "./socketLifecycle";
 import { workerLocationService } from "../features/worker_location/worker_location.service";
+import { validateCoordinatePair } from "../utils/coordinateValidator";
 
 /**
  * Registers secure Socket.IO event handlers.
@@ -186,16 +187,32 @@ export function registerSocketHandlers(io: Server): void {
             return;
           }
 
-          if (!customerId || lat === undefined || lng === undefined) {
+          if (!customerId) {
             const response: SocketAckResponse = {
               success: false,
               code: "INVALID_REQUEST",
-              message: "Missing required fields: customerId, lat, lng",
+              message: "Missing required field: customerId",
             };
             socket.emit("error", response);
             callback?.(response);
             return;
           }
+
+          // Enforce coordinate validation contract
+          const coordValidation = validateCoordinatePair(lat, lng);
+          if (!coordValidation.isValid) {
+            const response: SocketAckResponse = {
+              success: false,
+              code: "INVALID_REQUEST",
+              message: coordValidation.error || "Invalid coordinates",
+            };
+            socket.emit("error", response);
+            callback?.(response);
+            return;
+          }
+
+          const validLat = coordValidation.latitude!;
+          const validLng = coordValidation.longitude!;
 
           // Verify worker has an active assigned booking or job with this customer
           const activeRelationship = await prisma.booking.findFirst({
@@ -225,7 +242,7 @@ export function registerSocketHandlers(io: Server): void {
 
           // Persist current location canonically to database
           try {
-            await workerLocationService.updateLocation(user.id, lat, lng);
+            await workerLocationService.updateLocation(user.id, validLat, validLng);
           } catch (locErr: any) {
             console.warn(`[SOCKET] Failed to persist worker location for ${user.id}:`, locErr.message);
             const response: SocketAckResponse = {
@@ -241,8 +258,8 @@ export function registerSocketHandlers(io: Server): void {
           // Authoritative broadcast using trusted socket.data.user.id
           io.to(getCustomerPersonalRoom(customerId)).emit("worker:location", {
             workerId: user.id,
-            lat,
-            lng,
+            lat: validLat,
+            lng: validLng,
           });
 
           callback?.({ success: true });

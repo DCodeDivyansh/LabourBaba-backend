@@ -6,31 +6,46 @@ import { jobPolicy, assertPolicy, AuthenticatedUser, PolicyActor, AuthorizationE
 import { jobStateService, JobAction, JobStatus, JobTransitionActor } from './jobStateMachine';
 import { RequirementStatus } from './requirementStateMachine';
 import { generateDispatchOperationId } from '../dispatch/dispatchOperation';
+import { validateOptionalCoordinatePair } from '../../utils/coordinateValidator';
 
 export const jobService = {
   async createJob(customerId: string, payload: CreateJobReq) {
+    const coordValidation = validateOptionalCoordinatePair(payload.latitude, payload.longitude);
+    if (!coordValidation.isValid) {
+      const err = new Error(coordValidation.error || "Invalid geographic coordinates") as any;
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const hasCoords = coordValidation.latitude !== undefined && coordValidation.longitude !== undefined;
+    const validLat = coordValidation.latitude;
+    const validLon = coordValidation.longitude;
+
     const job = await prisma.$transaction(async (tx) => {
       const job = await tx.job.create({
         data: {
           customer_id: customerId,
-          latitude: payload.latitude,
-          longitude: payload.longitude,
+          latitude: validLat ?? null,
+          longitude: validLon ?? null,
           location: payload.location,
           status: JobStatus.OPEN,
           dispatch_status: 'PENDING',
         },
       });
-      try {
-        await tx.$executeRaw`
-          UPDATE job
-          SET location_geo = ST_SetSRID(
-            ST_MakePoint(${payload.longitude}, ${payload.latitude}),
-            4326
-          )::geography
-          WHERE id = ${job.id}::uuid;
-        `;
-      } catch (err) {
-        console.error("UPDATE failed:", err);
+
+      if (hasCoords) {
+        try {
+          await tx.$executeRaw`
+            UPDATE job
+            SET location_geo = ST_SetSRID(
+              ST_MakePoint(${validLon}, ${validLat}),
+              4326
+            )::geography
+            WHERE id = ${job.id}::uuid;
+          `;
+        } catch (err) {
+          console.error("UPDATE failed:", err);
+        }
       }
 
       // Record initial creation in transition history
@@ -97,7 +112,7 @@ export const jobService = {
     // Fire BullMQ dispatch for all requirements with deterministic job IDs
     // Durable, crash-resilient dispatch scheduling backed by Redis
     await Promise.all(
-      createdRequirements.map(async (req) => {
+      (createdRequirements || []).map(async (req) => {
         try {
           const operationId = generateDispatchOperationId({ requirementId: req.id, waveNumber: 1 });
           await dispatchQueue.add(

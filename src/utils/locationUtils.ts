@@ -1,49 +1,70 @@
+import { validateCoordinatePair } from './coordinateValidator';
+
 /**
- * Convert longitude and latitude to PostGIS geography format
- * @param longitude - The longitude value
- * @param latitude - The latitude value
+ * Convert longitude and latitude to PostGIS geography format.
+ * PostGIS POINT order is POINT(longitude latitude).
+ *
+ * @param longitude - The longitude value [-180, 180]
+ * @param latitude - The latitude value [-90, 90]
  * @returns PostGIS POINT format string
  */
 export const convertToGeography = (
   longitude: number,
-  latitude: number
+  latitude: number,
 ): string => {
-  if (longitude < -180 || longitude > 180) {
-    throw new Error("Longitude must be between -180 and 180");
+  const result = validateCoordinatePair(latitude, longitude);
+  if (!result.isValid) {
+    throw new Error(result.error || 'Invalid geographic coordinates');
   }
-  if (latitude < -90 || latitude > 90) {
-    throw new Error("Latitude must be between -90 and 90");
-  }
-  return `POINT(${longitude} ${latitude})`;
+  return `POINT(${result.longitude} ${result.latitude})`;
 };
 
 /**
- * Convert PostGIS geography to GeoJSON format
- * @param longitude - The longitude value
- * @param latitude - The latitude value
+ * Convert PostGIS geography to GeoJSON format.
+ * GeoJSON coordinate order is [longitude, latitude].
+ *
+ * @param longitude - The longitude value [-180, 180]
+ * @param latitude - The latitude value [-90, 90]
  * @returns GeoJSON Point object
  */
 export const convertToGeoJSON = (longitude: number, latitude: number) => {
+  const result = validateCoordinatePair(latitude, longitude);
+  if (!result.isValid) {
+    throw new Error(result.error || 'Invalid geographic coordinates');
+  }
   return {
-    type: "Point",
-    coordinates: [longitude, latitude],
+    type: 'Point' as const,
+    coordinates: [result.longitude!, result.latitude!],
   };
 };
 
 /**
- * Parse geography string to coordinates
+ * Parse geography string to coordinates.
+ * Expects "POINT(longitude latitude)" format.
+ *
  * @param geography - PostGIS geography string (e.g., "POINT(72.8777 19.0760)")
  * @returns Object with longitude and latitude
  */
 export const parseGeography = (
-  geography: string
+  geography: string,
 ): { longitude: number; latitude: number } => {
-  const match = geography.match(/POINT\(([^ ]+) ([^ ]+)\)/);
-  if (!match) {
-    throw new Error("Invalid geography format");
+  if (typeof geography !== 'string') {
+    throw new Error('Invalid geography format: string expected');
   }
+  const match = geography.match(/POINT\(([^ ]+)\s+([^ ]+)\)/i);
+  if (!match) {
+    throw new Error('Invalid geography format: expected POINT(lon lat)');
+  }
+  const lon = parseFloat(match[1]);
+  const lat = parseFloat(match[2]);
+
+  const result = validateCoordinatePair(lat, lon);
+  if (!result.isValid) {
+    throw new Error(`Invalid geography coordinates in point: ${result.error}`);
+  }
+
   return {
-    longitude: parseFloat(match[1]),
-    latitude: parseFloat(match[2]),
+    longitude: result.longitude!,
+    latitude: result.latitude!,
   };
 };
