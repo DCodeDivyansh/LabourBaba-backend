@@ -131,13 +131,13 @@ describe("P0 Finding #8 Security Regression Suite: BullMQ Dispatch Geographic Fi
         expect(sql).toContain("w.verification_status = 'verified'");
         expect(sql).toContain("ORDER BY dist_m ASC");
 
-        // Values alignment: [lon, lat, lon, lat, radiusMeters, ...]
-        const [jobLon1, jobLat1, jobLon2, jobLat2, radiusMeters, skillType, skillType2, skillType3, excludeDispatched, reqId, reqId2, requireFreshness, maxAgeHours] = values;
+        // Values alignment: [lon, lat, lon, lat, radiusMeters, skillType, skillType, skillType, excludeDispatched, reqId, requireFreshness, maxAgeSeconds, ...]
+        const [jobLon1, jobLat1, jobLon2, jobLat2, radiusMeters, skillType, skillType2, skillType3, excludeDispatched, reqId, requireFreshness, maxAgeSeconds] = values;
         expect(jobLon1).toBe(jobLon2);
         expect(jobLat1).toBe(jobLat2);
 
         const now = Date.now();
-        const freshnessMs = (maxAgeHours || DEFAULT_LOCATION_FRESHNESS_HOURS) * 60 * 60 * 1000;
+        const freshnessMs = (maxAgeSeconds || 300) * 1000;
 
         // Filter workers through exact database-level rules
         const eligible = mockWorkers

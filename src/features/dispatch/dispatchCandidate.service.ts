@@ -1,5 +1,8 @@
 import prisma from '../../config/prisma';
 import { dispatchWaveConfig } from '../../config/dispatchWaveConfig';
+import { locationFreshnessConfig } from '../../config/locationFreshnessConfig';
+import { isLocationFresh, getFreshnessCutoffDate } from './locationFreshnessPolicy';
+import { locationFreshnessTelemetry } from './locationFreshnessTelemetry';
 
 export interface DispatchWaveConfig {
   waveNumber: number;
@@ -27,22 +30,23 @@ export function getWaveRadiusMeters(waveNumber: number): number {
 }
 
 /**
- * Location freshness window in hours.
- * Defaults to 24 hours. Can be overridden via DISPATCH_LOCATION_FRESHNESS_HOURS.
+ * Operational location freshness window in seconds.
+ * Defaults to 300 seconds (5 minutes). Configured via LOCATION_FRESHNESS_MAX_AGE_SECONDS.
  * Workers whose location has not been updated within this window are considered stale
  * and excluded from location-sensitive dispatch.
  */
-export const DEFAULT_LOCATION_FRESHNESS_HOURS = 24;
+export const DEFAULT_LOCATION_FRESHNESS_SECONDS = locationFreshnessConfig.maxAgeSeconds;
 
+export function getLocationFreshnessSeconds(): number {
+  return locationFreshnessConfig.maxAgeSeconds;
+}
+
+/** @deprecated Use DEFAULT_LOCATION_FRESHNESS_SECONDS or locationFreshnessConfig.maxAgeSeconds */
+export const DEFAULT_LOCATION_FRESHNESS_HOURS = DEFAULT_LOCATION_FRESHNESS_SECONDS / 3600;
+
+/** @deprecated Use getLocationFreshnessSeconds */
 export function getLocationFreshnessHours(): number {
-  const envVal = process.env.DISPATCH_LOCATION_FRESHNESS_HOURS || process.env.LOCATION_FRESHNESS_HOURS;
-  if (envVal) {
-    const parsed = parseFloat(envVal);
-    if (Number.isFinite(parsed) && parsed > 0) {
-      return parsed;
-    }
-  }
-  return DEFAULT_LOCATION_FRESHNESS_HOURS;
+  return getLocationFreshnessSeconds() / 3600;
 }
 
 /**
@@ -142,6 +146,8 @@ export interface CandidateEligibilityParams {
   offset?: number;
   cursor?: string | null;
   requireLocationFreshness?: boolean;
+  maxLocationAgeSeconds?: number;
+  /** @deprecated Use maxLocationAgeSeconds instead */
   maxLocationAgeHours?: number;
   excludeDispatched?: boolean;
 }
@@ -155,7 +161,7 @@ export interface CandidateEligibilityParams {
  * 3. Worker Status: is_online = true, deleted_at IS NULL.
  * 4. Verification: verification_status = 'verified' (excludes pending, rejected, suspended).
  * 5. Spatial Filter: ST_DWithin on PostGIS geography (SRID 4326) with radius in meters.
- * 6. Location Freshness: worker_location updated within maxLocationAgeHours window.
+ * 6. Location Freshness: worker.last_location_at >= NOW() - maxLocationAgeSeconds (and <= NOW() + 60s).
  * 7. Skill Match: worker.skill_type or skill_category.name case-insensitive match.
  * 8. Dedup / In-flight: NOT EXISTS in job_dispatch for this requirement (database-level exclusion).
  * 9. Active Bookings: NOT EXISTS in booking with active status ('confirmed', 'in_progress').
@@ -176,9 +182,18 @@ export async function getEligibleCandidatePage(
     offset = 0,
     cursor = null,
     requireLocationFreshness = true,
-    maxLocationAgeHours = getLocationFreshnessHours(),
+    maxLocationAgeSeconds: rawSeconds,
+    maxLocationAgeHours,
     excludeDispatched = true,
   } = params;
+
+  // Resolve maxLocationAgeSeconds with fallback to hours or canonical config
+  const maxLocationAgeSeconds =
+    rawSeconds !== undefined && Number.isFinite(rawSeconds) && rawSeconds > 0
+      ? rawSeconds
+      : maxLocationAgeHours !== undefined && Number.isFinite(maxLocationAgeHours) && maxLocationAgeHours > 0
+        ? Math.round(maxLocationAgeHours * 3600)
+        : locationFreshnessConfig.maxAgeSeconds;
 
   const safeLimit = Math.max(1, Math.min(limit, 100));
 
@@ -249,15 +264,8 @@ export async function getEligibleCandidatePage(
               ${requireLocationFreshness}::boolean = false
               OR (
                 w.last_location_at IS NOT NULL
-                AND w.last_location_at >= NOW() - (${maxLocationAgeHours} || ' hours')::interval
-              )
-              OR (
-                w.last_location_at IS NULL
-                AND EXISTS (
-                  SELECT 1 FROM worker_location wl
-                  WHERE wl.worker_id = w.id
-                    AND wl.updated_at >= NOW() - (${maxLocationAgeHours} || ' hours')::interval
-                )
+                AND w.last_location_at >= NOW() - (${maxLocationAgeSeconds} || ' seconds')::interval
+                AND w.last_location_at <= NOW() + interval '60 seconds'
               )
             )
         AND (
