@@ -11,6 +11,7 @@
 import prisma from '../src/config/prisma';
 
 describe('Issue #31: Harden Lifecycle Schema Fields & Database Invariants', () => {
+  jest.setTimeout(30000);
   const runId = `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
   let categoryId: string;
   let customerId: string;

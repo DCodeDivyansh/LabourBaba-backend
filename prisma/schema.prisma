@@ -479,6 +479,7 @@ model refresh_session {
   expires_at     DateTime  @db.Timestamptz(6)
   last_used_at   DateTime? @db.Timestamptz(6)
   rotated_at     DateTime? @db.Timestamptz(6)
+  rotated_to_id  String?   @db.Uuid
   revoked_at     DateTime? @db.Timestamptz(6)
   revoked_reason String?   @db.VarChar(50)
 

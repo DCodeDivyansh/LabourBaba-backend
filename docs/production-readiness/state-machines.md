@@ -8,16 +8,25 @@ This document formalizes all canonical state machines across the LabourBaba back
 
 ### 1.1 Refresh Session Lifecycle
 ```
-[Created] -> ACTIVE -> (Token Rotation) -> REVOKED
-                   \-> (User Logout)    -> REVOKED
-                   \-> (Suspension)     -> REVOKED
-                   \-> (Time Expiry)    -> EXPIRED
+[Created] -> ACTIVE -> (Token Rotation)   -> ROTATED (links rotated_to_id)
+                   \-> (User Logout)     -> REVOKED (reason: LOGOUT)
+                   \-> (Suspension/Del)  -> REVOKED (reason: SUSPENDED)
+                   \-> (Reuse Detection) -> REVOKED (reason: REUSE on entire family)
+                   \-> (Time Expiry)     -> EXPIRED
 ```
-- **Allowed States**: `ACTIVE`, `REVOKED`, `EXPIRED`
+- **Allowed States**: `ACTIVE`, `ROTATED`, `REVOKED`, `EXPIRED`
+- **Fields & Invariants**:
+  - `token_hash`: bcrypt hash of raw secret. Raw token is never stored.
+  - `family_id`: UUID shared across all successor rotations in a session chain.
+  - `rotated_to_id`: UUID pointing to the direct successor session created upon rotation.
+  - `rotated_at`: Timestamp when the session was rotated.
+  - `revoked_at`: Timestamp when the session was revoked.
+  - `revoked_reason`: Reason code (`LOGOUT`, `REUSE`, `ADMIN`, `SUSPENDED`).
 - **Guards**: 
-  - Token lookup uses SHA-256 hashed token secret.
-  - If a `REVOKED` token is presented, all descendant tokens in the family (`family_id`) are revoked immediately (Reuse Attack Detection).
-- **PostgreSQL Invariant**: `CHECK (status IN ('ACTIVE', 'REVOKED', 'EXPIRED'))`
+  - Token lookup is O(1) by `sessionId` prefix, followed by constant-time secret comparison.
+  - Atomic rotation: `UPDATE refresh_session SET status = 'ROTATED', rotated_at = NOW() WHERE id = $1 AND status = 'ACTIVE'`.
+  - If a token with status `ROTATED` or `REVOKED` is presented, reuse detection triggers immediately, records an audit event, and revokes all sessions in the `family_id`.
+- **PostgreSQL Invariant**: `CHECK (status IN ('ACTIVE', 'ROTATED', 'REVOKED', 'EXPIRED'))`
 
 ### 1.2 Phone OTP Verification Lifecycle
 ```

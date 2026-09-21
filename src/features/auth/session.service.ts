@@ -24,6 +24,7 @@ import bcrypt from "bcrypt";
 import prisma from "../../config/prisma";
 import { UserRole } from "../../type/userRole";
 import { maskPhone } from "../../utils/authUtils";
+import { logger } from "../../utils/logger";
 import {
   REFRESH_TOKEN_SEPARATOR,
   REFRESH_SECRET_BYTES,
@@ -95,7 +96,7 @@ export const sessionService = {
 
     const rawToken = buildRawToken(session.id, secret);
 
-    console.log(`[SESSION] Created session ${session.id} for user ${opts.userId} (role: ${opts.userRole})`);
+    logger.info(`[SESSION] Created session ${session.id} for user ${opts.userId} (role: ${opts.userRole})`);
 
     return { rawToken, sessionId: session.id, expiresAt: session.expires_at };
   },
@@ -147,9 +148,8 @@ export const sessionService = {
 
     // 2. Reuse detection: token found but already rotated or revoked
     if (session.status === SESSION_STATUS.ROTATED || session.status === SESSION_STATUS.REVOKED) {
-      console.warn(
-        `[SESSION_AUDIT] REFRESH_TOKEN_REUSE detected for session ${sessionId} (family ${session.family_id}). ` +
-        `Revoking entire family.`
+      logger.warn(
+        `[SESSION_AUDIT] REFRESH_TOKEN_REUSE detected for session ${sessionId} (family ${session.family_id}). Revoking entire family.`
       );
       // Record durable security audit event
       try {
@@ -186,7 +186,7 @@ export const sessionService = {
     // 4. Constant-time secret verification
     const secretValid = await bcrypt.compare(secret, session.token_hash);
     if (!secretValid) {
-      console.warn(`[SESSION_AUDIT] Token secret mismatch for session ${sessionId}`);
+      logger.warn(`[SESSION_AUDIT] Token secret mismatch for session ${sessionId}`);
       const err: any = new Error("Invalid refresh token");
       err.code = "INVALID_REFRESH_TOKEN";
       throw err;
@@ -202,9 +202,8 @@ export const sessionService = {
 
       if (worker !== undefined) {
         if (!worker || worker.deleted_at != null || worker.verification_status === "suspended") {
-          console.warn(
-            `[SESSION_AUDIT] Refresh rejected: Worker ${session.user_id} is suspended, inactive, or deleted. ` +
-            `Revoking family ${session.family_id}.`
+          logger.warn(
+            `[SESSION_AUDIT] Refresh rejected: Worker ${session.user_id} is suspended, inactive, or deleted. Revoking family ${session.family_id}.`
           );
           await sessionService.revokeFamilyByFamilyId(session.family_id, REVOKE_REASON.SUSPENDED);
           const err: any = new Error("Account has been suspended or deactivated");
@@ -220,9 +219,8 @@ export const sessionService = {
 
       if (customer !== undefined) {
         if (!customer || customer.deleted_at != null) {
-          console.warn(
-            `[SESSION_AUDIT] Refresh rejected: Customer ${session.user_id} is inactive or deleted. ` +
-            `Revoking family ${session.family_id}.`
+          logger.warn(
+            `[SESSION_AUDIT] Refresh rejected: Customer ${session.user_id} is inactive or deleted. Revoking family ${session.family_id}.`
           );
           await sessionService.revokeFamilyByFamilyId(session.family_id, REVOKE_REASON.SUSPENDED);
           const err: any = new Error("Account is inactive or has been deactivated");
@@ -232,22 +230,54 @@ export const sessionService = {
       }
     }
 
-    // 5. Atomic status transition: ACTIVE → ROTATED
-    //    This is the concurrency gate. Only one concurrent request can succeed.
-    const updated = await prisma.refresh_session.updateMany({
-      where: {
-        id: sessionId,
-        status: SESSION_STATUS.ACTIVE, // ← atomic guard
-      },
-      data: {
-        status: SESSION_STATUS.ROTATED,
-        rotated_at: new Date(),
-      },
+    // Pre-generate the successor session ID, secret, and hash before entering the transaction
+    const cfg = getRefreshSessionConfig();
+    const newExpiresAt = new Date(Date.now() + cfg.refreshSessionTtlDays * 24 * 60 * 60 * 1000);
+    const newSessionId = crypto.randomUUID();
+    const newSecret = generateRawSecret();
+    const newTokenHash = await bcrypt.hash(newSecret, BCRYPT_ROUNDS);
+
+    // 5. Atomic Transaction: Transition old session to ROTATED (with rotated_to_id) AND insert successor session
+    const txResult = await prisma.$transaction(async (tx) => {
+      const updated = await tx.refresh_session.updateMany({
+        where: {
+          id: sessionId,
+          status: SESSION_STATUS.ACTIVE, // ← atomic guard
+        },
+        data: {
+          status: SESSION_STATUS.ROTATED,
+          rotated_at: new Date(),
+          rotated_to_id: newSessionId,
+        },
+      });
+
+      if (updated.count === 0) {
+        return { conflict: true, newSession: null };
+      }
+
+      const newSession = await tx.refresh_session.create({
+        data: {
+          id: newSessionId,
+          user_id: session.user_id,
+          user_role: session.user_role,
+          token_hash: newTokenHash,
+          family_id: session.family_id, // ← same family
+          device_id: session.device_id,
+          user_agent: session.user_agent,
+          ip_address: session.ip_address,
+          status: SESSION_STATUS.ACTIVE,
+          expires_at: newExpiresAt,
+          last_used_at: new Date(),
+        },
+        select: { id: true, expires_at: true },
+      });
+
+      return { conflict: false, newSession };
     });
 
-    if (updated.count === 0) {
+    if (txResult.conflict || !txResult.newSession) {
       // Another concurrent request rotated this token first → reuse detection
-      console.warn(
+      logger.warn(
         `[SESSION_AUDIT] Concurrent rotation conflict for session ${sessionId}. Revoking family ${session.family_id}.`
       );
       await sessionService.revokeFamilyByFamilyId(session.family_id, REVOKE_REASON.REUSE);
@@ -256,45 +286,16 @@ export const sessionService = {
       throw err;
     }
 
-    // 6. Create replacement session (inherits family_id for chain tracking)
-    const cfg = getRefreshSessionConfig();
-    const newExpiresAt = new Date(Date.now() + cfg.refreshSessionTtlDays * 24 * 60 * 60 * 1000);
-    const newSecret = generateRawSecret();
-    const newTokenHash = await bcrypt.hash(newSecret, BCRYPT_ROUNDS);
+    const newRawToken = buildRawToken(txResult.newSession.id, newSecret);
 
-    const newSession = await prisma.refresh_session.create({
-      data: {
-        user_id: session.user_id,
-        user_role: session.user_role,
-        token_hash: newTokenHash,
-        family_id: session.family_id, // ← same family
-        device_id: session.device_id,
-        user_agent: session.user_agent,
-        ip_address: session.ip_address,
-        status: SESSION_STATUS.ACTIVE,
-        expires_at: newExpiresAt,
-        last_used_at: new Date(),
-      },
-      select: { id: true, expires_at: true },
-    });
-
-    const newRawToken = buildRawToken(newSession.id, newSecret);
-
-    // Link the old session to the new session in the rotation chain
-    await prisma.refresh_session.update({
-      where: { id: sessionId },
-      data: { rotated_to_id: newSession.id },
-    });
-
-    console.log(
-      `[SESSION] Rotated session ${sessionId} → ${newSession.id} ` +
-      `for user ${session.user_id} (family ${session.family_id})`
+    logger.info(
+      `[SESSION] Rotated session ${sessionId} -> ${txResult.newSession.id} for user ${session.user_id} (family ${session.family_id})`
     );
 
     return {
       newRawToken,
-      newSessionId: newSession.id,
-      expiresAt: newSession.expires_at,
+      newSessionId: txResult.newSession.id,
+      expiresAt: txResult.newSession.expires_at,
       userId: session.user_id,
       userRole: session.user_role as UserRole,
     };
@@ -324,7 +325,7 @@ export const sessionService = {
     });
 
     if (result.count > 0) {
-      console.log(`[SESSION] Revoked session ${sessionId} (reason: ${reason}) for user ${userId}`);
+      logger.info(`[SESSION] Revoked session ${sessionId} (reason: ${reason}) for user ${userId}`);
     }
 
     return { revokedCount: result.count };
@@ -347,7 +348,7 @@ export const sessionService = {
       },
     });
 
-    console.log(`[SESSION] Revoked ${result.count} session(s) for user ${userId} (reason: ${reason})`);
+    logger.info(`[SESSION] Revoked ${result.count} session(s) for user ${userId} (reason: ${reason})`);
     return result.count;
   },
 
@@ -368,7 +369,7 @@ export const sessionService = {
       },
     });
 
-    console.warn(`[SESSION_AUDIT] Revoked ${result.count} session(s) in family ${familyId} (reason: ${reason})`);
+    logger.warn(`[SESSION_AUDIT] Revoked ${result.count} session(s) in family ${familyId} (reason: ${reason})`);
     return result.count;
   },
 
@@ -409,6 +410,7 @@ export const sessionService = {
         last_used_at: true,
         expires_at: true,
         status: true,
+        rotated_to_id: true,
       },
     });
 
@@ -435,9 +437,10 @@ export const sessionService = {
     });
 
     if (result.count > 0) {
-      console.log(`[SESSION] Cleanup: deleted ${result.count} expired refresh session(s) older than ${cutoff.toISOString()}`);
+      logger.info(`[SESSION] Cleanup: deleted ${result.count} expired refresh session(s) older than ${cutoff.toISOString()}`);
     }
 
     return { deletedCount: result.count };
   },
 };
+

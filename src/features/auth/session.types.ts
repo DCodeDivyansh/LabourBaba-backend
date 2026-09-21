@@ -12,6 +12,7 @@ export const SESSION_STATUS = {
   ACTIVE: "ACTIVE",
   ROTATED: "ROTATED",
   REVOKED: "REVOKED",
+  EXPIRED: "EXPIRED",
 } as const;
 export type SessionStatus = typeof SESSION_STATUS[keyof typeof SESSION_STATUS];
 
@@ -64,4 +65,6 @@ export interface SessionDTO {
   last_used_at: Date | null;
   expires_at: Date;
   status: string;
+  rotated_to_id?: string | null;
 }
+

@@ -14,7 +14,7 @@
 
 | Roadmap / P3 Issue | Status | Primary Test Command / Suite | Environment | Evidence / Invariant Verified |
 |---|---|---|---|---|
-| **P3-1: Refresh Session State** | FIXED | `npx jest tests/sessionLifecycle.test.ts` | Real PostgreSQL | Hashed tokens, atomic token family rotation, immediate reuse invalidation. |
+| **P3-1: Refresh Session State** | FIXED | `npx jest tests/sessionPostgresConcurrency.test.ts` | Real PostgreSQL | Hashed tokens, atomic token family rotation, immediate reuse invalidation. |
 | **P3-2: OTP Lifecycle & Database Check** | FIXED | `npx jest tests/otpLifecycle.test.ts tests/otpPostgresConcurrency.test.ts` | Real PostgreSQL + Redis | Atomic OTP consumption (`ACTIVE -> CONSUMED`), attempt counter, phone/IP rate limiters. |
 | **P3-3: Webhook Signature Fail-Closed** | FIXED | `npx jest tests/paymentWebhookAndReconciliation.test.ts` | Supertest + Express | Missing/tampered webhook secret/signature strictly yields 401/500, never 200 OK. |
 | **P3-4: Private Storage Abstraction** | FIXED | `npx jest tests/storageService.test.ts` | Unit + S3 Integration | Private bucket enforcement, pre-signed 15-min URLs, MIME & 5MB size limits, audit logs. |
