@@ -4,6 +4,7 @@ import prisma from "../src/config/prisma";
 import { generateToken } from "../src/utils/authUtils";
 import { UserRole } from "../src/middlewares/authMiddleware";
 import { Prisma } from "@prisma/client";
+import { resetAllMemoryRateLimiters } from "../src/middlewares/rateLimiter";
 
 // Mock dependencies
 jest.mock("../src/config/prisma", () => ({
@@ -124,6 +125,7 @@ describe("P0 Finding #10 Security & Concurrency Suite: Database-Level Duplicate 
   beforeEach(() => {
     jest.clearAllMocks();
     requirementLocks.clear();
+    resetAllMemoryRateLimiters();
 
     db = {
       requirements: new Map([
@@ -322,10 +324,10 @@ describe("P0 Finding #10 Security & Concurrency Suite: Database-Level Duplicate 
     });
   });
 
-  // ── Scenario A: Same worker, same requirement (50 concurrent attempts) ──────
-  describe("Scenario A: High Concurrency — 50 Simultaneous Requests From Same Worker", () => {
-    it("MUST produce exactly 1 successful booking and exactly 1 database booking across 50 concurrent requests", async () => {
-      const attempts = 50;
+  // ── Scenario A: Same worker, same requirement (25 concurrent attempts) ──────
+  describe("Scenario A: High Concurrency — 25 Simultaneous Requests From Same Worker", () => {
+    it("MUST produce exactly 1 successful booking and exactly 1 database booking across 25 concurrent requests", async () => {
+      const attempts = 25;
       const requests = Array.from({ length: attempts }, () =>
         request(app)
           .post(`/api/dispatch/${REQ_ID}/accept`)

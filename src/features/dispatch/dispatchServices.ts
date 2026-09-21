@@ -76,144 +76,189 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
   const otp_hash = await hashOTP(otp);
   const otp_expires_at = new Date(Date.now() + bookingConfig.bookingOtpTtlSeconds * 1000);
 
-  const result = await prisma.$transaction(async (tx) => {
-    // PostgreSQL FOR UPDATE is required here: an application-only read of the
-    // filled counter permits two concurrent callers to observe the final slot.
-    await tx.$queryRaw<{ id: string }[]>`
-      SELECT id FROM job_requirement
-      WHERE id = ${requirementId}::uuid FOR UPDATE
-    `;
+  let result: any;
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      // PostgreSQL FOR UPDATE is required here: an application-only read of the
+      // filled counter permits two concurrent callers to observe the final slot.
+      await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM job_requirement
+        WHERE id = ${requirementId}::uuid FOR UPDATE
+      `;
 
-    const req = await tx.job_requirement.findUnique({
-      where: { id: requirementId },
-      include: { job: true },
-    });
+      const req = await tx.job_requirement.findUnique({
+        where: { id: requirementId },
+        include: { job: true },
+      });
 
-    if (!req) {
-      throw new DispatchAcceptanceError('Requirement not found', 'REQUIREMENT_NOT_FOUND', 404);
-    }
-    const isAlreadyFull =
-      req.status?.toUpperCase() === RequirementStatus.FILLED ||
-      (req.worker_count_filled ?? 0) >= req.worker_count_needed;
-    if (isAlreadyFull) {
-      throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
-    }
+      if (!req) {
+        throw new DispatchAcceptanceError('Requirement not found', 'REQUIREMENT_NOT_FOUND', 404);
+      }
+      const isAlreadyFull =
+        req.status?.toUpperCase() === RequirementStatus.FILLED ||
+        (req.worker_count_filled ?? 0) >= req.worker_count_needed;
+      if (isAlreadyFull) {
+        throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
+      }
 
-    // Guard: ensure worker does not already have a confirmed booking for this requirement
-    const existingBooking = await tx.booking.findFirst({
-      where: {
-        requirement_id: requirementId,
-        worker_id: workerId,
-      },
-    });
-    if (existingBooking) {
-      throw new DispatchAcceptanceError(
-        'Worker already has an active booking for this requirement',
-        'BOOKING_ALREADY_EXISTS',
-        409,
-      );
-    }
-
-    // Atomic conditional transition: must be pending, non-expired, matching exact requirement and worker
-    const now = new Date();
-    const updateResult = await tx.job_dispatch.updateMany({
-      where: {
-        requirement_id: requirementId,
-        worker_id: workerId,
-        status: 'pending',
-        expires_at: {
-          gt: now,
-        },
-      },
-      data: {
-        status: 'accepted',
-        responded_at: now,
-      },
-    });
-
-    if (updateResult.count === 0) {
-      // Investigate why acceptance failed for precise, safe error handling
-      const existingDispatch = await tx.job_dispatch.findFirst({
+      // Guard: ensure worker does not already have a confirmed booking for this requirement
+      const existingBooking = await tx.booking.findFirst({
         where: {
           requirement_id: requirementId,
           worker_id: workerId,
         },
-        select: {
-          status: true,
-          expires_at: true,
-        },
       });
-
-      if (!existingDispatch) {
+      if (existingBooking) {
         throw new DispatchAcceptanceError(
-          'No dispatch record found for this worker and requirement',
-          'NO_VALID_DISPATCH',
-          404,
-        );
-      }
-      if (existingDispatch.status === 'accepted') {
-        throw new DispatchAcceptanceError(
-          'Dispatch has already been accepted',
-          'DISPATCH_ALREADY_ACCEPTED',
+          'Worker already has an active booking for this requirement',
+          'BOOKING_ALREADY_EXISTS',
           409,
         );
       }
-      if (existingDispatch.expires_at && existingDispatch.expires_at <= now) {
+
+      // Atomic conditional transition: must be pending, non-expired, matching exact requirement and worker
+      const now = new Date();
+      const updateResult = await tx.job_dispatch.updateMany({
+        where: {
+          requirement_id: requirementId,
+          worker_id: workerId,
+          status: 'pending',
+          expires_at: { gt: now },
+        },
+        data: {
+          status: 'accepted',
+          responded_at: now,
+        },
+      });
+
+      if (updateResult.count === 0) {
+        const dispatchRow = await tx.job_dispatch.findFirst({
+          where: { requirement_id: requirementId, worker_id: workerId },
+        });
+
+        if (!dispatchRow) {
+          throw new DispatchAcceptanceError(
+            'No valid dispatch found for this worker on this requirement',
+            'NO_VALID_DISPATCH',
+            404,
+          );
+        }
+
+        if (dispatchRow.status === 'accepted') {
+          throw new DispatchAcceptanceError(
+            'This dispatch has already been accepted',
+            'DISPATCH_ALREADY_ACCEPTED',
+            409,
+          );
+        }
+
+        if (dispatchRow.status === 'declined' || dispatchRow.status === 'timeout' || dispatchRow.status === 'expired') {
+          throw new DispatchAcceptanceError(
+            `Dispatch is in terminal state: ${dispatchRow.status}`,
+            'DISPATCH_NOT_ACTIONABLE',
+            409,
+          );
+        }
+
+        if (dispatchRow.expires_at && dispatchRow.expires_at <= now) {
+          throw new DispatchAcceptanceError(
+            'Dispatch has expired',
+            'DISPATCH_EXPIRED',
+            410,
+          );
+        }
+
         throw new DispatchAcceptanceError(
-          'Dispatch has expired',
-          'DISPATCH_EXPIRED',
-          410,
+          'Dispatch cannot be accepted in its current state',
+          'DISPATCH_NOT_ACCEPTABLE',
+          409,
         );
       }
-      throw new DispatchAcceptanceError(
-        `Dispatch is in terminal state '${existingDispatch.status}' and cannot be accepted`,
-        'DISPATCH_NOT_ACTIONABLE',
-        409,
-      );
-    }
 
-    if (updateResult.count > 1) {
-      throw new DispatchAcceptanceError(
-        'Invariant violation: Multiple dispatch records updated',
-        'INVARIANT_VIOLATION_MULTIPLE_DISPATCHES',
-        500,
-      );
-    }
+      // Capacity invariant: worker_count_filled strictly increments
+      const newFilled = (req.worker_count_filled ?? 0) + 1;
+      const nowFilled = newFilled >= req.worker_count_needed;
 
-    // Reserve capacity *before* creating the booking.  The requirement row is
-    // already locked, and the state transition persists filled = previous + 1.
-    // Any later database error aborts this transaction and releases the slot.
-    const newFilled = (req.worker_count_filled ?? 0) + 1;
-    const nowFilled = newFilled >= req.worker_count_needed;
-    await requirementStateService.transition(tx, {
-      requirementId,
-      action: RequirementAction.RECORD_ACCEPTANCE,
-      actor: { id: workerId, role: UserRole.WORKER },
-      newFilledCount: newFilled,
-    });
+      await tx.job_requirement.update({
+        where: { id: requirementId },
+        data: {
+          worker_count_filled: newFilled,
+          status: nowFilled ? 'filled' : 'partially_filled',
+        },
+      });
 
-    // Create the booking only after successfully reserving a slot.
-    let booking;
-    try {
-      booking = await tx.booking.create({
+      // 4. Create the booking record with hashed OTP and set job state
+      const booking = await tx.booking.create({
         data: {
           job_id: req.job_id,
           requirement_id: requirementId,
           worker_id: workerId,
           customer_id: req.job.customer_id,
-          status: BookingStatus.CONFIRMED,
+          status: 'confirmed',
           otp_hash,
           otp_expires_at,
           otp_attempts: 0,
         },
-        select: bookingSafeSelect,
       });
-    } catch (err: any) {
+
+      let expiredWorkerIds: string[] = [];
+      let jobFullyBooked = false;
+
+      // 5. If this requirement is now full:
+      if (nowFilled) {
+        const pendingDispatches = await tx.job_dispatch.findMany({
+          where: {
+            requirement_id: requirementId,
+            status: 'pending',
+          },
+          select: { worker_id: true },
+        });
+        expiredWorkerIds = pendingDispatches.map((d) => d.worker_id);
+
+        // Expire all remaining pending dispatches
+        await tx.job_dispatch.updateMany({
+          where: {
+            requirement_id: requirementId,
+            status: 'pending',
+          },
+          data: { status: 'expired', responded_at: new Date() },
+        });
+
+        // Check if ALL requirements for this job are now filled → mark job fully_booked
+        jobFullyBooked = await checkJobComplete(req.job_id, tx);
+      }
+
+      return {
+        booking,
+        otp,
+        nowFilled,
+        newFilled,
+        needed: req.worker_count_needed,
+        jobId: req.job_id,
+        customerId: req.job.customer_id,
+        skillType: req.skill_type,
+        expiredWorkerIds,
+        jobFullyBooked,
+      };
+    }, {
+      // The lock queue can legitimately contain many mobile retries. These are
+      // database waits, not business failures; retain a bounded but realistic
+      // budget so Prisma does not turn a capacity race into a transaction-timeout
+      // 500 before the caller can receive SLOTS_FULL.
+      maxWait: 15_000,
+      timeout: 30_000,
+    });
+  } catch (err: any) {
+    if (err instanceof DispatchAcceptanceError) {
+      throw err;
+    }
+    // Handle Prisma unique constraint violations (P2002)
+    if (err.code === 'P2002' || err.message?.includes('23505')) {
+      const target = err.meta?.target || [];
       if (
-        (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') ||
-        err?.code === 'P2002' ||
-        err?.message?.includes('Unique constraint') ||
-        err?.message?.includes('uniq_booking_requirement_worker')
+        (Array.isArray(target) && target.includes('worker_id')) ||
+        err.message?.includes('uniq_booking_requirement_worker') ||
+        err.message?.includes('uniq_job_dispatch_req_worker')
       ) {
         throw new DispatchAcceptanceError(
           'Worker already has an active booking for this requirement',
@@ -221,56 +266,28 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
           409,
         );
       }
-      throw err;
     }
-
-    // Problem 1: when filled, expire ALL remaining pending dispatches atomically
-    let expiredWorkerIds: string[] = [];
-    let jobFullyBooked = false;
-    if (nowFilled) {
-      // Collect worker IDs of remaining pending dispatches BEFORE expiring them
-      const pendingDispatches = await tx.job_dispatch.findMany({
-        where: {
-          requirement_id: requirementId,
-          status: 'pending',
-        },
-        select: { worker_id: true },
+    // If transaction failed due to conflict/lock timeout (P2034, P2028, deadlock), check if requirement was filled by the winner
+    if (
+      err.code === 'P2034' ||
+      err.code === 'P2028' ||
+      err.message?.includes('deadlock') ||
+      err.message?.includes('timeout') ||
+      err.message?.includes('Transaction')
+    ) {
+      const latestReq = await prisma.job_requirement.findUnique({
+        where: { id: requirementId },
       });
-      expiredWorkerIds = pendingDispatches.map((d) => d.worker_id);
-
-      // Expire all remaining pending dispatches
-      await tx.job_dispatch.updateMany({
-        where: {
-          requirement_id: requirementId,
-          status: 'pending',
-        },
-        data: { status: 'expired', responded_at: new Date() },
-      });
-
-      // Check if ALL requirements for this job are now filled → mark job fully_booked
-      jobFullyBooked = await checkJobComplete(req.job_id, tx);
+      if (
+        latestReq &&
+        (latestReq.status?.toUpperCase() === RequirementStatus.FILLED ||
+          (latestReq.worker_count_filled ?? 0) >= latestReq.worker_count_needed)
+      ) {
+        throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
+      }
     }
-
-    return {
-      booking,
-      otp,
-      nowFilled,
-      newFilled,
-      needed: req.worker_count_needed,
-      jobId: req.job_id,
-      customerId: req.job.customer_id,
-      skillType: req.skill_type,
-      expiredWorkerIds,
-      jobFullyBooked,
-    };
-  }, {
-    // The lock queue can legitimately contain many mobile retries. These are
-    // database waits, not business failures; retain a bounded but realistic
-    // budget so Prisma does not turn a capacity race into a transaction-timeout
-    // 500 before the caller can receive SLOTS_FULL.
-    maxWait: 10_000,
-    timeout: 20_000,
-  });
+    throw err;
+  }
 
   // Problem 2: AFTER transaction commits, notify remaining workers via Socket.IO
   // This runs outside the transaction so it doesn't block or rollback on socket errors
@@ -293,10 +310,6 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
 
   // Notify the customer's website in real-time that a worker accepted the
   // job, with enough worker detail to render a card (name/phone/rating).
-  // Only whitelisted fields are sent - never the password hash or other
-  // sensitive worker data. This also supports the multi-worker case: the
-  // frontend should append this worker to its list rather than replace it,
-  // since more worker:accepted events may follow for other requirements.
   try {
     const coords = await prisma.$queryRaw<any[]>`
       SELECT
@@ -321,7 +334,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       longitude: coords[0]?.longitude || null,
     }) : null;
 
-    io.to(`customer:${result.customerId}`).emit('worker:accepted', {
+    io?.to(`customer:${result.customerId}`)?.emit('worker:accepted', {
       jobId: result.jobId,
       requirementId,
       bookingId: result.booking.id,
@@ -337,81 +350,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
     });
 
     if (result.jobFullyBooked) {
-      io.to(`customer:${result.customerId}`).emit('job:fully_booked', {
-        jobId: result.jobId,
-      });
-    }
-  } catch (err) {
-    console.error('[dispatchServices] Failed to emit worker:accepted:', err);
-  }
-
-
-  // Problem 2: AFTER transaction commits, notify remaining workers via Socket.IO
-  // This runs outside the transaction so it doesn't block or rollback on socket errors
-  if (result.nowFilled && result.expiredWorkerIds.length > 0) {
-    try {
-      for (const losingWorkerId of result.expiredWorkerIds) {
-        io?.to(`worker:${losingWorkerId}`)?.emit('job:closed', {
-          requirementId,
-          jobId: result.jobId,
-          reason: 'filled',
-        });
-      }
-      console.log(
-        `[dispatchServices] Notified ${result.expiredWorkerIds.length} workers that requirement ${requirementId} is filled`,
-      );
-    } catch (err) {
-      console.error('[dispatchServices] Failed to emit job:closed:', err);
-    }
-  }
-
-  // Notify the customer's website in real-time that a worker accepted the
-  // job, with enough worker detail to render a card (name/phone/rating).
-  // Only whitelisted fields are sent - never the password hash or other
-  // sensitive worker data. This also supports the multi-worker case: the
-  // frontend should append this worker to its list rather than replace it,
-  // since more worker:accepted events may follow for other requirements.
-  try {
-    const coords = await prisma.$queryRaw<any[]>`
-      SELECT
-        ST_X(location_geo::geometry) AS longitude,
-        ST_Y(location_geo::geometry) AS latitude
-      FROM worker
-      WHERE id = ${workerId}::uuid;
-    `;
-
-    const worker = await prisma.worker.findUnique({
-      where: { id: workerId },
-      select: { id: true, name: true, phone: true, skill_type: true, worker_score: true },
-    });
-
-    const workerWithLoc = worker ? toWorkerPublicDTO({
-      id: worker.id,
-      name: worker.name,
-      phone: worker.phone,
-      skill_type: worker.skill_type,
-      worker_score: worker.worker_score,
-      latitude: coords[0]?.latitude || null,
-      longitude: coords[0]?.longitude || null,
-    }) : null;
-
-    io.to(`customer:${result.customerId}`).emit('worker:accepted', {
-      jobId: result.jobId,
-      requirementId,
-      bookingId: result.booking.id,
-      otp: result.otp,
-      worker: workerWithLoc,
-      requirement: {
-        id: requirementId,
-        skill_type: result.skillType,
-        worker_count_needed: result.needed,
-        worker_count_filled: result.newFilled,
-        status: result.nowFilled ? 'filled' : 'dispatching',
-      },
-    });
-
-    if (result.jobFullyBooked) {
-      io.to(`customer:${result.customerId}`).emit('job:fully_booked', {
+      io?.to(`customer:${result.customerId}`)?.emit('job:fully_booked', {
         jobId: result.jobId,
       });
     }
