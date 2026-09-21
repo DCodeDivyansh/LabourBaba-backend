@@ -15,6 +15,7 @@ import { dispatchQueue, timeoutQueue, notificationQueue } from '../config/bullmq
 import { closeAllWorkers } from '../workers/workerLifecycle';
 import { assertJwtConfig, assertProductionAuthConfig } from '../config/authConfig';
 import { assertProductionPaymentConfig } from '../config/paymentConfig';
+import { assertProductionStorageConfig } from '../config/storageConfig';
 import { assertFcmConfig } from '../shared/fcm';
 import { reconcileDispatchState } from '../features/dispatch/dispatchReconciliationService';
 import { outboxService } from '../services/outboxService';
@@ -56,6 +57,7 @@ export class LifecycleManager {
     assertJwtConfig();
     assertProductionAuthConfig();
     assertProductionPaymentConfig();
+    assertProductionStorageConfig();
     assertRedisConfig();
     assertFcmConfig();
     logger.info('[LIFECYCLE] Configuration successfully validated.');

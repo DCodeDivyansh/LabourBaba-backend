@@ -64,6 +64,44 @@ export function validateStorageSecret(
   return trimmed;
 }
 
+export function assertProductionStorageConfig(): void {
+  const nodeEnv = process.env.NODE_ENV || "development";
+  
+  if (nodeEnv !== "production") {
+    return;
+  }
+
+  // Enforce production storage gatekeepers
+  validateStorageSecret(process.env.STORAGE_SIGNING_SECRET, "STORAGE_SIGNING_SECRET");
+
+  const provider = process.env.STORAGE_PROVIDER;
+  if (!provider || provider === "local" || provider === "mock") {
+    throw new Error(
+      `[SECURITY ERROR] STORAGE_PROVIDER must be configured to a private object storage provider (e.g. 'supabase') in production. Found: '${provider || "undefined"}'.`,
+    );
+  }
+
+  if (provider === "supabase") {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_URL.startsWith("https://")) {
+      throw new Error(
+        `[SECURITY ERROR] Required Supabase storage environment variable 'SUPABASE_URL' is missing or invalid in production.`,
+      );
+    }
+    const secretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!secretKey || secretKey.trim().length < 20) {
+      throw new Error(
+        `[SECURITY ERROR] Required Supabase storage environment variable 'SUPABASE_SECRET_KEY' (service role key) is missing or too short in production.`,
+      );
+    }
+  }
+
+  if (!process.env.STORAGE_BUCKET_NAME || process.env.STORAGE_BUCKET_NAME.trim().length === 0) {
+    throw new Error(
+      `[SECURITY ERROR] Required storage environment variable 'STORAGE_BUCKET_NAME' cannot be empty in production.`,
+    );
+  }
+}
+
 export const storageConfig: StorageConfig = {
   bucketName: process.env.STORAGE_BUCKET_NAME || "labourbaba-private-documents",
   signedUrlTtlSeconds: parseInt(process.env.DOCUMENT_SIGNED_URL_TTL_SECONDS || "900", 10),

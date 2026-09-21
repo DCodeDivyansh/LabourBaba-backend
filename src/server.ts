@@ -18,6 +18,7 @@ import chatRoutes from "./features/chat/chatRoutes";
 import adminRoutes from "./features/admin/adminRoutes";
 import workerLocationRoute from "./features/worker_location/worker_location.routes";
 import healthRoutes from "./features/health/healthRoutes";
+import storageRoutes from "./providers/storage/storage.routes";
 
 import { setupSwagger } from "./config/swagger";
 import { requestLogger } from "./middlewares/requestLogger";
@@ -169,6 +170,7 @@ app.use("/api/payments", paymentRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/storage", storageRoutes);
 
 setupSwagger(app);
 
