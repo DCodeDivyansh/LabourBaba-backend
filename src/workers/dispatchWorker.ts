@@ -477,10 +477,7 @@ export function getDispatchWorker(): Worker<DispatchJobData, DispatchOperationRe
   return dispatchWorker;
 }
 
-// Lazy start unless in test mode
-if (process.env.NODE_ENV !== 'test') {
-  getDispatchWorker();
-}
+// Worker is started explicitly via lifecycleManager.startup()
 
 const shutdown = async () => {
   if (dispatchWorker) {

@@ -51,30 +51,24 @@ end
 return { current, ttl }
 `;
 
-// Test-only in-memory store isolated for mocked unit test environments
+// Deprecated test-only memory store interface preserved for backwards compatibility
 interface MemoryRateLimitRecord {
   count: number;
   resetAt: number;
 }
 const testMemoryStore = new Map<string, MemoryRateLimitRecord>();
-let testMemoryFallbackEnabled = process.env.NODE_ENV === "test";
+let testMemoryFallbackEnabled = false;
 
-export function enableTestMemoryFallback(enable = true): void {
+export function enableTestMemoryFallback(enable = false): void {
   testMemoryFallbackEnabled = enable;
 }
 
 export function clearRateLimitStore(): void {
   testMemoryStore.clear();
-  if (process.env.NODE_ENV === "test") {
-    testMemoryFallbackEnabled = true;
-  }
 }
 
 export function resetAllMemoryRateLimiters(): void {
   testMemoryStore.clear();
-  if (process.env.NODE_ENV === "test") {
-    testMemoryFallbackEnabled = true;
-  }
 }
 
 /**
@@ -85,6 +79,7 @@ export function resetAllMemoryRateLimiters(): void {
  * 2. Atomic Windows: INCR + EXPIRE are executed atomically via Lua script to prevent immortal keys.
  * 3. Strict Security Policy (Fail-Closed): Security-sensitive operations (Auth, OTP, Payments)
  *    strictly FAIL CLOSED during Redis degradation, preventing distributed brute-force bypasses.
+ *    ZERO process-local memory fallback is permitted for security-sensitive controls.
  * 4. High-Throughput Telemetry (Fail-Open): Generic traffic limiters (GPS, Chat) fail open with
  *    logged warnings to preserve basic core functionality.
  */
@@ -126,24 +121,8 @@ export async function incrementRateLimit(
       status: "ok",
     };
   } catch (err: any) {
-    // In unit test mode ONLY, if test-memory fallback is explicitly enabled:
-    if (!isProduction && testMemoryFallbackEnabled) {
-      const now = Date.now();
-      const existing = testMemoryStore.get(key);
-      if (!existing || existing.resetAt <= now) {
-        testMemoryStore.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
-        return { allowed: true, remaining: maxLimit - 1, resetAfterSeconds: windowSeconds, status: "ok" };
-      }
-      if (existing.count >= maxLimit) {
-        const resetAfter = Math.max(1, Math.ceil((existing.resetAt - now) / 1000));
-        return { allowed: false, remaining: 0, resetAfterSeconds: resetAfter, status: "exceeded" };
-      }
-      existing.count += 1;
-      const resetAfter = Math.max(1, Math.ceil((existing.resetAt - now) / 1000));
-      return { allowed: true, remaining: maxLimit - existing.count, resetAfterSeconds: resetAfter, status: "ok" };
-    }
-
-    // Security-sensitive rate limiters: Fail closed to prevent distributed brute-force attacks
+    // Security-sensitive rate limiters: Strictly FAIL CLOSED to prevent distributed brute-force attacks across instances.
+    // Zero in-memory fallback permitted for security-sensitive controls under any environment.
     if (failPolicy === "fail_closed") {
       logger.error(`[SECURITY_LIMITER_ERROR] Security-sensitive rate limiter failed closed due to Redis error on key ${key}:`, {
         error: err.message,

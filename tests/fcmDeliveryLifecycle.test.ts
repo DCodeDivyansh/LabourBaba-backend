@@ -2,12 +2,14 @@ import {
   sendFCMToTokens,
   sendFCMToWorker,
   isPermanentInvalidTokenError,
-  assertFcmConfig
+  assertFcmConfig,
+  setMockFcmProvider,
+  resetFirebaseApp,
 } from "../src/shared/fcm";
 import { workerDeviceService } from "../src/features/worker_device/worker_device.service";
 import prisma from "../src/config/prisma";
 
-describe("Issue 45 - FCM Delivery Lifecycle & WorkerDevice Management", () => {
+describe("Issue 45 / P5 Issue 22 - FCM Delivery Lifecycle & Fail-Fast Guarantees", () => {
   const testWorkerId = "00000000-0000-4000-b000-000000000001";
   const dummyToken1 = "fcm_test_token_1_valid_alphanumeric_123456";
   const dummyToken2 = "fcm_test_token_2_valid_alphanumeric_654321";
@@ -37,6 +39,8 @@ describe("Issue 45 - FCM Delivery Lifecycle & WorkerDevice Management", () => {
   });
 
   afterAll(async () => {
+    setMockFcmProvider(null);
+    resetFirebaseApp();
     await prisma.worker_device.deleteMany({
       where: { worker_id: testWorkerId },
     }).catch(() => {});
@@ -61,8 +65,25 @@ describe("Issue 45 - FCM Delivery Lifecycle & WorkerDevice Management", () => {
     });
   });
 
-  describe("Multi-Device Delivery & Token Revocation", () => {
-    it("registers multiple devices for a single worker and supports multi-device delivery", async () => {
+  describe("Multi-Device Delivery & Explicit Provider Injection", () => {
+    beforeEach(() => {
+      // Inject explicit test mock provider
+      setMockFcmProvider({
+        sendToTokens: async (tokens, payload) => {
+          return tokens.map((token) => ({
+            token,
+            success: true,
+            messageId: `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          }));
+        },
+      });
+    });
+
+    afterEach(() => {
+      setMockFcmProvider(null);
+    });
+
+    it("registers multiple devices for a single worker and supports multi-device delivery via mock provider", async () => {
       // Register Device 1
       await workerDeviceService.registerDevice(testWorkerId, {
         device_id: "device-uuid-1",
@@ -88,6 +109,8 @@ describe("Issue 45 - FCM Delivery Lifecycle & WorkerDevice Management", () => {
       expect(results.length).toBe(2);
       expect(results[0].success).toBe(true);
       expect(results[1].success).toBe(true);
+      expect(results[0].messageId).toBeDefined();
+      expect(results[0].messageId).not.toBe("stub-message-id");
     });
 
     it("auto-revokes invalid device token when reported by FCM", async () => {
@@ -109,6 +132,24 @@ describe("Issue 45 - FCM Delivery Lifecycle & WorkerDevice Management", () => {
     });
   });
 
+  describe("Zero Stub Success Invariant", () => {
+    it("returns success: false and never returns fake stub-message-id when uninitialized and no mock registered", async () => {
+      setMockFcmProvider(null);
+      resetFirebaseApp();
+
+      const results = await sendFCMToTokens(["test_token_123"], {
+        title: "Test Alert",
+        body: "Test Body",
+      });
+
+      expect(results.length).toBe(1);
+      expect(results[0].success).toBe(false);
+      expect(results[0].messageId).toBeUndefined();
+      expect(results[0].error).toBeDefined();
+      expect(results[0].error.message).toContain("[FCM_UNINITIALIZED]");
+    });
+  });
+
   describe("Production Configuration Gatekeeper", () => {
     it("throws in production if Firebase configuration is missing", () => {
       const originalEnv = process.env.NODE_ENV;
@@ -124,6 +165,19 @@ describe("Issue 45 - FCM Delivery Lifecycle & WorkerDevice Management", () => {
       process.env.NODE_ENV = originalEnv;
       process.env.FIREBASE_SERVICE_ACCOUNT_JSON = originalVar;
       process.env.GOOGLE_APPLICATION_CREDENTIALS = originalGoogle;
+    });
+
+    it("prohibits registering mock FCM provider in production environment", () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = "production";
+
+      expect(() => {
+        setMockFcmProvider({
+          sendToTokens: async () => [],
+        });
+      }).toThrow("[SECURITY_VIOLATION] Mock FCM provider cannot be registered in production environment.");
+
+      process.env.NODE_ENV = originalEnv;
     });
   });
 });

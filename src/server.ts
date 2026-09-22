@@ -194,9 +194,7 @@ app.use((req: Request, res: Response) => {
  */
 app.use(errorHandler);
 
-// Issue #22 & #44: Background notification and outbox workers
-import "./workers/notificationWorker";
-import "./workers/outboxWorker";
+// Workers and background processors are started in deterministic sequence within lifecycleManager.startup()
 
 async function startServer() {
   try {

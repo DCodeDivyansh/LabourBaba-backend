@@ -100,7 +100,27 @@ export class LifecycleManager {
       logger.warn('[LIFECYCLE] Initial OTP cleanup skipped on startup:', { error: err.message });
     });
 
-    // 6. Mark application state as READY
+    // 6. Initialize background consumers & schedulers AFTER dependencies and reconciliation
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const { getNotificationWorker } = await import('../workers/notificationWorker');
+        const { getDispatchWorker } = await import('../workers/dispatchWorker');
+        const { getTimeoutWorker } = await import('../workers/timeoutWorker');
+        getNotificationWorker();
+        getDispatchWorker();
+        getTimeoutWorker();
+        outboxWorker.start();
+        paymentReconciliationWorker.start();
+        logger.info('[LIFECYCLE] Background workers and queues initialized successfully.');
+      } catch (workerErr: any) {
+        logger.error('[LIFECYCLE] Failed to start background workers:', { error: workerErr.message });
+        if (process.env.NODE_ENV === 'production') {
+          throw workerErr;
+        }
+      }
+    }
+
+    // 7. Mark application state as READY
     this.state = 'READY';
     logger.info('[LIFECYCLE] Application is now READY to process traffic.');
   }

@@ -171,10 +171,7 @@ export function getNotificationWorker(): Worker<DispatchNotifyJobData> {
   return notificationWorkerInstance;
 }
 
-// Lazy start unless in test mode
-if (process.env.NODE_ENV !== 'test') {
-  getNotificationWorker();
-}
+// Worker is started explicitly via lifecycleManager.startup()
 
 // ── Graceful shutdown ────────────────────────────────────────────────────────
 

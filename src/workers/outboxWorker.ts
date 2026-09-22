@@ -134,6 +134,4 @@ export class OutboxWorker {
 
 export const outboxWorker = new OutboxWorker();
 
-if (process.env.NODE_ENV !== 'test') {
-  outboxWorker.start();
-}
+// Outbox worker is started explicitly via lifecycleManager.startup()

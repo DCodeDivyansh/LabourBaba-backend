@@ -7,6 +7,33 @@ import { logger } from "../utils/logger";
 let isFirebaseInitialized = false;
 let app: App | undefined;
 
+export interface IFCMProvider {
+  sendToTokens(
+    tokens: string[],
+    payload: FCMPayload,
+    onInvalidToken?: (token: string) => Promise<void> | void,
+  ): Promise<FCMDeliveryResult[]>;
+}
+
+let mockFcmProvider: IFCMProvider | null = null;
+
+/**
+ * Registers an explicit mock FCM provider for test environments only.
+ * Strictly prohibited in production.
+ */
+export function setMockFcmProvider(provider: IFCMProvider | null): void {
+  if (process.env.NODE_ENV === "production" && provider !== null) {
+    throw new Error("[SECURITY_VIOLATION] Mock FCM provider cannot be registered in production environment.");
+  }
+  mockFcmProvider = provider;
+}
+
+export function resetFirebaseApp(): void {
+  app = undefined;
+  isFirebaseInitialized = false;
+  mockFcmProvider = null;
+}
+
 export function getFirebaseApp(): App | undefined {
   if (app) return app;
 
@@ -28,12 +55,18 @@ export function getFirebaseApp(): App | undefined {
       logger.info(`[FCM] Found Firebase Service Account file at root.`);
     } catch (error: any) {
       logger.error("[FCM] Failed to parse local service account JSON file:", { error: error.message });
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(`[FCM_CONFIG_ERROR] Failed to parse local service account JSON file: ${error.message}`);
+      }
     }
   } else if (serviceAccountVar) {
     try {
       serviceAccount = JSON.parse(serviceAccountVar);
     } catch (error: any) {
       logger.error("[FCM] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON env variable:", { error: error.message });
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(`[FCM_CONFIG_ERROR] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON env variable: ${error.message}`);
+      }
     }
   }
 
@@ -46,27 +79,43 @@ export function getFirebaseApp(): App | undefined {
       logger.info("[FCM] Firebase Admin SDK initialized successfully via Service Account.");
     } catch (error: any) {
       logger.error("[FCM] Failed to initialize Firebase Admin SDK with Service Account:", { error: error.message });
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(`[FCM_INIT_ERROR] Failed to initialize Firebase Admin SDK: ${error.message}`);
+      }
     }
-  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  } else if (
+    process.env.GOOGLE_APPLICATION_CREDENTIALS &&
+    process.env.GOOGLE_APPLICATION_CREDENTIALS !== "undefined" &&
+    process.env.GOOGLE_APPLICATION_CREDENTIALS.trim().length > 0
+  ) {
     try {
       app = initializeApp();
       isFirebaseInitialized = true;
       logger.info("[FCM] Firebase Admin SDK initialized via Application Default Credentials.");
     } catch (error: any) {
-      logger.warn("[FCM] Firebase Admin SDK running in stub mode (no credentials found).");
+      logger.error("[FCM] Failed to initialize Firebase Admin SDK via ADC:", { error: error.message });
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(`[FCM_INIT_ERROR] Failed to initialize Firebase Admin SDK via ADC: ${error.message}`);
+      }
     }
   } else {
-    logger.info("[FCM] Firebase Admin SDK running in stub mode (no credentials configured).");
+    logger.info("[FCM] Firebase Admin SDK uninitialized (no credentials configured).");
   }
 
   return app;
 }
 
 // Initialize on module load
-getFirebaseApp();
+try {
+  getFirebaseApp();
+} catch (err: any) {
+  if (process.env.NODE_ENV === "production") {
+    throw err;
+  }
+}
 
 /**
- * Validates that FCM is configured in production.
+ * Validates that FCM is configured and successfully initializable in production.
  */
 export function assertFcmConfig(): void {
   if (process.env.NODE_ENV === "test") {
@@ -84,6 +133,14 @@ export function assertFcmConfig(): void {
   if (!existsSync(rootServiceAccountPath) && !serviceAccountVar && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     throw new Error(
       "[FCM_CONFIG_ERROR] Production requires valid Firebase Admin SDK credentials (FIREBASE_SERVICE_ACCOUNT_JSON, service account JSON file, or GOOGLE_APPLICATION_CREDENTIALS)."
+    );
+  }
+
+  // Authoritatively verify that the credentials can initialize the messaging client
+  const firebaseApp = getFirebaseApp();
+  if (!firebaseApp || !isFirebaseInitialized) {
+    throw new Error(
+      "[FCM_CONFIG_ERROR] Production Firebase Admin SDK initialization failed. Cannot operate in uninitialized or stub mode in production."
     );
   }
 }
@@ -125,6 +182,11 @@ export function isPermanentInvalidTokenError(error: any): boolean {
 /**
  * Send an FCM push notification to multiple tokens in parallel.
  * Detects invalid tokens and triggers cleanup callback while allowing valid tokens to succeed.
+ *
+ * Invariants:
+ * 1. Zero Fake Success: Never returns success: true or fake message IDs when Firebase is uninitialized.
+ * 2. Explicit Mocking: In tests, mock delivery must use an explicit mock provider.
+ * 3. Fail-Loud in Production: Uninitialized FCM in production returns explicit failure results.
  */
 export async function sendFCMToTokens(
   tokens: string[],
@@ -132,6 +194,11 @@ export async function sendFCMToTokens(
   onInvalidToken?: (token: string) => Promise<void> | void,
 ): Promise<FCMDeliveryResult[]> {
   if (!tokens || tokens.length === 0) return [];
+
+  // 1. Explicit Test Mock Provider check (strictly disallowed in production)
+  if (mockFcmProvider && process.env.NODE_ENV !== "production") {
+    return mockFcmProvider.sendToTokens(tokens, payload, onInvalidToken);
+  }
 
   const currentApp = getFirebaseApp();
   const results: FCMDeliveryResult[] = [];
@@ -156,12 +223,18 @@ export async function sendFCMToTokens(
           const messageId = await getMessaging(currentApp).send(message);
           results.push({ token, success: true, messageId });
         } else {
-          // Stub mode for local dev / tests without credentials
-          logger.info(`[FCM_STUB] Mock push notification dispatched`, {
+          // Uninitialized FCM — NEVER return fake success or fake message IDs!
+          const uninitError = new Error("[FCM_UNINITIALIZED] Firebase Admin SDK is not initialized. Notification delivery failed.");
+          logger.error(`[FCM_DELIVERY_FAILED] Cannot send push notification: Firebase Admin SDK is uninitialized`, {
+            tokenMasked: token.slice(0, 8) + "...",
             title: payload.title,
-            body: payload.body,
           });
-          results.push({ token, success: true, messageId: "stub-message-id" });
+          results.push({
+            token,
+            success: false,
+            error: uninitError,
+            isInvalidToken: false,
+          });
         }
       } catch (err: any) {
         const isInvalid = isPermanentInvalidTokenError(err);

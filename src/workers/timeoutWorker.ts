@@ -184,9 +184,7 @@ export function getTimeoutWorker(): Worker<TimeoutJobData> {
   return timeoutWorker;
 }
 
-if (process.env.NODE_ENV !== 'test') {
-  getTimeoutWorker();
-}
+// Worker is started explicitly via lifecycleManager.startup()
 
 const shutdown = async () => {
   if (timeoutWorker) {
