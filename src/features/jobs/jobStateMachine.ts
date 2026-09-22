@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { UserRole } from "../../policies";
+import { logger } from "../../utils/logger";
 
 // ── 1. JOB LIFECYCLE STATES & ACTIONS ────────────────────────────────────────
 
@@ -341,8 +342,9 @@ export const jobStateService = {
       });
     }
 
-    console.log(
-      `[JOB_STATE_MACHINE] Job ${jobId} transitioned: ${currentStatus} --(${action})--> ${targetStatus} by [${actor.role}:${actor.id || "system"}]`
+    logger.info(
+      `[JOB_STATE_MACHINE] Job ${jobId} transitioned: ${currentStatus} --(${action})--> ${targetStatus} by [${actor.role}:${actor.id || "system"}]`,
+      { jobId, currentStatus, targetStatus, action, actorRole: actor.role, actorId: actor.id }
     );
 
     return {

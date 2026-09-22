@@ -9,36 +9,31 @@
 
 import { getRequestContext } from './requestContext';
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 
 const SENSITIVE_KEYS = new Set([
   'password',
-  'password_hash',
   'passwordhash',
   'otp',
-  'otp_hash',
   'otphash',
   'token',
-  'access_token',
   'accesstoken',
-  'refresh_token',
   'refreshtoken',
   'authorization',
   'cookie',
   'cookies',
-  'fcm_token',
   'fcmtoken',
-  'device_token',
   'devicetoken',
   'secret',
-  'razorpay_key_secret',
-  'razorpay_key_id',
-  'webhook_secret',
-  'jwt_access_secret',
-  'jwt_refresh_secret',
-  'private_key',
+  'razorpaykeysecret',
+  'razorpaykeyid',
+  'paymentsecret',
+  'clientsecret',
+  'webhooksecret',
+  'jwtaccesssecret',
+  'jwtrefreshsecret',
+  'privatekey',
   'apikey',
-  'api_key',
 ]);
 
 const REDACTED_MASK = '[REDACTED]';
@@ -174,6 +169,10 @@ export class Logger {
 
   public error(message: string, meta?: LogContext | Record<string, unknown>): void {
     this.write('error', message, meta);
+  }
+
+  public fatal(message: string, meta?: LogContext | Record<string, unknown>): void {
+    this.write('fatal', message, meta);
   }
 }
 

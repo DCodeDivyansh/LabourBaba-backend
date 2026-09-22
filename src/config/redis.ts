@@ -126,6 +126,8 @@ export function getRedisConnectionOptions(): RedisOptions {
 
 export const redisConnectionOptions = getRedisConnectionOptions();
 
+import { logger } from '../utils/logger';
+
 let sharedRedisClient: IORedisClient | null = null;
 
 /**
@@ -138,7 +140,7 @@ export function getRedisClient(): IORedisClient {
 
     sharedRedisClient.on('error', (err) => {
       if (process.env.NODE_ENV !== 'test') {
-        console.error('[REDIS_CLIENT_ERROR]', err.message);
+        logger.error('[REDIS_CLIENT_ERROR]', { error: err.message });
       }
     });
   }

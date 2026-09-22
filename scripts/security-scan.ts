@@ -53,6 +53,17 @@ const HIGH_RISK_PATTERNS: { name: string; regex: RegExp }[] = [
   },
 ];
 
+const PROD_ONLY_PATTERNS: { name: string; regex: RegExp }[] = [
+  {
+    name: "Direct console.* in production source (use structured logger instead)",
+    regex: /\bconsole\.(log|error|warn|info|debug)\s*\(/,
+  },
+  {
+    name: "Unsafe 500 error.message serialization in controller",
+    regex: /res\.status\(500\)\.json\([^{]*\{[^}]*(error|err|e)\.message/,
+  },
+];
+
 export interface ScanFinding {
   file: string;
   line: number;
@@ -120,6 +131,19 @@ export function scanDirectoryForSecrets(dir: string): ScanFinding[] {
               patternName: pattern.name,
               matchedSnippet: line.trim().slice(0, 40) + "...",
             });
+          }
+        }
+
+        if (filePath.includes("src") && !filePath.includes("tests")) {
+          for (const pattern of PROD_ONLY_PATTERNS) {
+            if (pattern.regex.test(line)) {
+              findingsList.push({
+                file: filePath.replace(ROOT_DIR, ""),
+                line: idx + 1,
+                patternName: pattern.name,
+                matchedSnippet: line.trim().slice(0, 40) + "...",
+              });
+            }
           }
         }
       });

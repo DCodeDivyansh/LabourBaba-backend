@@ -73,21 +73,20 @@ export interface RequirementForDispatch {
   workers_needed?: number | null;
 }
 
+import { logger } from '../../utils/logger';
+
 // ── Structured logging ───────────────────────────────────────────────────────
 
 function log(event: string, fields: Record<string, unknown>): void {
-  console.log(JSON.stringify({ ts: new Date().toISOString(), event, ...fields }));
+  logger.info(`[simpleDispatch] ${event}`, { event, ...fields });
 }
 
 function logError(event: string, fields: Record<string, unknown>, err: unknown): void {
-  console.error(
-    JSON.stringify({
-      ts: new Date().toISOString(),
-      event,
-      ...fields,
-      error: err instanceof Error ? err.message : String(err),
-    }),
-  );
+  logger.error(`[simpleDispatch] ${event}`, {
+    event,
+    ...fields,
+    error: err instanceof Error ? err.message : String(err),
+  });
 }
 
 function sleep(ms: number): Promise<void> {

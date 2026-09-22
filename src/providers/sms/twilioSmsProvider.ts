@@ -1,6 +1,7 @@
 import { SmsProvider } from "./smsProvider.interface";
 import { authConfig } from "../../config/authConfig";
 import { maskPhone } from "../../utils/authUtils";
+import { logger } from "../../utils/logger";
 
 export class TwilioSmsProvider implements SmsProvider {
   public readonly name = "TwilioSmsProvider";
@@ -35,10 +36,10 @@ export class TwilioSmsProvider implements SmsProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[TwilioSmsProvider] Failed to dispatch SMS to ${maskPhone(phone)}: HTTP ${response.status}`);
+      logger.error(`[TwilioSmsProvider] Failed to dispatch SMS to ${maskPhone(phone)}: HTTP ${response.status}`, { phone: maskPhone(phone), status: response.status });
       throw new Error(`SMS delivery gateway error (HTTP ${response.status}): ${errorText}`);
     }
 
-    console.log(`[TwilioSmsProvider] Successfully dispatched OTP to ${maskPhone(phone)} for purpose '${purpose}'`);
+    logger.info(`[TwilioSmsProvider] Successfully dispatched OTP to ${maskPhone(phone)} for purpose '${purpose}'`, { phone: maskPhone(phone), purpose });
   }
 }

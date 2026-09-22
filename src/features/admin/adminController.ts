@@ -2,13 +2,30 @@ import { Request, Response } from "express";
 import { adminService } from "./adminServices";
 import { VerifyWorkerDocumentReq, SuspendWorkerReq } from "../../type/api_req.type";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
+import { logger } from "../../utils/logger";
+
+function handleAdminError(error: any, req: Request, res: Response): void {
+  const reqLogger = (req as any).logger || logger;
+  const statusCode = error.statusCode || error.status;
+  if (typeof statusCode === "number" && statusCode >= 400 && statusCode < 500) {
+    res.status(statusCode).json({ success: false, code: error.code || "CLIENT_ERROR", message: error.message });
+    return;
+  }
+
+  reqLogger.error("[adminController] Unexpected error:", { error: error?.message, stack: error?.stack });
+  res.status(500).json({
+    success: false,
+    code: "INTERNAL_SERVER_ERROR",
+    message: "An unexpected internal error occurred.",
+  });
+}
 
 export const getWorkers = async (req: Request, res: Response): Promise<void> => {
   try {
     const workers = await adminService.getWorkers();
     res.status(200).json({ success: true, data: workers });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleAdminError(error, req, res);
   }
 };
 
@@ -22,7 +39,7 @@ export const verifyWorker = async (req: Request, res: Response): Promise<void> =
 
     res.status(200).json({ success: true, data: worker });
   } catch (error: any) {
-    res.status(400).json({ success: false, message: error.message });
+    handleAdminError(error, req, res);
   }
 };
 
@@ -43,7 +60,7 @@ export const getAuditLogs = async (req: Request, res: Response): Promise<void> =
 
     res.status(200).json({ success: true, data: result });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleAdminError(error, req, res);
   }
 };
 
@@ -53,7 +70,7 @@ export const getAllJobs = async (req: Request, res: Response): Promise<void> => 
     const jobs = await adminService.getAllJobs(customerId);
     res.status(200).json({ success: true, data: jobs });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: "Internal server error" });
+    handleAdminError(error, req, res);
   }
 };
 
@@ -62,7 +79,7 @@ export const getFlaggedWorkers = async (req: Request, res: Response): Promise<vo
     const workers = await adminService.getFlaggedWorkers();
     res.status(200).json({ success: true, data: workers });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleAdminError(error, req, res);
   }
 };
 
@@ -76,8 +93,7 @@ export const suspendWorker = async (req: Request, res: Response): Promise<void> 
 
     res.status(200).json({ success: true, data: result });
   } catch (error: any) {
-    const statusCode = error.statusCode || error.status || 400;
-    res.status(statusCode).json({ success: false, message: error.message });
+    handleAdminError(error, req, res);
   }
 };
 
@@ -87,7 +103,7 @@ export const getWorkerDocuments = async (req: Request, res: Response): Promise<v
     const documents = await adminService.getWorkerDocuments(id);
     res.status(200).json({ success: true, data: documents });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleAdminError(error, req, res);
   }
 };
 
@@ -98,8 +114,7 @@ export const getWorkerDocumentAccess = async (req: Request, res: Response): Prom
     const accessDto = await adminService.getWorkerDocumentAccess(adminId, id, documentId);
     res.status(200).json({ success: true, data: accessDto });
   } catch (error: any) {
-    const statusCode = error.statusCode || error.status || 500;
-    res.status(statusCode).json({ success: false, message: error.message });
+    handleAdminError(error, req, res);
   }
 };
 

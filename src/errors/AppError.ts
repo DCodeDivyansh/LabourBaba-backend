@@ -79,11 +79,16 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+export const AuthenticationError = UnauthorizedError;
+
 export class ForbiddenError extends AppError {
   constructor(message: string = 'Access denied', code: string = ErrorCode.FORBIDDEN) {
     super(message, 403, code);
   }
 }
+
+export const AuthorizationError = ForbiddenError;
+export const DomainError = AppError;
 
 export class NotFoundError extends AppError {
   constructor(message: string = 'Resource not found', code: string = ErrorCode.NOT_FOUND) {

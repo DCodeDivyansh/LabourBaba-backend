@@ -1,5 +1,6 @@
 import { SmsProvider } from "./smsProvider.interface";
 import { maskPhone } from "../../utils/authUtils";
+import { logger } from "../../utils/logger";
 
 export interface CapturedSms {
   phone: string;
@@ -28,7 +29,7 @@ export class MockSmsProvider implements SmsProvider {
 
     // Masked observability in logs - NEVER print plaintext OTP
     if (process.env.NODE_ENV !== "test") {
-      console.log(`[SMS_MOCK] Dispatched OTP for purpose '${purpose}' to ${maskPhone(phone)}`);
+      logger.info(`[SMS_MOCK] Dispatched OTP for purpose '${purpose}' to ${maskPhone(phone)}`, { purpose, phone: maskPhone(phone) });
     }
   }
 

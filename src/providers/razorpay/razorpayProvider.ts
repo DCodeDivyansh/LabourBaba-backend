@@ -22,6 +22,7 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import { paymentConfig } from "../../config/paymentConfig";
+import { logger } from "../../utils/logger";
 
 // ── Error types ────────────────────────────────────────────────────────────────
 
@@ -153,8 +154,9 @@ export async function createOrder(
     // Log the error code/description but never the raw SDK error (may contain credentials)
     const safeCode = sdkErr?.error?.code ?? sdkErr?.statusCode ?? "UNKNOWN";
     const safeDesc = sdkErr?.error?.description ?? sdkErr?.message ?? "Unknown error";
-    console.error(
+    logger.error(
       `[razorpayProvider] Razorpay order creation failed: code=${safeCode}, description=${safeDesc}`,
+      { safeCode, safeDesc }
     );
     throw new RazorpayProviderError(
       "Payment provider failed to create order. Please try again.",
@@ -166,7 +168,7 @@ export async function createOrder(
   // Validate provider response ─────────────────────────────────────────────────
 
   if (!order || typeof order.id !== "string" || order.id.trim() === "") {
-    console.error(
+    logger.error(
       "[razorpayProvider] Razorpay returned missing or invalid order ID.",
       { orderId: order?.id },
     );
@@ -179,8 +181,9 @@ export async function createOrder(
 
   const returnedAmount = Number(order.amount);
   if (returnedAmount !== amountPaise) {
-    console.error(
+    logger.error(
       `[razorpayProvider] Amount mismatch: expected ${amountPaise} paise, provider returned ${returnedAmount} paise.`,
+      { expectedPaise: amountPaise, returnedPaise: returnedAmount }
     );
     throw new RazorpayProviderError(
       "Payment provider returned an unexpected amount.",
@@ -191,8 +194,9 @@ export async function createOrder(
 
   const returnedCurrency = (order.currency ?? "").toUpperCase();
   if (returnedCurrency !== currency.toUpperCase()) {
-    console.error(
+    logger.error(
       `[razorpayProvider] Currency mismatch: expected ${currency}, provider returned ${returnedCurrency}.`,
+      { expectedCurrency: currency, returnedCurrency }
     );
     throw new RazorpayProviderError(
       "Payment provider returned an unexpected currency.",
@@ -332,8 +336,9 @@ export async function createRefund(
     if (sdkErr instanceof RazorpayProviderError) throw sdkErr;
     const safeCode = sdkErr?.error?.code ?? sdkErr?.statusCode ?? "UNKNOWN";
     const safeDesc = sdkErr?.error?.description ?? sdkErr?.message ?? "Refund provider failure";
-    console.error(
+    logger.error(
       `[razorpayProvider] Razorpay refund failed: code=${safeCode}, description=${safeDesc}`,
+      { safeCode, safeDesc }
     );
     throw new RazorpayProviderError(
       `Payment provider failed to process refund: ${safeDesc}`,

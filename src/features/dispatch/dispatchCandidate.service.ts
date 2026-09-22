@@ -4,6 +4,7 @@ import { locationFreshnessConfig } from '../../config/locationFreshnessConfig';
 import { isLocationFresh, getFreshnessCutoffDate } from './locationFreshnessPolicy';
 import { locationFreshnessTelemetry } from './locationFreshnessTelemetry';
 import { validateCoordinatePair } from '../../utils/coordinateValidator';
+import { logger } from '../../utils/logger';
 
 export interface DispatchWaveConfig {
   waveNumber: number;
@@ -314,7 +315,7 @@ export async function getEligibleCandidatePage(
       nextCursor,
     };
   } catch (err) {
-    console.error('[dispatchCandidateService] Error querying eligible candidate page:', {
+    logger.error('[dispatchCandidateService] Error querying eligible candidate page:', {
       requirementId,
       radiusMeters,
       error: err instanceof Error ? err.message : String(err),

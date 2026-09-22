@@ -27,6 +27,7 @@ import {
   BookingOtpAlreadyConsumedError,
   BookingOtpWrongStateError,
 } from "./bookingStateMachine";
+import { logger } from "../../utils/logger";
 
 export const bookingService = {
   async getBookingDetail(bookingId: string, actor?: AuthenticatedUser) {
@@ -445,7 +446,7 @@ export const bookingService = {
               },
             });
           } catch (dispErr: any) {
-            console.warn(`[bookingServices] Note: Could not reconcile dispatch state: ${dispErr?.message}`);
+            logger.warn(`[bookingServices] Note: Could not reconcile dispatch state: ${dispErr?.message}`);
           }
         }
 

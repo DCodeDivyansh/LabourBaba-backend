@@ -21,6 +21,7 @@ import { isValidIdentifier } from "../schemas";
 import { setSocketServer } from "./socketLifecycle";
 import { workerLocationService } from "../features/worker_location/worker_location.service";
 import { validateCoordinatePair } from "../utils/coordinateValidator";
+import { logger } from "../utils/logger";
 
 /**
  * Registers secure Socket.IO event handlers.
@@ -44,12 +45,12 @@ export function registerSocketHandlers(io: Server): void {
     const user = socket.data.user;
 
     if (!user || !user.id || !user.role) {
-      console.warn(`[SOCKET] Unauthenticated socket connected unexpectedly: ${socket.id}`);
+      logger.warn(`[SOCKET] Unauthenticated socket connected unexpectedly: ${socket.id}`, { socketId: socket.id });
       socket.disconnect(true);
       return;
     }
 
-    console.log(`[SOCKET] Authenticated socket connected: ${socket.id} (user: ${user.id}, role: ${user.role})`);
+    logger.info(`[SOCKET] Authenticated socket connected: ${socket.id} (user: ${user.id}, role: ${user.role})`, { socketId: socket.id, userId: user.id, role: user.role });
 
     // ========================================================================
     // 1. Automatic Personal Room Membership
@@ -69,7 +70,7 @@ export function registerSocketHandlers(io: Server): void {
     // ========================================================================
     socket.on("join:worker", (workerId?: string, callback?: (res: SocketAckResponse) => void) => {
       if (user.role !== UserRole.WORKER && user.role !== UserRole.ADMIN) {
-        console.warn(`[SOCKET_SECURITY] Role violation: User ${user.id} (${user.role}) attempted join:worker`);
+        logger.warn(`[SOCKET_SECURITY] Role violation: User ${user.id} (${user.role}) attempted join:worker`, { userId: user.id, role: user.role });
         const response: SocketAckResponse = {
           success: false,
           code: "FORBIDDEN",
@@ -81,8 +82,9 @@ export function registerSocketHandlers(io: Server): void {
       }
 
       if (workerId && workerId !== user.id && user.role !== UserRole.ADMIN) {
-        console.warn(
-          `[SOCKET_SECURITY] Identity spoofing attempt: Worker ${user.id} attempted to join worker room for ${workerId}`
+        logger.warn(
+          `[SOCKET_SECURITY] Identity spoofing attempt: Worker ${user.id} attempted to join worker room for ${workerId}`,
+          { userId: user.id, spoofedWorkerId: workerId }
         );
         const response: SocketAckResponse = {
           success: false,
@@ -108,7 +110,7 @@ export function registerSocketHandlers(io: Server): void {
     // ========================================================================
     socket.on("join:customer", (customerId?: string, callback?: (res: SocketAckResponse) => void) => {
       if (user.role !== UserRole.CUSTOMER && user.role !== UserRole.ADMIN) {
-        console.warn(`[SOCKET_SECURITY] Role violation: User ${user.id} (${user.role}) attempted join:customer`);
+        logger.warn(`[SOCKET_SECURITY] Role violation: User ${user.id} (${user.role}) attempted join:customer`, { userId: user.id, role: user.role });
         const response: SocketAckResponse = {
           success: false,
           code: "FORBIDDEN",
@@ -120,8 +122,9 @@ export function registerSocketHandlers(io: Server): void {
       }
 
       if (customerId && customerId !== user.id && user.role !== UserRole.ADMIN) {
-        console.warn(
-          `[SOCKET_SECURITY] Identity spoofing attempt: Customer ${user.id} attempted to join customer room for ${customerId}`
+        logger.warn(
+          `[SOCKET_SECURITY] Identity spoofing attempt: Customer ${user.id} attempted to join customer room for ${customerId}`,
+          { userId: user.id, spoofedCustomerId: customerId }
         );
         const response: SocketAckResponse = {
           success: false,
@@ -157,8 +160,9 @@ export function registerSocketHandlers(io: Server): void {
         try {
           // Role check
           if (user.role !== UserRole.WORKER) {
-            console.warn(
-              `[SOCKET_SECURITY] Role violation: Non-worker ${user.id} (${user.role}) attempted location update`
+            logger.warn(
+              `[SOCKET_SECURITY] Role violation: Non-worker ${user.id} (${user.role}) attempted location update`,
+              { userId: user.id, role: user.role }
             );
             const response: SocketAckResponse = {
               success: false,
@@ -174,8 +178,9 @@ export function registerSocketHandlers(io: Server): void {
 
           // Rejection of identity spoofing attempt
           if (workerId && workerId !== user.id) {
-            console.warn(
-              `[SOCKET_SECURITY] Location spoofing attempt: Authenticated worker ${user.id} sent workerId ${workerId}`
+            logger.warn(
+              `[SOCKET_SECURITY] Location spoofing attempt: Authenticated worker ${user.id} sent workerId ${workerId}`,
+              { userId: user.id, spoofedWorkerId: workerId }
             );
             const response: SocketAckResponse = {
               success: false,
@@ -227,8 +232,9 @@ export function registerSocketHandlers(io: Server): void {
           });
 
           if (!activeRelationship) {
-            console.warn(
-              `[SOCKET_SECURITY] Unauthorized location broadcast: Worker ${user.id} has no active booking with customer ${customerId}`
+            logger.warn(
+              `[SOCKET_SECURITY] Unauthorized location broadcast: Worker ${user.id} has no active booking with customer ${customerId}`,
+              { userId: user.id, customerId }
             );
             const response: SocketAckResponse = {
               success: false,
@@ -244,7 +250,7 @@ export function registerSocketHandlers(io: Server): void {
           try {
             await workerLocationService.updateLocation(user.id, validLat, validLng);
           } catch (locErr: any) {
-            console.warn(`[SOCKET] Failed to persist worker location for ${user.id}:`, locErr.message);
+            logger.warn(`[SOCKET] Failed to persist worker location for ${user.id}:`, { userId: user.id, error: locErr.message });
             const response: SocketAckResponse = {
               success: false,
               code: "INVALID_REQUEST",
@@ -264,7 +270,7 @@ export function registerSocketHandlers(io: Server): void {
 
           callback?.({ success: true });
         } catch (err: any) {
-          console.error(`[SOCKET] Error processing worker location update:`, err.message);
+          logger.error(`[SOCKET] Error processing worker location update:`, { userId: user.id, error: err?.message });
           callback?.({
             success: false,
             code: "INTERNAL_ERROR",
@@ -315,8 +321,9 @@ export function registerSocketHandlers(io: Server): void {
           if (rawBooking) {
             const decision = chatPolicy.canJoinRoom(user, rawBooking);
             if (!decision.allowed) {
-              console.warn(
-                `[SOCKET_SECURITY] Unauthorized room join: User ${user.id} (${user.role}) attempted to join booking ${bookingId}`
+              logger.warn(
+                `[SOCKET_SECURITY] Unauthorized room join: User ${user.id} (${user.role}) attempted to join booking ${bookingId}`,
+                { userId: user.id, role: user.role, bookingId }
               );
               const response: SocketAckResponse = {
                 success: false,
@@ -349,7 +356,7 @@ export function registerSocketHandlers(io: Server): void {
           message: `Joined booking room: ${roomName}`,
         });
       } catch (err: any) {
-        console.error(`[SOCKET] Error processing join:booking:`, err.message);
+        logger.error(`[SOCKET] Error processing join:booking:`, { userId: user.id, error: err?.message });
         callback?.({
           success: false,
           code: "INTERNAL_ERROR",
@@ -409,7 +416,7 @@ export function registerSocketHandlers(io: Server): void {
 
           callback?.({ success: true, data: message });
         } catch (err: any) {
-          console.warn(`[SOCKET] Chat message failed for user ${user.id}:`, err.message);
+          logger.warn(`[SOCKET] Chat message failed for user ${user.id}:`, { userId: user.id, error: err?.message });
           const isForbidden =
             err instanceof AuthorizationError
               ? err.statusCode === 403
@@ -435,7 +442,7 @@ export function registerSocketHandlers(io: Server): void {
     );
 
     socket.on("disconnect", () => {
-      console.log(`[SOCKET] Disconnected: ${socket.id} (user: ${user.id})`);
+      logger.info(`[SOCKET] Disconnected: ${socket.id} (user: ${user.id})`, { socketId: socket.id, userId: user.id });
     });
   });
 }

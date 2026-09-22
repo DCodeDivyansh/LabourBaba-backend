@@ -33,10 +33,10 @@ describe('Issue #35: Docker Hardening & Multi-Stage Configuration', () => {
     expect(dockerfile).toMatch(/USER\s+nodejs/);
   });
 
-  test('Dockerfile defines a HEALTHCHECK instruction against /health endpoint', () => {
+  test('Dockerfile defines a HEALTHCHECK instruction against /health/ready endpoint', () => {
     const dockerfile = fs.readFileSync(dockerfilePath, 'utf8');
     expect(dockerfile).toContain('HEALTHCHECK');
-    expect(dockerfile).toContain('/health');
+    expect(dockerfile).toContain('/health/ready');
   });
 
   test('.dockerignore excludes sensitive files, tests, docs, and git metadata', () => {

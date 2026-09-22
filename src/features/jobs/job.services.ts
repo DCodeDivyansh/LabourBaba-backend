@@ -8,6 +8,7 @@ import { RequirementStatus } from './requirementStateMachine';
 import { generateDispatchOperationId } from '../dispatch/dispatchOperation';
 import { validateOptionalCoordinatePair } from '../../utils/coordinateValidator';
 import { skillService } from '../skill/skill.service';
+import { logger } from '../../utils/logger';
 
 export const jobService = {
   async createJob(customerId: string, payload: CreateJobReq) {
@@ -45,7 +46,7 @@ export const jobService = {
             WHERE id = ${job.id}::uuid;
           `;
         } catch (err) {
-          console.error("UPDATE failed:", err);
+          logger.error("UPDATE failed:", { error: (err as any)?.message });
         }
       }
 
@@ -65,7 +66,7 @@ export const jobService = {
           });
         }
       } catch (histErr: any) {
-        console.warn(`[jobService] Could not write initial transition: ${histErr?.message}`);
+        logger.warn(`[jobService] Could not write initial transition: ${histErr?.message}`);
       }
 
       if (payload.requirements && payload.requirements.length > 0) {
@@ -96,7 +97,7 @@ export const jobService = {
                 },
               });
             } catch (jrsErr: any) {
-              console.warn(`[jobService] Could not write job_requirement_skill: ${jrsErr?.message}`);
+              logger.warn(`[jobService] Could not write job_requirement_skill: ${jrsErr?.message}`);
             }
           }
         }
@@ -109,7 +110,7 @@ export const jobService = {
       where: { job_id: job.id },
       select: { id: true, skill_id: true, skill_type: true, rate_per_day: true, worker_count_needed: true },
     });
-    console.log("[jobService] requirements", createdRequirements);
+    logger.info("[jobService] requirements", { count: createdRequirements?.length });
 
     // Transition job to SEARCHING and requirements to DISPATCHING
     try {
@@ -126,7 +127,7 @@ export const jobService = {
         });
       });
     } catch (err: any) {
-      console.warn(`[jobService] Transition to SEARCHING note: ${err?.message}`);
+      logger.warn(`[jobService] Transition to SEARCHING note: ${err?.message}`);
     }
 
     // Fire BullMQ dispatch for all requirements with deterministic job IDs
@@ -149,7 +150,7 @@ export const jobService = {
             },
           );
         } catch (err) {
-          console.error(`[jobService] Failed to enqueue BullMQ dispatch job for requirement ${req.id}:`, err);
+          logger.error(`[jobService] Failed to enqueue BullMQ dispatch job for requirement ${req.id}:`, { error: (err as any)?.message });
         }
       }),
     );
@@ -363,7 +364,7 @@ export const jobService = {
             },
           };
         } catch (err) {
-          console.error(`Failed to get worker coordinates for ${b.worker_id}:`, err);
+          logger.error(`Failed to get worker coordinates for ${b.worker_id}:`, { error: (err as any)?.message });
           return b;
         }
       })

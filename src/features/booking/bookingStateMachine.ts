@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { UserRole } from "../../policies";
+import { logger } from "../../utils/logger";
 
 // ── 1. BOOKING LIFECYCLE STATES & ACTIONS ────────────────────────────────────
 
@@ -464,7 +465,7 @@ export const bookingStateService = {
           },
         });
       } catch (logErr: any) {
-        console.warn(`[bookingStateService] Note: Could not record transition audit: ${logErr?.message}`);
+        logger.warn(`[bookingStateService] Note: Could not record transition audit: ${logErr?.message}`);
       }
     }
 

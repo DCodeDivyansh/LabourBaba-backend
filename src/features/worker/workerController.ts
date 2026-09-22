@@ -6,10 +6,39 @@ import { comparePassword, generateToken, normalizePhoneToE164 } from "../../util
 import prisma from "../../config/prisma";
 import { workerPolicy, assertPolicy, AuthorizationError } from "../../policies";
 import { sessionService } from "../auth/session.service";
+import { logger } from "../../utils/logger";
 
 const getWorkerId = (req: Request) => {
   return (req as AuthenticatedRequest).user?.id || null;
 };
+
+function handleWorkerError(error: any, req: Request, res: Response): void {
+  const reqLogger = (req as any).logger || logger;
+  if (error instanceof AuthorizationError || error.statusCode === 403) {
+    res.status(403).json({ success: false, code: "FORBIDDEN", message: error.message || "Forbidden" });
+    return;
+  }
+  if (error.code === "PHONE_ALREADY_REGISTERED" || error.code === "P2002") {
+    res.status(409).json({ success: false, code: "PHONE_ALREADY_REGISTERED", message: "Worker with this phone number already exists" });
+    return;
+  }
+  if (error.code === "INVALID_PHONE_NUMBER") {
+    res.status(422).json({ success: false, code: "INVALID_PHONE_NUMBER", message: error.message || "Invalid phone number" });
+    return;
+  }
+  if (typeof error.statusCode === "number" && error.statusCode >= 400 && error.statusCode < 500) {
+    res.status(error.statusCode).json({ success: false, code: error.code || "CLIENT_ERROR", message: error.message });
+    return;
+  }
+
+  // 500 / Unexpected error: Log server-side with structured logger, return safe generic message
+  reqLogger.error("[workerController] Unexpected error:", { error: error?.message, stack: error?.stack });
+  res.status(500).json({
+    success: false,
+    code: "INTERNAL_SERVER_ERROR",
+    message: "An unexpected internal error occurred.",
+  });
+}
 
 export const loginWorker = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -55,11 +84,7 @@ export const loginWorker = async (req: Request, res: Response): Promise<void> =>
       refreshToken: sessionResult.rawToken,
     });
   } catch (error: any) {
-    if (error.code === "INVALID_PHONE_NUMBER") {
-      res.status(422).json({ success: false, code: "INVALID_PHONE_NUMBER", message: error.message });
-      return;
-    }
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -69,15 +94,7 @@ export const registerWorker = async (req: Request, res: Response): Promise<void>
     const worker = await workerService.register(payload);
     res.status(201).json({ success: true, data: worker });
   } catch (error: any) {
-    if (error.code === "PHONE_ALREADY_REGISTERED" || error.code === "P2002") {
-      res.status(409).json({ success: false, code: "PHONE_ALREADY_REGISTERED", message: "Worker with this phone number already exists" });
-      return;
-    }
-    if (error.code === "INVALID_PHONE_NUMBER") {
-      res.status(422).json({ success: false, code: "INVALID_PHONE_NUMBER", message: error.message });
-      return;
-    }
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -88,7 +105,7 @@ export const getMe = async (req: Request, res: Response): Promise<void> => {
     const worker = await workerService.getProfile(workerId);
     res.status(200).json({ success: true, data: worker });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -100,15 +117,7 @@ export const updateMe = async (req: Request, res: Response): Promise<void> => {
     const worker = await workerService.updateProfile(workerId, payload);
     res.status(200).json({ success: true, data: worker });
   } catch (error: any) {
-    if (error.code === "PHONE_ALREADY_REGISTERED" || error.code === "P2002") {
-      res.status(409).json({ success: false, code: "PHONE_ALREADY_REGISTERED", message: "Phone number is already in use by another worker" });
-      return;
-    }
-    if (error.code === "INVALID_PHONE_NUMBER") {
-      res.status(422).json({ success: false, code: "INVALID_PHONE_NUMBER", message: error.message });
-      return;
-    }
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -140,8 +149,7 @@ export const updateLocation = async (req: Request, res: Response): Promise<void>
     const location = await workerService.updateLocation(workerId, payload);
     res.status(200).json({ success: true, data: location });
   } catch (error: any) {
-    const statusCode = error.statusCode || 500;
-    res.status(statusCode).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -153,7 +161,7 @@ export const updateOnline = async (req: Request, res: Response): Promise<void> =
     const worker = await workerService.updateOnlineStatus(workerId, payload);
     res.status(200).json({ success: true, data: worker });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -172,11 +180,7 @@ export const uploadDocuments = async (req: Request, res: Response): Promise<void
     const document = await workerService.uploadDocument(actor.id, payload);
     res.status(201).json({ success: true, data: document });
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
-      return;
-    }
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -189,11 +193,7 @@ export const requestUploadUrl = async (req: Request, res: Response): Promise<voi
     const result = await workerService.requestUploadUrl(actor.id, document_type, file_extension);
     res.status(200).json({ success: true, data: result });
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
-      return;
-    }
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -205,11 +205,7 @@ export const getDocuments = async (req: Request, res: Response): Promise<void> =
     const documents = await workerService.getDocuments(actor.id);
     res.status(200).json({ success: true, data: documents });
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
-      return;
-    }
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -221,11 +217,7 @@ export const getDocumentAccess = async (req: Request, res: Response): Promise<vo
     const accessDto = await workerService.getDocumentAccessUrl(actor, documentId);
     res.status(200).json({ success: true, data: accessDto });
   } catch (error: any) {
-    if (error instanceof AuthorizationError) {
-      res.status(error.status).json({ success: false, message: error.message });
-      return;
-    }
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -236,7 +228,7 @@ export const getAnalytics = async (req: Request, res: Response): Promise<void> =
     const analytics = await workerService.getAnalytics(workerId);
     res.status(200).json({ success: true, data: analytics });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -247,7 +239,7 @@ export const getBookings = async (req: Request, res: Response): Promise<void> =>
     const bookings = await workerService.getBookings(workerId);
     res.status(200).json({ success: true, data: bookings });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -258,7 +250,7 @@ export const getEarnings = async (req: Request, res: Response): Promise<void> =>
     const earnings = await workerService.getEarnings(workerId);
     res.status(200).json({ success: true, data: { earnings } });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -276,7 +268,7 @@ export const updateDeviceToken = async (req: Request, res: Response): Promise<vo
     await workerService.updateDeviceToken(workerId, device_token, device_id, platform);
     res.status(200).json({ success: true, message: "Device token updated" });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -293,7 +285,7 @@ export const registerDevice = async (req: Request, res: Response): Promise<void>
     const device = await workerService.registerDevice(workerId, req.body);
     res.status(201).json({ success: true, data: device });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -311,7 +303,7 @@ export const revokeDevice = async (req: Request, res: Response): Promise<void> =
     const result = await workerService.revokeDevice(workerId, deviceId);
     res.status(200).json({ success: true, data: result, message: "Device revoked successfully" });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };
 
@@ -323,6 +315,6 @@ export const getDevices = async (req: Request, res: Response): Promise<void> => 
     const devices = await workerService.listDevices(workerId);
     res.status(200).json({ success: true, data: devices });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
+    handleWorkerError(error, req, res);
   }
 };

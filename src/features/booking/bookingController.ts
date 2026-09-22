@@ -4,8 +4,10 @@ import { ConfirmBookingCompleteReq, CancelBookingReq } from "../../type/api_req.
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
 import { AuthorizationError } from "../../policies";
 import { BookingStateError } from "./bookingStateMachine";
+import { logger } from "../../utils/logger";
 
-function handleBookingError(error: any, res: Response): void {
+function handleBookingError(error: any, req: Request, res: Response): void {
+  const reqLogger = (req as any).logger || logger;
   if (error instanceof BookingStateError) {
     res.status(error.statusCode).json({
       success: false,
@@ -26,10 +28,21 @@ function handleBookingError(error: any, res: Response): void {
     res.status(404).json({ success: false, message: "Booking not found" });
     return;
   }
-  res.status(error.statusCode || 400).json({
+  const statusCode = error.statusCode || 400;
+  if (statusCode < 500) {
+    res.status(statusCode).json({
+      success: false,
+      code: error.code,
+      message: error.message,
+    });
+    return;
+  }
+
+  reqLogger.error("[bookingController] Unexpected error:", { error: error?.message, stack: error?.stack });
+  res.status(500).json({
     success: false,
-    code: error.code,
-    message: error.message,
+    code: "INTERNAL_SERVER_ERROR",
+    message: "An unexpected internal error occurred.",
   });
 }
 
@@ -44,7 +57,7 @@ export const getBooking = async (req: Request, res: Response): Promise<void> => 
     const booking = await bookingService.getBookingDetail(bookingId, actor);
     res.status(200).json({ success: true, data: booking });
   } catch (error: any) {
-    handleBookingError(error, res);
+    handleBookingError(error, req, res);
   }
 };
 
@@ -57,7 +70,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     const result = await bookingService.verifyOtp(bookingId, actor.id, otp, actor);
     res.status(200).json(result);
   } catch (error: any) {
-    handleBookingError(error, res);
+    handleBookingError(error, req, res);
   }
 };
 
@@ -69,7 +82,7 @@ export const completeBooking = async (req: Request, res: Response): Promise<void
     const result = await bookingService.completeBooking(bookingId, actor.id, actor);
     res.status(200).json(result);
   } catch (error: any) {
-    handleBookingError(error, res);
+    handleBookingError(error, req, res);
   }
 };
 
@@ -82,7 +95,7 @@ export const confirmComplete = async (req: Request, res: Response): Promise<void
     const result = await bookingService.confirmComplete(bookingId, actor.id, payload, actor);
     res.status(200).json(result);
   } catch (error: any) {
-    handleBookingError(error, res);
+    handleBookingError(error, req, res);
   }
 };
 
@@ -95,7 +108,7 @@ export const cancelBooking = async (req: Request, res: Response): Promise<void> 
     const result = await bookingService.cancelBooking(bookingId, actor.id, payload, actor);
     res.status(200).json(result);
   } catch (error: any) {
-    handleBookingError(error, res);
+    handleBookingError(error, req, res);
   }
 };
 
@@ -107,6 +120,6 @@ export const getWorkerLocation = async (req: Request, res: Response): Promise<vo
     const location = await bookingService.getWorkerLocation(bookingId, actor);
     res.status(200).json({ success: true, data: location });
   } catch (error: any) {
-    handleBookingError(error, res);
+    handleBookingError(error, req, res);
   }
 };

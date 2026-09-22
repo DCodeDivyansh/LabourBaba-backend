@@ -16,6 +16,7 @@ import {
 import { storageService } from "../../providers/storage/storage.service";
 import { workerPolicy, assertPolicy, AuthorizationError, AuthenticatedUser } from "../../policies";
 import { skillService } from "../skill/skill.service";
+import { logger } from "../../utils/logger";
 
 export const workerService = {
   async register(payload: CreateWorkerReq) {
@@ -74,7 +75,7 @@ export const workerService = {
             update: {},
           });
         } catch (wsErr: any) {
-          console.warn(`[workerService] Could not write initial worker_skill: ${wsErr?.message}`);
+          logger.warn(`[workerService] Could not write initial worker_skill: ${wsErr?.message}`);
         }
       }
 
@@ -130,7 +131,7 @@ export const workerService = {
             update: {},
           });
         } catch (wsErr: any) {
-          console.warn(`[workerService] Could not write worker_skill on update: ${wsErr?.message}`);
+          logger.warn(`[workerService] Could not write worker_skill on update: ${wsErr?.message}`);
         }
       }
 

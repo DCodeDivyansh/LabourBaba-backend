@@ -17,6 +17,8 @@ import { bookingConfig } from '../../config/bookingConfig';
 import { generateDispatchOperationId } from './dispatchOperation';
 import { planDispatchWave } from './wavePlanner';
 
+import { logger } from '../../utils/logger';
+
 // ── Helper: check if all requirements for a job are filled ──────────────────
 
 async function checkJobComplete(
@@ -39,14 +41,14 @@ async function checkJobComplete(
         reason: "All job requirements filled",
       });
     } catch (err: any) {
-      console.warn(`[dispatchServices] Note: Job transition to BOOKED: ${err.message}`);
+      logger.warn(`[dispatchServices] Note: Job transition to BOOKED: ${err.message}`);
     }
 
     await tx.job.update({
       where: { id: jobId },
       data: { dispatch_status: 'fully_booked' },
     });
-    console.log(`[dispatchServices] Job ${jobId} is fully booked.`);
+    logger.info(`[dispatchServices] Job ${jobId} is fully booked.`);
     return true;
   }
   return false;
@@ -300,11 +302,11 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
           reason: 'filled',
         });
       }
-      console.log(
+      logger.info(
         `[dispatchServices] Notified ${result.expiredWorkerIds.length} workers that requirement ${requirementId} is filled`,
       );
-    } catch (err) {
-      console.error('[dispatchServices] Failed to emit job:closed:', err);
+    } catch (err: any) {
+      logger.error('[dispatchServices] Failed to emit job:closed:', { error: err.message });
     }
   }
 
@@ -354,8 +356,8 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
         jobId: result.jobId,
       });
     }
-  } catch (err) {
-    console.error('[dispatchServices] Failed to emit worker:accepted:', err);
+  } catch (err: any) {
+    logger.error('[dispatchServices] Failed to emit worker:accepted:', { error: err?.message });
   }
 
   return result;
@@ -411,7 +413,7 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
     });
 
     if (req && req.status !== 'filled') {
-      console.log(
+      logger.info(
         `[dispatchServices] All wave ${currentWave} workers responded for requirement ${requirementId}. Firing next wave immediately.`,
       );
 
@@ -447,7 +449,7 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
         waveNumber: nextWaveNumber,
       });
 
-      console.log(
+      logger.info(
         `[dispatchServices] Firing wave ${nextWaveNumber} (operation ${operationId}) at offset ${nextOffset} via BullMQ`,
       );
       try {
@@ -464,8 +466,8 @@ export const declineDispatch = async (requirementId: string, workerId: string) =
             jobId: `dispatch:${requirementId}:wave-${nextWaveNumber}`,
           },
         );
-      } catch (err) {
-        console.error(`[dispatchServices] Failed to enqueue wave ${nextWaveNumber} for requirement ${requirementId}:`, err);
+      } catch (err: any) {
+        logger.error(`[dispatchServices] Failed to enqueue wave ${nextWaveNumber} for requirement ${requirementId}:`, { error: err?.message });
       }
     }
   }

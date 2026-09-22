@@ -6,6 +6,7 @@ import { RequirementStatus } from '../features/jobs/requirementStateMachine';
 import { io } from '../server';
 import { generateDispatchOperationId } from '../features/dispatch/dispatchOperation';
 import { planDispatchWave } from '../features/dispatch/wavePlanner';
+import { logger } from '../utils/logger';
 
 export interface TimeoutJobData {
   requirementId: string;
@@ -23,8 +24,9 @@ export interface TimeoutJobData {
 export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
   const { requirementId, jobId, waveNumber, totalWorkersFound = 0, offset = 0, waveSize = 0 } = data;
 
-  console.log(
+  logger.info(
     `[timeoutWorker] Wave ${waveNumber} timeout for requirement=${requirementId}`,
+    { requirementId, jobId, waveNumber }
   );
 
   // 1. Authoritative DB re-read: check if requirement is already filled or cancelled
@@ -38,7 +40,7 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
   });
 
   if (!req) {
-    console.warn(`[timeoutWorker] Requirement ${requirementId} not found — skipping`);
+    logger.warn(`[timeoutWorker] Requirement ${requirementId} not found — skipping`, { requirementId });
     return;
   }
 
@@ -49,8 +51,9 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
     reqStatusUpper === RequirementStatus.CANCELLED ||
     req.status === 'cancelled'
   ) {
-    console.log(
+    logger.info(
       `[timeoutWorker] Requirement ${requirementId} already reached terminal state (${req.status}) — skipping wave timeout`,
+      { requirementId, status: req.status }
     );
     return;
   }
@@ -66,7 +69,7 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
   });
   const timedOut = timeoutResult?.count ?? 0;
 
-  console.log(`[timeoutWorker] Marked ${timedOut} dispatch(es) as timeout for wave ${waveNumber}`);
+  logger.info(`[timeoutWorker] Marked ${timedOut} dispatch(es) as timeout for wave ${waveNumber}`, { requirementId, waveNumber, timedOut });
 
   // 3. Close this wave as exhausted
   await prisma.dispatch_wave.updateMany({
@@ -95,8 +98,9 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
 
   if (!nextPlan.canDispatch || !nextPlan.shouldTryNextWave) {
     // No more workers available for this requirement
-    console.log(
+    logger.info(
       `[timeoutWorker] No more workers for requirement ${requirementId} in wave ${nextWave}. Marking no_workers_available.`,
+      { requirementId, nextWave }
     );
     await prisma.job_requirement.update({
       where: { id: requirementId },
@@ -109,8 +113,8 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
           jobId,
           requirementId,
         });
-      } catch (err) {
-        console.error('[timeoutWorker] Failed to emit job:no_workers socket event:', err);
+      } catch (err: any) {
+        logger.error('[timeoutWorker] Failed to emit job:no_workers socket event:', { error: err.message });
       }
     }
     return;
@@ -122,8 +126,9 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
     waveNumber: nextWave,
   });
 
-  console.log(
+  logger.info(
     `[timeoutWorker] Firing wave ${nextWave} (operation ${nextOperationId}) for requirement ${requirementId} at offset ${nextOffset}`,
+    { requirementId, nextWave, nextOperationId, nextOffset }
   );
 
   await dispatchQueue.add(
@@ -160,23 +165,23 @@ export function getTimeoutWorker(): Worker<TimeoutJobData> {
     registerWorker(timeoutWorker);
 
     timeoutWorker.on('failed', (job, err) => {
-      console.error(`[timeoutWorker] Job ${job?.id} failed:`, err.message);
+      logger.error(`[timeoutWorker] Job ${job?.id} failed:`, { jobId: job?.id, error: err.message });
     });
 
     timeoutWorker.on('stalled', (jobId) => {
-      console.warn(`[timeoutWorker] Job ${jobId} stalled — worker may have crashed`);
+      logger.warn(`[timeoutWorker] Job ${jobId} stalled — worker may have crashed`, { jobId });
     });
 
     timeoutWorker.on('error', (err) => {
-      console.error('[timeoutWorker] Worker error:', err.message);
+      logger.error('[timeoutWorker] Worker error:', { error: err.message });
     });
 
     timeoutWorker.on('ready', () => {
-      console.log('[timeoutWorker] ✅ Worker connected to Redis and ready to process jobs');
+      logger.info('[timeoutWorker] ✅ Worker connected to Redis and ready to process jobs');
     });
 
     timeoutWorker.on('completed', (job) => {
-      console.log(`[timeoutWorker] ✅ Job ${job?.id} completed for requirement ${job?.data?.requirementId}`);
+      logger.info(`[timeoutWorker] ✅ Job ${job?.id} completed for requirement ${job?.data?.requirementId}`, { jobId: job?.id, requirementId: job?.data?.requirementId });
     });
   }
   return timeoutWorker;
@@ -188,9 +193,9 @@ if (process.env.NODE_ENV !== 'test') {
 
 const shutdown = async () => {
   if (timeoutWorker) {
-    console.log('[timeoutWorker] Shutting down gracefully...');
+    logger.info('[timeoutWorker] Shutting down gracefully...');
     await timeoutWorker.close();
-    console.log('[timeoutWorker] Closed.');
+    logger.info('[timeoutWorker] Closed.');
   }
 };
 

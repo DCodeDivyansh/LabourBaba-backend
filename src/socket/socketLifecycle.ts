@@ -15,6 +15,8 @@ import {
   getAdminPersonalRoom,
 } from "./roomHelpers";
 
+import { logger } from "../utils/logger";
+
 let socketServerInstance: Server | null = null;
 
 /**
@@ -57,8 +59,8 @@ export function disconnectUserSockets(userId: string, role: UserRole): void {
 
     // Force disconnect all sockets currently in the user's personal room
     socketServerInstance.in(room).disconnectSockets(true);
-    console.log(`[SOCKET_SECURITY] Disconnected all active sockets in room '${room}' for user ${userId}`);
+    logger.info(`[SOCKET_SECURITY] Disconnected all active sockets in room '${room}' for user ${userId}`, { userId, room, role });
   } catch (err: any) {
-    console.error(`[SOCKET_SECURITY] Failed to disconnect sockets for user ${userId}:`, err.message);
+    logger.error(`[SOCKET_SECURITY] Failed to disconnect sockets for user ${userId}:`, { userId, error: err?.message });
   }
 }

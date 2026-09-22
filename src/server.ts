@@ -152,9 +152,9 @@ import { metricsService } from "./metrics/metrics.service";
 /**
  * Routes
  */
-app.get("/metrics", (_req: Request, res: Response) => {
-  res.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
-  res.send(metricsService.formatPrometheus());
+app.get("/metrics", async (_req: Request, res: Response) => {
+  res.setHeader("Content-Type", metricsService.getContentType());
+  res.send(await metricsService.formatPrometheus());
 });
 
 app.use("/health", healthRoutes);

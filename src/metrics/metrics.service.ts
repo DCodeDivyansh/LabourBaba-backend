@@ -1,102 +1,490 @@
+import client, { Registry, Counter, Gauge, Histogram, collectDefaultMetrics } from "prom-client";
 import { logger } from "../utils/logger";
 
-interface MetricLabels {
+export interface MetricLabels {
   [key: string]: string | number;
 }
 
-interface HistogramData {
-  count: number;
-  sum: number;
-  buckets: Record<number, number>;
-}
-
 export class MetricsService {
-  private counters: Map<string, number> = new Map();
-  private gauges: Map<string, number> = new Map();
-  private histograms: Map<string, { buckets: number[]; data: HistogramData }> = new Map();
+  private registry: Registry;
+  private dynamicCounters: Map<string, Counter<string>> = new Map();
+  private dynamicGauges: Map<string, Gauge<string>> = new Map();
+  private dynamicHistograms: Map<string, Histogram<string>> = new Map();
+
+  // Generic and Default Metrics
+  public readonly httpRequestsTotal: Counter<string>;
+  public readonly httpRequestDurationMs: Histogram<string>;
+  public readonly httpRequestDurationSeconds: Histogram<string>;
+
+  // Health Metrics
+  public readonly healthReadyDatabaseStatus: Gauge<string>;
+  public readonly healthReadyRedisStatus: Gauge<string>;
+  public readonly healthReadyStatus: Gauge<string>;
+
+  // BullMQ Queue Metrics
+  public readonly bullmqWaitingJobsTotal: Gauge<string>;
+  public readonly bullmqActiveJobsTotal: Gauge<string>;
+  public readonly bullmqFailedJobsTotal: Gauge<string>;
+
+  // Dispatch Metrics
+  public readonly jobsCreatedTotal: Counter<string>;
+  public readonly dispatchAttemptsTotal: Counter<string>;
+  public readonly dispatchSuccessTotal: Counter<string>;
+  public readonly dispatchFailureTotal: Counter<string>;
+  public readonly dispatchAcceptTotal: Counter<string>;
+  public readonly dispatchLatencyMs: Histogram<string>;
+  public readonly dispatchCandidateCount: Histogram<string>;
+  public readonly dispatchAcceptLatencyMs: Histogram<string>;
+
+  // Location Metrics
+  public readonly locationUpdatesTotal: Counter<string>;
+  public readonly locationCleanupRowsDeletedTotal: Counter<string>;
+  public readonly locationCleanupDurationMs: Histogram<string>;
+  public readonly locationExclusionsTotal: Counter<string>;
+
+  // Notification Metrics
+  public readonly notificationAttemptsTotal: Counter<string>;
+  public readonly notificationSuccessTotal: Counter<string>;
+  public readonly notificationFailureTotal: Counter<string>;
+
+  // OTP & Security Metrics
+  public readonly otpChallengesCreatedTotal: Counter<string>;
+  public readonly otpVerificationsTotal: Counter<string>;
+  public readonly otpDeliveryFailedTotal: Counter<string>;
+  public readonly securityAuditEventsTotal: Counter<string>;
+
+  // Payment Metrics
+  public readonly paymentsCreatedTotal: Counter<string>;
+  public readonly paymentsCapturedTotal: Counter<string>;
+  public readonly paymentsCapturedAmountPaiseTotal: Counter<string>;
+  public readonly paymentsFailedTotal: Counter<string>;
+  public readonly refundsCreatedTotal: Counter<string>;
+  public readonly refundsAmountPaiseTotal: Counter<string>;
+  public readonly webhookSignatureFailuresTotal: Counter<string>;
+  public readonly paymentsQuarantinedTotal: Counter<string>;
+
+  // Booking Metrics
+  public readonly bookingCreatedTotal: Counter<string>;
+  public readonly bookingCancelledTotal: Counter<string>;
+  public readonly bookingCompletedTotal: Counter<string>;
+
+  // Backup Metric
+  public readonly backupLastSuccessfulTimestampSeconds: Gauge<string>;
 
   constructor() {
-    this.initDefaultHistograms();
-  }
+    this.registry = new Registry();
 
-  private initDefaultHistograms(): void {
-    this.histograms.set("dispatch_latency_ms", {
-      buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000],
-      data: { count: 0, sum: 0, buckets: {} },
+    // Collect standard process metrics (CPU, memory, event loop lag, handles)
+    collectDefaultMetrics({ register: this.registry, prefix: "nodejs_" });
+
+    // HTTP Request Duration & Count
+    this.httpRequestsTotal = new Counter({
+      name: "http_requests_total",
+      help: "Total number of HTTP requests processed by LabourBaba API",
+      labelNames: ["method", "route", "status"],
+      registers: [this.registry],
     });
-    this.histograms.set("dispatch_candidate_count", {
-      buckets: [1, 3, 5, 10, 20, 50],
-      data: { count: 0, sum: 0, buckets: {} },
-    });
-    this.histograms.set("dispatch_accept_latency_ms", {
-      buckets: [500, 1000, 2500, 5000, 10000, 30000, 60000],
-      data: { count: 0, sum: 0, buckets: {} },
-    });
-    this.histograms.set("http_request_duration_ms", {
+
+    this.httpRequestDurationMs = new Histogram({
+      name: "http_request_duration_ms",
+      help: "HTTP request latency distribution in milliseconds",
+      labelNames: ["method", "route", "status"],
       buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
-      data: { count: 0, sum: 0, buckets: {} },
+      registers: [this.registry],
     });
-    this.histograms.set("location_cleanup_duration_ms", {
+
+    this.httpRequestDurationSeconds = new Histogram({
+      name: "http_request_duration_seconds",
+      help: "HTTP request latency in seconds for p50/p95/p99 quantile calculation",
+      labelNames: ["method", "route", "status"],
+      buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+      registers: [this.registry],
+    });
+
+    // Health Status Gauges
+    this.healthReadyDatabaseStatus = new Gauge({
+      name: "health_ready_database_status",
+      help: "PostgreSQL Database readiness probe health status (1 = healthy, 0 = unhealthy)",
+      registers: [this.registry],
+    });
+    this.healthReadyDatabaseStatus.set(1);
+
+    this.healthReadyRedisStatus = new Gauge({
+      name: "health_ready_redis_status",
+      help: "Redis data store readiness probe health status (1 = healthy, 0 = unhealthy)",
+      registers: [this.registry],
+    });
+    this.healthReadyRedisStatus.set(1);
+
+    this.healthReadyStatus = new Gauge({
+      name: "health_ready_status",
+      help: "Overall application readiness status (1 = ready, 0 = not ready)",
+      registers: [this.registry],
+    });
+    this.healthReadyStatus.set(1);
+
+    // BullMQ Queue Depth Gauges
+    this.bullmqWaitingJobsTotal = new Gauge({
+      name: "bullmq_waiting_jobs_total",
+      help: "Current number of waiting jobs across BullMQ queues",
+      labelNames: ["queue"],
+      registers: [this.registry],
+    });
+
+    this.bullmqActiveJobsTotal = new Gauge({
+      name: "bullmq_active_jobs_total",
+      help: "Current number of actively processing jobs across BullMQ queues",
+      labelNames: ["queue"],
+      registers: [this.registry],
+    });
+
+    this.bullmqFailedJobsTotal = new Gauge({
+      name: "bullmq_failed_jobs_total",
+      help: "Total number of failed jobs across BullMQ queues",
+      labelNames: ["queue"],
+      registers: [this.registry],
+    });
+
+    // Dispatch Counters & Histograms
+    this.jobsCreatedTotal = new Counter({
+      name: "jobs_created_total",
+      help: "Total number of marketplace jobs created",
+      registers: [this.registry],
+    });
+
+    this.dispatchAttemptsTotal = new Counter({
+      name: "dispatch_attempts_total",
+      help: "Total number of dispatch attempts initiated",
+      registers: [this.registry],
+    });
+
+    this.dispatchSuccessTotal = new Counter({
+      name: "dispatch_success_total",
+      help: "Total number of successful dispatches where candidates were notified",
+      registers: [this.registry],
+    });
+
+    this.dispatchFailureTotal = new Counter({
+      name: "dispatch_failure_total",
+      help: "Total number of failed dispatch attempts",
+      labelNames: ["reason"],
+      registers: [this.registry],
+    });
+
+    this.dispatchAcceptTotal = new Counter({
+      name: "dispatch_accept_total",
+      help: "Total number of dispatches accepted by workers",
+      registers: [this.registry],
+    });
+
+    this.dispatchLatencyMs = new Histogram({
+      name: "dispatch_latency_ms",
+      help: "Dispatch matching and notification latency in milliseconds",
+      buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000],
+      registers: [this.registry],
+    });
+
+    this.dispatchCandidateCount = new Histogram({
+      name: "dispatch_candidate_count",
+      help: "Distribution of candidates found per dispatch attempt",
+      buckets: [1, 3, 5, 10, 20, 50],
+      registers: [this.registry],
+    });
+
+    this.dispatchAcceptLatencyMs = new Histogram({
+      name: "dispatch_accept_latency_ms",
+      help: "Time elapsed from dispatch broadcast to worker acceptance in milliseconds",
+      buckets: [500, 1000, 2500, 5000, 10000, 30000, 60000],
+      registers: [this.registry],
+    });
+
+    // Location Metrics
+    this.locationUpdatesTotal = new Counter({
+      name: "location_updates_total",
+      help: "Total number of worker GPS location pings received",
+      registers: [this.registry],
+    });
+
+    this.locationCleanupRowsDeletedTotal = new Counter({
+      name: "location_cleanup_rows_deleted_total",
+      help: "Total number of stale location rows pruned by retention worker",
+      registers: [this.registry],
+    });
+
+    this.locationCleanupDurationMs = new Histogram({
+      name: "location_cleanup_duration_ms",
+      help: "Location retention cleanup execution time in milliseconds",
       buckets: [50, 100, 250, 500, 1000, 5000],
-      data: { count: 0, sum: 0, buckets: {} },
+      registers: [this.registry],
     });
+
+    this.locationExclusionsTotal = new Counter({
+      name: "location_exclusions_total",
+      help: "Total number of workers excluded from candidate matching due to location reasons",
+      labelNames: ["reason"],
+      registers: [this.registry],
+    });
+
+    // Notification Metrics
+    this.notificationAttemptsTotal = new Counter({
+      name: "notification_attempts_total",
+      help: "Total notification delivery attempts",
+      labelNames: ["channel"],
+      registers: [this.registry],
+    });
+
+    this.notificationSuccessTotal = new Counter({
+      name: "notification_success_total",
+      help: "Total successful notification deliveries",
+      labelNames: ["channel"],
+      registers: [this.registry],
+    });
+
+    this.notificationFailureTotal = new Counter({
+      name: "notification_failure_total",
+      help: "Total failed notification deliveries",
+      labelNames: ["channel", "error_type"],
+      registers: [this.registry],
+    });
+
+    // OTP & Security Metrics
+    this.otpChallengesCreatedTotal = new Counter({
+      name: "otp_challenges_created_total",
+      help: "Total OTP challenges generated",
+      labelNames: ["purpose"],
+      registers: [this.registry],
+    });
+
+    this.otpDeliveryFailedTotal = new Counter({
+      name: "otp_delivery_failed_total",
+      help: "Total failed OTP SMS deliveries",
+      labelNames: ["purpose"],
+      registers: [this.registry],
+    });
+
+    this.otpVerificationsTotal = new Counter({
+      name: "otp_verifications_total",
+      help: "Total OTP verification attempts",
+      labelNames: ["purpose", "status"],
+      registers: [this.registry],
+    });
+
+    this.securityAuditEventsTotal = new Counter({
+      name: "security_audit_events_total",
+      help: "Total security audit log events recorded",
+      labelNames: ["action", "role"],
+      registers: [this.registry],
+    });
+
+    // Payment Metrics
+    this.paymentsCreatedTotal = new Counter({
+      name: "payments_created_total",
+      help: "Total payment intents/orders created",
+      registers: [this.registry],
+    });
+
+    this.paymentsCapturedTotal = new Counter({
+      name: "payments_captured_total",
+      help: "Total payments successfully captured",
+      registers: [this.registry],
+    });
+
+    this.paymentsCapturedAmountPaiseTotal = new Counter({
+      name: "payments_captured_amount_paise_total",
+      help: "Total amount captured in paise",
+      registers: [this.registry],
+    });
+
+    this.paymentsFailedTotal = new Counter({
+      name: "payments_failed_total",
+      help: "Total payment failures",
+      labelNames: ["reason"],
+      registers: [this.registry],
+    });
+
+    this.refundsCreatedTotal = new Counter({
+      name: "refunds_created_total",
+      help: "Total refunds initiated",
+      registers: [this.registry],
+    });
+
+    this.refundsAmountPaiseTotal = new Counter({
+      name: "refunds_amount_paise_total",
+      help: "Total amount refunded in paise",
+      registers: [this.registry],
+    });
+
+    this.webhookSignatureFailuresTotal = new Counter({
+      name: "webhook_signature_failures_total",
+      help: "Total invalid payment webhook signature attempts",
+      registers: [this.registry],
+    });
+
+    this.paymentsQuarantinedTotal = new Counter({
+      name: "payments_quarantined_total",
+      help: "Total payments placed in quarantine due to mismatch or fraud flags",
+      labelNames: ["reason"],
+      registers: [this.registry],
+    });
+
+    // Booking Metrics
+    this.bookingCreatedTotal = new Counter({
+      name: "booking_created_total",
+      help: "Total bookings confirmed",
+      registers: [this.registry],
+    });
+
+    this.bookingCancelledTotal = new Counter({
+      name: "booking_cancelled_total",
+      help: "Total bookings cancelled",
+      labelNames: ["reason"],
+      registers: [this.registry],
+    });
+
+    this.bookingCompletedTotal = new Counter({
+      name: "booking_completed_total",
+      help: "Total bookings successfully completed",
+      registers: [this.registry],
+    });
+
+    // Backup Metric
+    this.backupLastSuccessfulTimestampSeconds = new Gauge({
+      name: "backup_last_successful_timestamp_seconds",
+      help: "Unix timestamp in seconds of the last verified database backup",
+      registers: [this.registry],
+    });
+    // Initialize to current time so alert doesn't fire immediately on clean boot
+    this.backupLastSuccessfulTimestampSeconds.set(Math.floor(Date.now() / 1000));
   }
 
-  private serializeLabels(labels?: MetricLabels): string {
-    if (!labels || Object.keys(labels).length === 0) return "";
-    const entries = Object.entries(labels)
-      .map(([k, v]) => `${k}="${String(v).replace(/"/g, '\\"')}"`)
-      .sort()
-      .join(",");
-    return `{${entries}}`;
-  }
+  // --- Dynamic Compatibility Helpers ---
 
-  /**
-   * Increments a named counter metric safely.
-   */
-  incrementCounter(name: string, value: number = 1, labels?: MetricLabels): void {
+  incrementCounter(name: string, value: number = 1, labels?: Record<string, string | number>): void {
     try {
-      const key = `${name}${this.serializeLabels(labels)}`;
-      const current = this.counters.get(key) || 0;
-      this.counters.set(key, current + value);
+      const sanitizedLabels: Record<string, string> = {};
+      if (labels) {
+        for (const [k, v] of Object.entries(labels)) {
+          sanitizedLabels[k] = String(v);
+        }
+      }
+
+      // Check known pre-defined counters first
+      if (name === "jobs_created_total") return this.jobsCreatedTotal.inc(value);
+      if (name === "dispatch_attempts_total") return this.dispatchAttemptsTotal.inc(value);
+      if (name === "dispatch_success_total") return this.dispatchSuccessTotal.inc(value);
+      if (name === "dispatch_failure_total") return this.dispatchFailureTotal.inc(sanitizedLabels, value);
+      if (name === "dispatch_accept_total") return this.dispatchAcceptTotal.inc(value);
+      if (name === "booking_created_total") return this.bookingCreatedTotal.inc(value);
+      if (name === "booking_cancelled_total") return this.bookingCancelledTotal.inc(sanitizedLabels, value);
+      if (name === "booking_completed_total") return this.bookingCompletedTotal.inc(value);
+      if (name === "location_updates_total") return this.locationUpdatesTotal.inc(value);
+      if (name === "location_cleanup_rows_deleted_total") return this.locationCleanupRowsDeletedTotal.inc(value);
+      if (name === "location_exclusions_total") return this.locationExclusionsTotal.inc(sanitizedLabels, value);
+      if (name === "notification_attempts_total") return this.notificationAttemptsTotal.inc(sanitizedLabels, value);
+      if (name === "notification_success_total") return this.notificationSuccessTotal.inc(sanitizedLabels, value);
+      if (name === "notification_failure_total") return this.notificationFailureTotal.inc(sanitizedLabels, value);
+      if (name === "otp_challenges_created_total") return this.otpChallengesCreatedTotal.inc(sanitizedLabels, value);
+      if (name === "otp_delivery_failed_total") return this.otpDeliveryFailedTotal.inc(sanitizedLabels, value);
+      if (name === "otp_verifications_total") return this.otpVerificationsTotal.inc(sanitizedLabels, value);
+      if (name === "security_audit_events_total") return this.securityAuditEventsTotal.inc(sanitizedLabels, value);
+      if (name === "payments_created_total") return this.paymentsCreatedTotal.inc(value);
+      if (name === "payments_captured_total") return this.paymentsCapturedTotal.inc(value);
+      if (name === "payments_captured_amount_paise_total") return this.paymentsCapturedAmountPaiseTotal.inc(value);
+      if (name === "payments_failed_total") return this.paymentsFailedTotal.inc(sanitizedLabels, value);
+      if (name === "refunds_created_total") return this.refundsCreatedTotal.inc(value);
+      if (name === "refunds_amount_paise_total") return this.refundsAmountPaiseTotal.inc(value);
+      if (name === "webhook_signature_failures_total") return this.webhookSignatureFailuresTotal.inc(value);
+      if (name === "payments_quarantined_total") return this.paymentsQuarantinedTotal.inc(sanitizedLabels, value);
+      if (name === "http_requests_total") return this.httpRequestsTotal.inc(sanitizedLabels, value);
+
+      // Create or reuse dynamic counter
+      let counter = this.dynamicCounters.get(name);
+      if (!counter) {
+        counter = new Counter({
+          name,
+          help: `Dynamically registered counter ${name}`,
+          labelNames: labels ? Object.keys(labels) : [],
+          registers: [this.registry],
+        });
+        this.dynamicCounters.set(name, counter);
+      }
+      if (labels && Object.keys(labels).length > 0) {
+        counter.inc(sanitizedLabels, value);
+      } else {
+        counter.inc(value);
+      }
     } catch (err: any) {
       logger.warn(`[METRICS] Failed to increment counter ${name}:`, { error: err.message });
     }
   }
 
-  /**
-   * Sets a gauge metric value.
-   */
-  setGauge(name: string, value: number, labels?: MetricLabels): void {
+  setGauge(name: string, value: number, labels?: Record<string, string | number>): void {
     try {
-      const key = `${name}${this.serializeLabels(labels)}`;
-      this.gauges.set(key, value);
+      const sanitizedLabels: Record<string, string> = {};
+      if (labels) {
+        for (const [k, v] of Object.entries(labels)) {
+          sanitizedLabels[k] = String(v);
+        }
+      }
+
+      if (name === "health_ready_database_status") return this.healthReadyDatabaseStatus.set(value);
+      if (name === "health_ready_redis_status") return this.healthReadyRedisStatus.set(value);
+      if (name === "health_ready_status") return this.healthReadyStatus.set(value);
+      if (name === "backup_last_successful_timestamp_seconds") return this.backupLastSuccessfulTimestampSeconds.set(value);
+      if (name === "bullmq_waiting_jobs_total") return this.bullmqWaitingJobsTotal.set(sanitizedLabels, value);
+      if (name === "bullmq_active_jobs_total") return this.bullmqActiveJobsTotal.set(sanitizedLabels, value);
+      if (name === "bullmq_failed_jobs_total") return this.bullmqFailedJobsTotal.set(sanitizedLabels, value);
+
+      let gauge = this.dynamicGauges.get(name);
+      if (!gauge) {
+        gauge = new Gauge({
+          name,
+          help: `Dynamically registered gauge ${name}`,
+          labelNames: labels ? Object.keys(labels) : [],
+          registers: [this.registry],
+        });
+        this.dynamicGauges.set(name, gauge);
+      }
+      if (labels && Object.keys(labels).length > 0) {
+        gauge.set(sanitizedLabels, value);
+      } else {
+        gauge.set(value);
+      }
     } catch (err: any) {
       logger.warn(`[METRICS] Failed to set gauge ${name}:`, { error: err.message });
     }
   }
 
-  /**
-   * Observes a numerical value in a histogram metric.
-   */
-  observeHistogram(name: string, value: number): void {
+  observeHistogram(name: string, value: number, labels?: Record<string, string | number>): void {
     try {
-      let histo = this.histograms.get(name);
-      if (!histo) {
-        histo = {
-          buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000],
-          data: { count: 0, sum: 0, buckets: {} },
-        };
-        this.histograms.set(name, histo);
+      const sanitizedLabels: Record<string, string> = {};
+      if (labels) {
+        for (const [k, v] of Object.entries(labels)) {
+          sanitizedLabels[k] = String(v);
+        }
       }
 
-      histo.data.count++;
-      histo.data.sum += value;
+      if (name === "dispatch_latency_ms") return this.dispatchLatencyMs.observe(value);
+      if (name === "dispatch_candidate_count") return this.dispatchCandidateCount.observe(value);
+      if (name === "dispatch_accept_latency_ms") return this.dispatchAcceptLatencyMs.observe(value);
+      if (name === "location_cleanup_duration_ms") return this.locationCleanupDurationMs.observe(value);
+      if (name === "http_request_duration_ms") return this.httpRequestDurationMs.observe(sanitizedLabels, value);
+      if (name === "http_request_duration_seconds") return this.httpRequestDurationSeconds.observe(sanitizedLabels, value);
 
-      for (const bucket of histo.buckets) {
-        if (value <= bucket) {
-          histo.data.buckets[bucket] = (histo.data.buckets[bucket] || 0) + 1;
-        }
+      let histo = this.dynamicHistograms.get(name);
+      if (!histo) {
+        histo = new Histogram({
+          name,
+          help: `Dynamically registered histogram ${name}`,
+          labelNames: labels ? Object.keys(labels) : [],
+          registers: [this.registry],
+        });
+        this.dynamicHistograms.set(name, histo);
+      }
+      if (labels && Object.keys(labels).length > 0) {
+        histo.observe(sanitizedLabels, value);
+      } else {
+        histo.observe(value);
       }
     } catch (err: any) {
       logger.warn(`[METRICS] Failed to observe histogram ${name}:`, { error: err.message });
@@ -106,152 +494,159 @@ export class MetricsService {
   // --- Convenience Business Metric Methods ---
 
   recordJobCreated(): void {
-    this.incrementCounter("jobs_created_total");
+    this.jobsCreatedTotal.inc();
   }
 
   recordDispatchAttempt(): void {
-    this.incrementCounter("dispatch_attempts_total");
+    this.dispatchAttemptsTotal.inc();
   }
 
   recordDispatchSuccess(candidateCount: number, durationMs: number): void {
-    this.incrementCounter("dispatch_success_total");
-    this.observeHistogram("dispatch_candidate_count", candidateCount);
-    this.observeHistogram("dispatch_latency_ms", durationMs);
+    this.dispatchSuccessTotal.inc();
+    this.dispatchCandidateCount.observe(candidateCount);
+    this.dispatchLatencyMs.observe(durationMs);
   }
 
   recordDispatchFailure(reason: string = "no_candidates"): void {
-    this.incrementCounter("dispatch_failure_total", 1, { reason });
+    this.dispatchFailureTotal.inc({ reason });
   }
 
   recordDispatchAccept(latencyMs: number): void {
-    this.incrementCounter("dispatch_accept_total");
-    this.observeHistogram("dispatch_accept_latency_ms", latencyMs);
+    this.dispatchAcceptTotal.inc();
+    this.dispatchAcceptLatencyMs.observe(latencyMs);
   }
 
   recordBookingCreated(): void {
-    this.incrementCounter("booking_created_total");
+    this.bookingCreatedTotal.inc();
   }
 
   recordBookingCancelled(reason?: string): void {
-    this.incrementCounter("booking_cancelled_total", 1, { reason: reason ? reason.slice(0, 30) : "unspecified" });
+    this.bookingCancelledTotal.inc({ reason: reason ? reason.slice(0, 30) : "unspecified" });
   }
 
   recordBookingCompleted(): void {
-    this.incrementCounter("booking_completed_total");
+    this.bookingCompletedTotal.inc();
   }
 
   recordNotificationAttempt(channel: "fcm" | "socket" = "fcm"): void {
-    this.incrementCounter("notification_attempts_total", 1, { channel });
+    this.notificationAttemptsTotal.inc({ channel });
   }
 
   recordNotificationSuccess(channel: "fcm" | "socket" = "fcm"): void {
-    this.incrementCounter("notification_success_total", 1, { channel });
+    this.notificationSuccessTotal.inc({ channel });
   }
 
   recordNotificationFailure(channel: "fcm" | "socket" = "fcm", errorType: "transient" | "permanent" = "transient"): void {
-    this.incrementCounter("notification_failure_total", 1, { channel, error_type: errorType });
+    this.notificationFailureTotal.inc({ channel, error_type: errorType });
   }
 
   recordLocationUpdate(): void {
-    this.incrementCounter("location_updates_total");
+    this.locationUpdatesTotal.inc();
   }
 
   recordLocationCleanup(deletedRows: number, durationMs: number): void {
-    this.incrementCounter("location_cleanup_rows_deleted_total", deletedRows);
-    this.observeHistogram("location_cleanup_duration_ms", durationMs);
+    this.locationCleanupRowsDeletedTotal.inc(deletedRows);
+    this.locationCleanupDurationMs.observe(durationMs);
+  }
+
+  recordLocationExclusion(reason: string = "stale_location"): void {
+    this.locationExclusionsTotal.inc({ reason });
   }
 
   recordHttpRequest(method: string, route: string, statusCode: number, durationMs: number): void {
-    // Normalizing route to avoid high cardinality
+    // Normalizing route to avoid high cardinality (UUIDs -> :id)
     const normalizedRoute = route.split("?")[0].replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ":id");
-    this.incrementCounter("http_requests_total", 1, {
+    const labels = {
       method,
       route: normalizedRoute,
       status: String(statusCode),
-    });
-    this.observeHistogram("http_request_duration_ms", durationMs);
+    };
+    this.httpRequestsTotal.inc(labels);
+    this.httpRequestDurationMs.observe(labels, durationMs);
+    this.httpRequestDurationSeconds.observe(labels, durationMs / 1000);
   }
 
   recordOtpChallenge(purpose: string): void {
-    this.incrementCounter("otp_challenges_created_total", 1, { purpose });
+    this.otpChallengesCreatedTotal.inc({ purpose });
   }
 
   recordOtpVerification(purpose: string, status: "success" | "failed" | "locked"): void {
-    this.incrementCounter("otp_verifications_total", 1, { purpose, status });
+    this.otpVerificationsTotal.inc({ purpose, status });
   }
 
   recordAuditEvent(action: string, actorRole: string): void {
-    this.incrementCounter("security_audit_events_total", 1, { action, role: actorRole });
+    this.securityAuditEventsTotal.inc({ action, role: actorRole });
   }
 
   recordPaymentCreated(): void {
-    this.incrementCounter("payments_created_total");
+    this.paymentsCreatedTotal.inc();
   }
 
   recordPaymentCaptured(amountPaise: number): void {
-    this.incrementCounter("payments_captured_total");
-    this.incrementCounter("payments_captured_amount_paise_total", amountPaise);
+    this.paymentsCapturedTotal.inc();
+    this.paymentsCapturedAmountPaiseTotal.inc(amountPaise);
   }
 
   recordPaymentFailed(reason: string = "unknown"): void {
-    this.incrementCounter("payments_failed_total", 1, { reason });
+    this.paymentsFailedTotal.inc({ reason });
   }
 
   recordRefundCreated(amountPaise: number): void {
-    this.incrementCounter("refunds_created_total");
-    this.incrementCounter("refunds_amount_paise_total", amountPaise);
+    this.refundsCreatedTotal.inc();
+    this.refundsAmountPaiseTotal.inc(amountPaise);
   }
 
   recordWebhookSignatureFailure(): void {
-    this.incrementCounter("webhook_signature_failures_total");
+    this.webhookSignatureFailuresTotal.inc();
   }
 
   recordPaymentQuarantined(reason: string): void {
-    this.incrementCounter("payments_quarantined_total", 1, { reason: reason.slice(0, 30) });
+    this.paymentsQuarantinedTotal.inc({ reason: reason.slice(0, 30) });
+  }
+
+  setDatabaseHealth(healthy: boolean): void {
+    this.healthReadyDatabaseStatus.set(healthy ? 1 : 0);
+  }
+
+  setRedisHealth(healthy: boolean): void {
+    this.healthReadyRedisStatus.set(healthy ? 1 : 0);
+  }
+
+  setApplicationReady(ready: boolean): void {
+    this.healthReadyStatus.set(ready ? 1 : 0);
+  }
+
+  setQueueWaitingJobs(queue: string, count: number): void {
+    this.bullmqWaitingJobsTotal.set({ queue }, count);
+  }
+
+  setLastBackupTimestamp(timestampSeconds: number): void {
+    this.backupLastSuccessfulTimestampSeconds.set(timestampSeconds);
   }
 
   /**
-   * Formats all collected metrics in standard Prometheus exposition format.
+   * Returns Prometheus exposition text output for scraping.
    */
-  formatPrometheus(): string {
-    const lines: string[] = [];
-
-    // Format counters
-    for (const [key, val] of this.counters.entries()) {
-      lines.push(`${key} ${val}`);
-    }
-
-    // Format gauges
-    for (const [key, val] of this.gauges.entries()) {
-      lines.push(`${key} ${val}`);
-    }
-
-    // Format histograms
-    for (const [name, histo] of this.histograms.entries()) {
-      let cumulative = 0;
-      for (const bucket of histo.buckets) {
-        cumulative += histo.data.buckets[bucket] || 0;
-        lines.push(`${name}_bucket{le="${bucket}"} ${cumulative}`);
-      }
-      lines.push(`${name}_bucket{le="+Inf"} ${histo.data.count}`);
-      lines.push(`${name}_sum ${histo.data.sum}`);
-      lines.push(`${name}_count ${histo.data.count}`);
-    }
-
-    return lines.join("\n") + "\n";
+  async formatPrometheus(): Promise<string> {
+    return await this.registry.metrics();
   }
 
   /**
-   * Resets all metrics (primarily for test environments).
+   * Returns the standard Prometheus Content-Type header.
+   */
+  getContentType(): string {
+    return this.registry.contentType;
+  }
+
+  /**
+   * Resets all metric values in the registry (useful for test isolation).
    */
   reset(): void {
-    this.counters.clear();
-    this.gauges.clear();
-    for (const histo of this.histograms.values()) {
-      histo.data.count = 0;
-      histo.data.sum = 0;
-      histo.data.buckets = {};
-    }
+    this.registry.resetMetrics();
+    this.healthReadyDatabaseStatus.set(1);
+    this.healthReadyRedisStatus.set(1);
+    this.healthReadyStatus.set(1);
+    this.backupLastSuccessfulTimestampSeconds.set(Math.floor(Date.now() / 1000));
   }
 }
 

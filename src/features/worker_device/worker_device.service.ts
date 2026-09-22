@@ -6,6 +6,7 @@ import {
   WorkerDeviceDTO,
   toWorkerDeviceDTO,
 } from "./worker_device.types";
+import { logger } from "../../utils/logger";
 
 export class WorkerDeviceService {
   /**
@@ -158,7 +159,7 @@ export class WorkerDeviceService {
     });
 
     if (result.count > 0) {
-      console.log(`[WorkerDevice] Auto-revoked ${result.count} device(s) for invalid FCM token.`);
+      logger.info(`[WorkerDevice] Auto-revoked ${result.count} device(s) for invalid FCM token.`, { count: result.count });
     }
 
     return result.count;

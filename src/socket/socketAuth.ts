@@ -3,6 +3,7 @@ import prisma from "../config/prisma";
 import { verifyAccessToken } from "../utils/authUtils";
 import { UserRole, isValidUserRole } from "../type/userRole";
 import { AuthenticatedSocket } from "./socketTypes";
+import { logger } from "../utils/logger";
 
 /**
  * Socket.IO Handshake Authentication Middleware.
@@ -33,7 +34,7 @@ export async function socketAuthMiddleware(
     }
 
     if (!token || typeof token !== "string" || token.trim().length === 0) {
-      console.warn(`[SOCKET_AUTH] Connection rejected: Missing authentication token (socket ${socket.id})`);
+      logger.warn(`[SOCKET_AUTH] Connection rejected: Missing authentication token (socket ${socket.id})`, { socketId: socket.id });
       return next(new Error("Authentication required"));
     }
 
@@ -42,14 +43,15 @@ export async function socketAuthMiddleware(
     const decoded = verifyAccessToken(token.trim());
 
     if (!decoded || typeof decoded !== "object" || !decoded.id || !decoded.role) {
-      console.warn(`[SOCKET_AUTH] Connection rejected: Invalid or expired token (socket ${socket.id})`);
+      logger.warn(`[SOCKET_AUTH] Connection rejected: Invalid or expired token (socket ${socket.id})`, { socketId: socket.id });
       return next(new Error("Invalid authentication credentials"));
     }
 
     // 3. Role claim validation
     if (!isValidUserRole(decoded.role)) {
-      console.warn(
-        `[SOCKET_AUTH] Connection rejected: Unsupported role '${decoded.role}' for user ${decoded.id}`
+      logger.warn(
+        `[SOCKET_AUTH] Connection rejected: Unsupported role '${decoded.role}' for user ${decoded.id}`,
+        { socketId: socket.id, userId: decoded.id, role: decoded.role }
       );
       return next(new Error("Invalid authentication credentials"));
     }
@@ -62,8 +64,9 @@ export async function socketAuthMiddleware(
       });
 
       if (!worker || worker.deleted_at || worker.verification_status === "suspended") {
-        console.warn(
-          `[SOCKET_AUTH] Connection rejected: Worker account ${decoded.id} not found, inactive, or suspended`
+        logger.warn(
+          `[SOCKET_AUTH] Connection rejected: Worker account ${decoded.id} not found, inactive, or suspended`,
+          { socketId: socket.id, userId: decoded.id }
         );
         return next(new Error("Invalid authentication credentials"));
       }
@@ -80,8 +83,9 @@ export async function socketAuthMiddleware(
       });
 
       if (!customer || customer.deleted_at) {
-        console.warn(
-          `[SOCKET_AUTH] Connection rejected: Customer account ${decoded.id} not found or inactive`
+        logger.warn(
+          `[SOCKET_AUTH] Connection rejected: Customer account ${decoded.id} not found or inactive`,
+          { socketId: socket.id, userId: decoded.id }
         );
         return next(new Error("Invalid authentication credentials"));
       }
@@ -104,7 +108,7 @@ export async function socketAuthMiddleware(
     // Handshake passed: socket is authenticated
     next();
   } catch (err: any) {
-    console.error(`[SOCKET_AUTH] Unexpected error during socket authentication:`, err.message);
+    logger.error(`[SOCKET_AUTH] Unexpected error during socket authentication:`, { socketId: socket.id, error: err?.message });
     next(new Error("Invalid authentication credentials"));
   }
 }

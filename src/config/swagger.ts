@@ -35,6 +35,8 @@ registry.registerPath({
   },
 });
 
+import { logger } from "../utils/logger";
+
 export function setupSwagger(app: Express) {
   // Generate the OpenAPI document dynamically
   const getOpenApiDocument = () => {
@@ -67,5 +69,5 @@ export function setupSwagger(app: Express) {
     swaggerUi.setup(doc)(req, res, next);
   });
 
-  console.log("Swagger UI is available at http://localhost:5000/api-docs");
+  logger.info("Swagger UI is available at http://localhost:5000/api-docs");
 }

@@ -2,6 +2,7 @@ import prisma from '../../config/prisma';
 import { getRedisClient } from '../../config/redis';
 import { lifecycleManager } from '../../lifecycle/lifecycleManager';
 import { logger } from '../../utils/logger';
+import { metricsService } from '../../metrics/metrics.service';
 
 export interface HealthCheckResult {
   status: 'ready' | 'not_ready';
@@ -41,9 +42,13 @@ export const healthService = {
    */
   getLiveness() {
     return {
-      status: 'ok',
+      status: 'alive',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
+      process: {
+        pid: process.pid,
+        memoryUsage: process.memoryUsage(),
+      },
     };
   },
 
@@ -78,6 +83,11 @@ export const healthService = {
     }
 
     const isReady = isAppInitialized && dbStatus === 'healthy' && redisStatus === 'healthy';
+
+    // Update Prometheus health telemetry gauges for alert evaluation
+    metricsService.setDatabaseHealth(dbStatus === 'healthy');
+    metricsService.setRedisHealth(redisStatus === 'healthy');
+    metricsService.setApplicationReady(isReady);
 
     const result: HealthCheckResult = {
       status: isReady ? 'ready' : 'not_ready',

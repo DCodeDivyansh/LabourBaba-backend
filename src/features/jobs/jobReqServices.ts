@@ -7,6 +7,7 @@ import {
   requirementStateService,
   RequirementAction,
 } from "./requirementStateMachine";
+import { logger } from "../../utils/logger";
 
 export const jobReqService = {
   async createJobReq(jobId: string, payload: CreateJobRequirementReq, actor?: PolicyActor) {
@@ -24,14 +25,15 @@ export const jobReqService = {
     let canonicalSkillId: string | null = (payload as any).skill_id || null;
     if (!canonicalSkillId && payload.skill_type) {
       const { skillService } = await import("../skill/skill.service");
-      canonicalSkillId = await skillService.resolveSkillId(payload.skill_type);
+      const resolved = await skillService.resolveSkillId(payload.skill_type);
+      if (resolved) canonicalSkillId = resolved;
     }
 
     const created = await prisma.job_requirement.create({
       data: {
         job_id: jobId,
         skill_id: canonicalSkillId,
-        skill_type: payload.skill_type,
+        skill_type: payload.skill_type || "General",
         worker_count_needed: payload.worker_count_needed,
         rate_per_day: payload.rate_per_day,
         wave_size: payload.wave_size,
@@ -49,7 +51,7 @@ export const jobReqService = {
           },
         });
       } catch (jrsErr: any) {
-        console.warn(`[jobReqService] Could not write job_requirement_skill: ${jrsErr?.message}`);
+        logger.warn(`[jobReqService] Could not write job_requirement_skill: ${jrsErr?.message}`);
       }
     }
 

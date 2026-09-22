@@ -19,10 +19,12 @@ import { RazorpayProviderError } from "../../providers/razorpay/razorpayProvider
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
 import { AuthorizationError } from "../../policies";
 import { toPaymentDTO } from "../../shared/prismaSelects";
+import { logger } from "../../utils/logger";
 
 // ── Helper: map domain errors to HTTP responses ────────────────────────────────
 
-function handlePaymentError(error: unknown, res: Response): void {
+function handlePaymentError(error: unknown, req: Request, res: Response): void {
+  const reqLogger = (req as any).logger || logger;
   if (error instanceof AuthorizationError) {
     res.status(error.status).json({
       success: false,
@@ -52,7 +54,7 @@ function handlePaymentError(error: unknown, res: Response): void {
   }
 
   // Unknown error — log server-side, return generic message
-  console.error("[paymentController] Unexpected error:", error);
+  reqLogger.error("[paymentController] Unexpected error:", { error: (error as any)?.message, stack: (error as any)?.stack });
   res.status(500).json({
     success: false,
     code: "PAYMENT_INTERNAL_ERROR",
@@ -84,7 +86,7 @@ export const createOrderHandler = async (
       data: result,
     });
   } catch (error) {
-    handlePaymentError(error, res);
+    handlePaymentError(error, req, res);
   }
 };
 
@@ -132,7 +134,7 @@ export const handleWebhookHandler = async (
     const result = await handleWebhook(rawBody, signature);
     res.status(200).json(result);
   } catch (error) {
-    handlePaymentError(error, res);
+    handlePaymentError(error, req, res);
   }
 };
 
@@ -153,7 +155,7 @@ export const getPaymentStatusHandler = async (
     const payment = await getPaymentStatus(bookingId, actor);
     res.status(200).json({ success: true, data: toPaymentDTO(payment) });
   } catch (error) {
-    handlePaymentError(error, res);
+    handlePaymentError(error, req, res);
   }
 };
 
@@ -175,6 +177,6 @@ export const refundPaymentHandler = async (
     const result = await refundPayment(bookingId, actor, amount, reason);
     res.status(200).json(result);
   } catch (error) {
-    handlePaymentError(error, res);
+    handlePaymentError(error, req, res);
   }
 };

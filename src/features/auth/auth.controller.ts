@@ -3,6 +3,7 @@ import { authService } from "./auth.services";
 import { sessionService } from "./session.service";
 import { SendOtpReq, AuthVerifyOtpReq, RefreshTokenReq } from "../../type/api_req.type";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
+import { logger } from "../../utils/logger";
 
 export const sendOtp = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -35,7 +36,9 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
       });
       return;
     }
-    res.status(500).json({ success: false, message: error.message || "Failed to send OTP" });
+    const reqLogger = (req as any).logger || logger;
+    reqLogger.error("[authController] sendOtp error:", { error: error?.message, stack: error?.stack });
+    res.status(500).json({ success: false, code: "INTERNAL_SERVER_ERROR", message: "Failed to send OTP" });
   }
 };
 

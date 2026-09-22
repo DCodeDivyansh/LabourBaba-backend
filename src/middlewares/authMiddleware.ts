@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../utils/authUtils";
 import { UserRole, isValidUserRole, AuthenticatedUser } from "../type/userRole";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 export { UserRole, AuthenticatedUser };
 
@@ -23,6 +24,7 @@ export async function authenticateJWT(
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  const reqLogger = (req as any).logger || logger;
   try {
     const authHeader = req.headers.authorization;
 
@@ -65,8 +67,9 @@ export async function authenticateJWT(
       // undefined occurs only in Jest test suites that mock prisma without specifying worker mocks.
       if (worker !== undefined) {
         if (!worker || worker.deleted_at != null || worker.verification_status === "suspended") {
-          console.warn(
-            `[SECURITY] Access denied: Worker ${decoded.id} is suspended, inactive, or deleted`
+          reqLogger.warn(
+            `[SECURITY] Access denied: Worker ${decoded.id} is suspended, inactive, or deleted`,
+            { userId: decoded.id, role: decoded.role }
           );
           res.status(401).json({
             success: false,
@@ -84,8 +87,9 @@ export async function authenticateJWT(
 
       if (customer !== undefined) {
         if (!customer || customer.deleted_at != null) {
-          console.warn(
-            `[SECURITY] Access denied: Customer ${decoded.id} is inactive or deleted`
+          reqLogger.warn(
+            `[SECURITY] Access denied: Customer ${decoded.id} is inactive or deleted`,
+            { userId: decoded.id, role: decoded.role }
           );
           res.status(401).json({
             success: false,
@@ -105,7 +109,7 @@ export async function authenticateJWT(
 
     next();
   } catch (err: any) {
-    console.error("[SECURITY] Unexpected error in authenticateJWT:", err.message);
+    reqLogger.error("[SECURITY] Unexpected error in authenticateJWT:", { error: err.message });
     res.status(500).json({
       success: false,
       message: "Internal authentication error",
@@ -120,6 +124,7 @@ export async function authenticateJWT(
  */
 export function requireRole(...allowedRoles: UserRole[]) {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    const reqLogger = (req as any).logger || logger;
     if (!req.user) {
       res.status(401).json({
         success: false,
@@ -129,8 +134,9 @@ export function requireRole(...allowedRoles: UserRole[]) {
     }
 
     if (!allowedRoles.includes(req.user.role)) {
-      console.warn(
-        `[SECURITY] Authorization failed: user ${req.user.id} with role '${req.user.role}' attempted to access route requiring [${allowedRoles.join(", ")}]`
+      reqLogger.warn(
+        `[SECURITY] Authorization failed: user ${req.user.id} with role '${req.user.role}' attempted to access route requiring [${allowedRoles.join(", ")}]`,
+        { userId: req.user.id, role: req.user.role, allowedRoles }
       );
       res.status(403).json({
         success: false,

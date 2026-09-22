@@ -51,9 +51,9 @@ USER nodejs
 
 EXPOSE 5000
 
-# Health check using the existing application /health endpoint
+# Health check using the dependency-aware application /health/ready endpoint
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:5000/health || exit 1
+  CMD wget -qO- http://localhost:5000/health/ready || exit 1
 
 # Start production API server
 CMD ["node", "dist/server.js"]

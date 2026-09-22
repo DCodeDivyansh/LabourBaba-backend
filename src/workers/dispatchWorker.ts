@@ -16,6 +16,7 @@ import {
 } from '../features/dispatch/dispatchOperation';
 import { planDispatchWave } from '../features/dispatch/wavePlanner';
 import { dispatchWaveConfig } from '../config/dispatchWaveConfig';
+import { logger } from '../utils/logger';
 
 /** @deprecated Import dispatchWaveConfig.timeoutMs or planDispatchWave instead. */
 export const WAVE_TIMEOUT_MS = dispatchWaveConfig.timeoutMs;
@@ -48,8 +49,9 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
     operationType: 'WAVE_DISPATCH',
   });
 
-  console.log(
+  logger.info(
     `[dispatchWorker] Processing requirement=${requirementId} wave=${waveNumber} offset=${offset} operationId=${operationId}`,
+    { requirementId, waveNumber, offset, operationId }
   );
 
   // 1. Fetch requirement + parent job for coordinates & status
@@ -67,7 +69,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
   });
 
   if (!req) {
-    console.warn(`[dispatchWorker] Requirement ${requirementId} not found — skipping`);
+    logger.warn(`[dispatchWorker] Requirement ${requirementId} not found — skipping`, { requirementId });
     return {
       operationId,
       requirementId,
@@ -88,7 +90,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
     reqStatusUpper === RequirementStatus.CANCELLED ||
     req.status === 'cancelled'
   ) {
-    console.log(`[dispatchWorker] Requirement ${requirementId} in terminal state (${req.status}) — skipping`);
+    logger.info(`[dispatchWorker] Requirement ${requirementId} in terminal state (${req.status}) — skipping`, { requirementId, status: req.status });
     return {
       operationId,
       requirementId,
@@ -112,7 +114,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
       },
     });
     if (existingWave) {
-      console.log(
+      logger.info(
         `[dispatchWorker] Wave ${waveNumber} (operation ${operationId}) already exists for requirement ${requirementId} — returning existing logical result`,
       );
       let existingDispatches: Array<{ worker_id: string }> = [];
@@ -140,7 +142,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
 
   // Explicit coordinate validation (reject null, undefined, NaN, Infinity, out of bounds; allow 0,0)
   if (!validateDispatchCoordinates(req.job.latitude, req.job.longitude)) {
-    console.warn(`[dispatchWorker] Job ${jobId} missing or invalid coordinates — cannot dispatch`, {
+    logger.warn(`[dispatchWorker] Job ${jobId} missing or invalid coordinates — cannot dispatch`, {
       latitude: req.job.latitude,
       longitude: req.job.longitude,
     });
@@ -198,7 +200,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
     availableCandidates: workers.length,
   });
   if (!plan.canDispatch) {
-    console.log(
+    logger.info(
       `[dispatchWorker] No eligible workers found for requirement ${requirementId} in wave ${waveNumber} (radius: ${radiusMeters}m) at offset ${offset}`,
     );
     await prisma.job_requirement.update({
@@ -279,7 +281,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
           skipDuplicates: true,
         });
       } catch (outboxErr: any) {
-        console.warn(`[dispatchWorker] Note on outbox creation: ${outboxErr.message}`);
+        logger.warn(`[dispatchWorker] Note on outbox creation: ${outboxErr.message}`);
       }
     }
   };
@@ -306,7 +308,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
       String(err.message).includes('uniq_dispatch_wave_req_wave') ||
       String(err.message).includes('23505')
     ) {
-      console.warn(
+      logger.warn(
         `[dispatchWorker] Concurrent duplicate wave ${waveNumber} (operation ${operationId}) detected for requirement ${requirementId} — safely retrieving committed state`,
       );
       let existingWave: any = null;
@@ -341,7 +343,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
         workerIds: existingDispatches.map((d) => d.worker_id),
       };
     }
-    console.error(`[dispatchWorker] Failed to persist dispatch state for requirement ${requirementId}:`, err);
+    logger.error(`[dispatchWorker] Failed to persist dispatch state for requirement ${requirementId}:`, { error: err?.message, stack: err?.stack });
     throw err; // Re-throw to trigger BullMQ retry
   }
 
@@ -366,8 +368,8 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
         jobId: `wave-timeout:${requirementId}:wave-${waveNumber}`,
       },
     );
-  } catch (err) {
-    console.error(`[dispatchWorker] Failed to enqueue durable timeout for requirement ${requirementId}:`, err);
+  } catch (err: any) {
+    logger.error(`[dispatchWorker] Failed to enqueue durable timeout for requirement ${requirementId}:`, { error: err?.message });
     // Queue error will be retried by BullMQ
     throw err;
   }
@@ -397,15 +399,15 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
         backoff: { type: 'exponential', delay: 2000 },
       },
     );
-  } catch (err) {
-    console.error(
+  } catch (err: any) {
+    logger.error(
       `[dispatchWorker] Failed to enqueue notification job for requirement ${requirementId} wave ${waveNumber}:`,
-      err,
+      { error: err?.message },
     );
     throw err;
   }
 
-  console.log(
+  logger.info(
     `[dispatchWorker] Wave ${waveNumber} (operation ${operationId}) persisted and notification job enqueued for requirement ${requirementId}. Timeout queued in BullMQ.`,
   );
 
@@ -443,27 +445,27 @@ export function getDispatchWorker(): Worker<DispatchJobData, DispatchOperationRe
     registerWorker(dispatchWorker);
 
     dispatchWorker.on('failed', (job, err) => {
-      console.error(`[dispatchWorker] Job ${job?.id} failed:`, err.message);
+      logger.error(`[dispatchWorker] Job ${job?.id} failed:`, { error: err.message });
     });
 
     dispatchWorker.on('stalled', (jobId) => {
-      console.warn(`[dispatchWorker] Job ${jobId} stalled — worker may have crashed`);
+      logger.warn(`[dispatchWorker] Job ${jobId} stalled — worker may have crashed`);
     });
 
     dispatchWorker.on('error', (err) => {
-      console.error('[dispatchWorker] Worker error:', err.message);
+      logger.error('[dispatchWorker] Worker error:', { error: err.message });
     });
 
     dispatchWorker.on('ready', () => {
-      console.log('[dispatchWorker] ✅ Worker connected to Redis and ready to process jobs');
+      logger.info('[dispatchWorker] ✅ Worker connected to Redis and ready to process jobs');
     });
 
     dispatchWorker.on('active', (job) => {
-      console.log(`[dispatchWorker] 🔄 Picked up job ${job?.id} — processing requirement ${job?.data?.requirementId}`);
+      logger.info(`[dispatchWorker] 🔄 Picked up job ${job?.id} — processing requirement ${job?.data?.requirementId}`);
     });
 
     dispatchWorker.on('completed', (job) => {
-      console.log(`[dispatchWorker] ✅ Job ${job?.id} completed for requirement ${job?.data?.requirementId}`);
+      logger.info(`[dispatchWorker] ✅ Job ${job?.id} completed for requirement ${job?.data?.requirementId}`);
     });
   }
   return dispatchWorker;
@@ -476,9 +478,9 @@ if (process.env.NODE_ENV !== 'test') {
 
 const shutdown = async () => {
   if (dispatchWorker) {
-    console.log('[dispatchWorker] Shutting down gracefully...');
+    logger.info('[dispatchWorker] Shutting down gracefully...');
     await dispatchWorker.close();
-    console.log('[dispatchWorker] Closed.');
+    logger.info('[dispatchWorker] Closed.');
   }
 };
 

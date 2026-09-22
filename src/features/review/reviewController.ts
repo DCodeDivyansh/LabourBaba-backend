@@ -4,6 +4,7 @@ import { CreateReviewReq } from "../../type/api_req.type";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
 import { AuthorizationError } from "../../policies";
 import { toReviewDTO } from "../../shared/prismaSelects";
+import { logger } from "../../utils/logger";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -11,7 +12,8 @@ function isValidUUID(val: unknown): boolean {
   return typeof val === "string" && UUID_REGEX.test(val);
 }
 
-function handleReviewError(error: unknown, res: Response): void {
+function handleReviewError(error: unknown, req: Request, res: Response): void {
+  const reqLogger = (req as any).logger || logger;
   if (error instanceof AuthorizationError) {
     res.status(error.status).json({
       success: false,
@@ -30,7 +32,7 @@ function handleReviewError(error: unknown, res: Response): void {
   }
 
   // Unknown error — log server-side, never expose raw database or provider internals
-  console.error("[reviewController] Unexpected error:", error);
+  reqLogger.error("[reviewController] Unexpected error:", { error: (error as any)?.message, stack: (error as any)?.stack });
   res.status(500).json({
     success: false,
     code: "REVIEW_INTERNAL_ERROR",
@@ -74,7 +76,7 @@ export const createReview = async (req: Request, res: Response): Promise<void> =
     const review = await reviewService.createReview(bookingId, customerId, payload);
     res.status(201).json({ success: true, data: toReviewDTO(review) });
   } catch (error) {
-    handleReviewError(error, res);
+    handleReviewError(error, req, res);
   }
 };
 
@@ -93,7 +95,7 @@ export const getWorkerReviews = async (req: Request, res: Response): Promise<voi
     const reviews = await reviewService.getWorkerReviews(workerId);
     res.status(200).json({ success: true, data: reviews.map(toReviewDTO).filter(Boolean) });
   } catch (error) {
-    handleReviewError(error, res);
+    handleReviewError(error, req, res);
   }
 };
 
@@ -113,7 +115,7 @@ export const getBookingReview = async (req: Request, res: Response): Promise<voi
     const review = await reviewService.getBookingReview(bookingId, actor);
     res.status(200).json({ success: true, data: toReviewDTO(review) });
   } catch (error) {
-    handleReviewError(error, res);
+    handleReviewError(error, req, res);
   }
 };
 

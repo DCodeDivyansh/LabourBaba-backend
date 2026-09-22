@@ -13,6 +13,7 @@ import {
 import { AuthenticatedRequest, UserRole } from "../../middlewares/authMiddleware";
 import { customerSelfSelect, toCustomerSelfDTO } from "../../shared/prismaSelects";
 import { sessionService } from "../auth/session.service";
+import { logger } from "../../utils/logger";
 
 /**
  * Register a new customer.
@@ -21,6 +22,7 @@ export const signupCustomer = async (
   req: Request,
   res: Response
 ): Promise<void> => {
+  const reqLogger = (req as any).logger || logger;
   try {
     const { name, phone: rawPhone, password }: SignupCustomerReq = req.body;
     const phone = normalizePhoneToE164(rawPhone);
@@ -79,10 +81,11 @@ export const signupCustomer = async (
       return;
     }
 
-    console.error("Signup error:", error);
+    reqLogger.error("[customerAuthController] Signup error:", { error: error?.message, stack: error?.stack });
 
     res.status(500).json({
       success: false,
+      code: "INTERNAL_SERVER_ERROR",
       message: "An error occurred during customer signup",
     });
   }
@@ -95,6 +98,7 @@ export const loginCustomer = async (
   req: Request,
   res: Response
 ): Promise<void> => {
+  const reqLogger = (req as any).logger || logger;
   try {
     const { phone: rawPhone, password }: LoginCustomerReq = req.body;
     const phone = normalizePhoneToE164(rawPhone);
@@ -155,10 +159,11 @@ export const loginCustomer = async (
       return;
     }
 
-    console.error("Login error:", error);
+    reqLogger.error("[customerAuthController] Login error:", { error: error?.message, stack: error?.stack });
 
     res.status(500).json({
       success: false,
+      code: "INTERNAL_SERVER_ERROR",
       message: "An error occurred during customer login",
     });
   }
@@ -176,6 +181,7 @@ export const getCurrentCustomer = async (
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
+  const reqLogger = (req as any).logger || logger;
   try {
     const customerId = req.user?.id;
 
@@ -215,10 +221,11 @@ export const getCurrentCustomer = async (
       data: toCustomerSelfDTO(customer),
     });
   } catch (error: any) {
-    console.error("Get current customer error:", error);
+    reqLogger.error("[customerAuthController] Get current customer error:", { error: error?.message, stack: error?.stack });
 
     res.status(500).json({
       success: false,
+      code: "INTERNAL_SERVER_ERROR",
       message: "Unable to load customer profile",
     });
   }

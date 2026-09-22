@@ -100,6 +100,8 @@ export function getPaymentConfig(): PaymentConfig {
   };
 }
 
+import { logger } from "../utils/logger";
+
 /**
  * Fail-fast startup validation for payment configuration.
  * Called from server.ts alongside assertJwtConfig().
@@ -109,7 +111,7 @@ export function assertProductionPaymentConfig(): void {
   if (nodeEnv !== "production") {
     // Warn in development/test if credentials are absent — do not block
     if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-      console.warn(
+      logger.warn(
         "[PAYMENT CONFIG] RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set. " +
           "Real payment orders cannot be created. Set these before going to production.",
       );

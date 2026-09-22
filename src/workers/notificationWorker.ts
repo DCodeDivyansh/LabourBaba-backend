@@ -24,6 +24,7 @@ import { redisConnectionOptions, NOTIFICATION_QUEUE_NAME } from '../config/bullm
 import { sendFCMToWorker } from '../shared/fcm';
 import { io } from '../server';
 import { registerWorker } from './workerLifecycle';
+import { logger } from '../utils/logger';
 
 // ── Data Shape ───────────────────────────────────────────────────────────────
 
@@ -55,8 +56,9 @@ export async function processNotificationJob(data: DispatchNotifyJobData): Promi
     customerName,
   } = data;
 
-  console.log(
+  logger.info(
     `[notificationWorker] Delivering wave=${waveNumber} notifications for requirement=${requirementId} to ${workers.length} worker(s)`,
+    { waveNumber, requirementId, workerCount: workers.length }
   );
 
   const expiresAtDate = new Date(expiresAt);
@@ -82,12 +84,12 @@ export async function processNotificationJob(data: DispatchNotifyJobData): Promi
             expiresAt,
           },
         });
-      } catch (err) {
+      } catch (err: any) {
         // Log but do NOT rethrow: FCM failure must not roll back persisted state
         // or prevent other workers from receiving their notifications.
-        console.error(
+        logger.error(
           `[notificationWorker] FCM delivery failed for worker=${w.id} (requirement=${requirementId} wave=${waveNumber}):`,
-          err,
+          { workerId: w.id, requirementId, waveNumber, error: err?.message }
         );
       }
 
@@ -105,18 +107,19 @@ export async function processNotificationJob(data: DispatchNotifyJobData): Promi
             });
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         // Log but do NOT rethrow: socket failure must not affect persisted state.
-        console.error(
+        logger.error(
           `[notificationWorker] Socket.IO delivery failed for worker=${w.id} (requirement=${requirementId} wave=${waveNumber}):`,
-          err,
+          { workerId: w.id, requirementId, waveNumber, error: err?.message }
         );
       }
     }),
   );
 
-  console.log(
+  logger.info(
     `[notificationWorker] Wave=${waveNumber} notifications delivered for requirement=${requirementId}`,
+    { waveNumber, requirementId }
   );
 }
 
@@ -140,27 +143,28 @@ export function getNotificationWorker(): Worker<DispatchNotifyJobData> {
     registerWorker(notificationWorkerInstance);
 
     notificationWorkerInstance.on('failed', (job, err) => {
-      console.error(
+      logger.error(
         `[notificationWorker] Job ${job?.id} failed (attempt ${job?.attemptsMade ?? '?'}):`,
-        err.message,
+        { jobId: job?.id, attemptsMade: job?.attemptsMade, error: err.message }
       );
     });
 
     notificationWorkerInstance.on('stalled', (jobId) => {
-      console.warn(`[notificationWorker] Job ${jobId} stalled — worker may have crashed`);
+      logger.warn(`[notificationWorker] Job ${jobId} stalled — worker may have crashed`, { jobId });
     });
 
     notificationWorkerInstance.on('error', (err) => {
-      console.error('[notificationWorker] Worker error:', err.message);
+      logger.error('[notificationWorker] Worker error:', { error: err.message });
     });
 
     notificationWorkerInstance.on('ready', () => {
-      console.log('[notificationWorker] ✅ Connected to Redis and ready to process notification jobs');
+      logger.info('[notificationWorker] ✅ Connected to Redis and ready to process notification jobs');
     });
 
     notificationWorkerInstance.on('completed', (job) => {
-      console.log(
+      logger.info(
         `[notificationWorker] ✅ Job ${job?.id} completed for requirement=${job?.data?.requirementId}`,
+        { jobId: job?.id, requirementId: job?.data?.requirementId }
       );
     });
   }
@@ -176,9 +180,9 @@ if (process.env.NODE_ENV !== 'test') {
 
 const shutdown = async () => {
   if (notificationWorkerInstance) {
-    console.log('[notificationWorker] Shutting down gracefully...');
+    logger.info('[notificationWorker] Shutting down gracefully...');
     await notificationWorkerInstance.close();
-    console.log('[notificationWorker] Closed.');
+    logger.info('[notificationWorker] Closed.');
   }
 };
 

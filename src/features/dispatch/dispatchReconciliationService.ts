@@ -5,6 +5,7 @@ import { JobStatus } from '../jobs/jobStateMachine';
 import { dispatchWaveConfig } from '../../config/dispatchWaveConfig';
 import { planDispatchWave } from './wavePlanner';
 import { generateDispatchOperationId } from './dispatchOperation';
+import { logger } from '../../utils/logger';
 
 export interface ReconciliationReport {
   scannedRequirements: number;
@@ -36,7 +37,7 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
     errors: [],
   };
 
-  console.log('[dispatchReconciliation] 🔍 Starting startup dispatch reconciliation scan...');
+  logger.info('[dispatchReconciliation] 🔍 Starting startup dispatch reconciliation scan...');
 
   // 1. Find all active/open requirements for non-terminal jobs
   const candidateRequirements = await prisma.job_requirement.findMany({
@@ -71,7 +72,7 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
   });
 
   report.scannedRequirements = candidateRequirements.length;
-  console.log(`[dispatchReconciliation] Found ${candidateRequirements.length} dispatchable requirement(s)`);
+  logger.info(`[dispatchReconciliation] Found ${candidateRequirements.length} dispatchable requirement(s)`, { count: candidateRequirements.length });
 
   const now = Date.now();
 
@@ -94,8 +95,9 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
 
         if (waveExpiresAtMs <= now) {
           // ── Case A: Wave expired while system was down ────────────────────────
-          console.log(
+          logger.info(
             `[dispatchReconciliation] Requirement ${req.id} wave ${latestWave.wave_number} expired during downtime — resolving wave`,
+            { requirementId: req.id, waveNumber: latestWave.wave_number }
           );
 
           // Mark pending dispatches as timeout
@@ -158,8 +160,9 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
             requirementId: req.id,
             waveNumber: latestWave.wave_number,
           });
-          console.log(
+          logger.info(
             `[dispatchReconciliation] Requirement ${req.id} wave ${latestWave.wave_number} is still active — re-queuing timeout in ${remainingDelayMs}ms`,
+            { requirementId: req.id, waveNumber: latestWave.wave_number, remainingDelayMs }
           );
 
           await timeoutQueue.add(
@@ -187,8 +190,9 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
           requirementId: req.id,
           waveNumber: 1,
         });
-        console.log(
+        logger.info(
           `[dispatchReconciliation] Requirement ${req.id} has no waves — enqueuing initial wave 1 (operation ${wave1OperationId})`,
+          { requirementId: req.id, operationId: wave1OperationId }
         );
 
         await dispatchQueue.add(
@@ -208,9 +212,9 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
         report.missingWavesScheduled++;
       }
     } catch (err: any) {
-      console.error(
+      logger.error(
         `[dispatchReconciliation] Failed to reconcile requirement ${req.id}:`,
-        err.message || err,
+        { requirementId: req.id, error: err.message || err }
       );
       report.errors.push({
         requirementId: req.id,
@@ -219,8 +223,9 @@ export async function reconcileDispatchState(): Promise<ReconciliationReport> {
     }
   }
 
-  console.log(
+  logger.info(
     `[dispatchReconciliation] ✅ Reconciliation complete. Scanned: ${report.scannedRequirements}, Expired Closed: ${report.expiredWavesClosed}, Timeouts Restored: ${report.activeTimeoutsRestored}, Waves Scheduled: ${report.missingWavesScheduled}`,
+    { report }
   );
 
   return report;
