@@ -44,12 +44,9 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
     return;
   }
 
-  const reqStatusUpper = req.status?.toUpperCase();
   if (
-    reqStatusUpper === RequirementStatus.FILLED ||
-    req.status === 'filled' ||
-    reqStatusUpper === RequirementStatus.CANCELLED ||
-    req.status === 'cancelled'
+    req.status === RequirementStatus.FILLED ||
+    req.status === RequirementStatus.CANCELLED
   ) {
     logger.info(
       `[timeoutWorker] Requirement ${requirementId} already reached terminal state (${req.status}) — skipping wave timeout`,

@@ -3,7 +3,7 @@ import { CreateJobReq } from '../../type/api_req.type';
 import { dispatchQueue } from '../../config/bullmq';
 import { bookingSafeSelect } from '../../shared/prismaSelects';
 import { jobPolicy, assertPolicy, AuthenticatedUser, PolicyActor, AuthorizationError, UserRole } from '../../policies';
-import { jobStateService, JobAction, JobStatus, JobTransitionActor } from './jobStateMachine';
+import { jobStateService, JobAction, JobStatus, JobTransitionActor, JobInvalidTransitionError } from './jobStateMachine';
 import { RequirementStatus } from './requirementStateMachine';
 import { generateDispatchOperationId } from '../dispatch/dispatchOperation';
 import { validateOptionalCoordinatePair } from '../../utils/coordinateValidator';
@@ -108,7 +108,7 @@ export const jobService = {
     });
     logger.info("[jobService] requirements", { count: createdRequirements?.length });
 
-    // Transition job to SEARCHING and requirements to DISPATCHING
+    // Transition job to SEARCHING/DISPATCHING and requirements to DISPATCHING
     try {
       await prisma.$transaction(async (tx) => {
         await jobStateService.transition(tx, {
@@ -123,7 +123,12 @@ export const jobService = {
         });
       });
     } catch (err: any) {
-      logger.warn(`[jobService] Transition to SEARCHING note: ${err?.message}`);
+      if (err instanceof JobInvalidTransitionError && err.fromStatus === JobStatus.DISPATCHING) {
+        // Safe idempotent ignore: job was already in DISPATCHING
+      } else {
+        logger.error(`[jobService] Failed to transition job to DISPATCHING: ${err?.message}`);
+        throw err;
+      }
     }
 
     // Fire BullMQ dispatch for all requirements with deterministic job IDs
@@ -216,7 +221,7 @@ export const jobService = {
 
       // Synchronously cascade cancellation to open requirements and pending dispatches
       await tx.job_requirement.updateMany({
-        where: { job_id: jobId, status: { notIn: ["filled", "FILLED", RequirementStatus.CANCELLED] } },
+        where: { job_id: jobId, status: { notIn: [RequirementStatus.FILLED, RequirementStatus.CANCELLED] } },
         data: { status: RequirementStatus.CANCELLED },
       });
 
@@ -224,7 +229,7 @@ export const jobService = {
       for (const r of reqs) {
         await tx.job_dispatch.updateMany({
           where: { requirement_id: r.id, status: "pending" },
-          data: { status: "CANCELLED", responded_at: new Date() },
+          data: { status: "cancelled", responded_at: new Date() },
         });
       }
 

@@ -649,7 +649,7 @@ async function processPaymentCaptured(params: CapturedParams): Promise<{ success
               body: `Your payment of ₹${(localPayment.amount ?? 0) / 100} has been confirmed.`,
             },
             idempotencyKey: `PAYMENT_COMPLETED:payment:${localPayment.id}:${booking.customer_id}`,
-          }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
+          });
         }
 
         if (booking?.worker_id) {
@@ -668,7 +668,7 @@ async function processPaymentCaptured(params: CapturedParams): Promise<{ success
               body: `Payment of ₹${(localPayment.amount ?? 0) / 100} received for booking.`,
             },
             idempotencyKey: `PAYMENT_COMPLETED:payment:${localPayment.id}:${booking.worker_id}`,
-          }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
+          });
         }
       }
 
@@ -759,7 +759,7 @@ async function processPaymentFailed(params: {
               body: "Your payment attempt failed. Please try again.",
             },
             idempotencyKey: `PAYMENT_FAILED:payment:${localPayment.id}:${booking.customer_id}`,
-          }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
+          });
         }
       }
 
@@ -854,7 +854,7 @@ async function processRefundProcessed(params: {
               body: `Your refund of ₹${(refundAmount || localPayment.amount || 0) / 100} has been processed.`,
             },
             idempotencyKey: `REFUND_COMPLETED:payment:${localPayment.id}:${booking.customer_id}`,
-          }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
+          });
         }
       } else if (localPayment.status === PaymentStatus.REFUNDED && !localPayment.razorpay_refund_id && refundId) {
         // Payment was already reconciled to REFUNDED before webhook arrived; enrich with provider refund ID
@@ -1178,7 +1178,7 @@ export async function refundPayment(
             body: `Your refund of ₹${providerRefund.amount / 100} has been processed.`,
           },
           idempotencyKey: `REFUND_COMPLETED:payment:${payment.id}:${booking.customer_id}`,
-        }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
+        });
       }
     });
 

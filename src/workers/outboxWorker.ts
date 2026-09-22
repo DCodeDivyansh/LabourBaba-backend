@@ -71,13 +71,13 @@ export class OutboxWorker {
       }
 
       if (fcmSuccess || !hasTransientError) {
-        await outboxService.markEventSuccess(id);
+        await outboxService.markEventSuccess(id, record.updated_at);
       } else {
-        await outboxService.markEventFailure(id, lastErrorMessage || 'Transient push delivery failure', false);
+        await outboxService.markEventFailure(id, lastErrorMessage || 'Transient push delivery failure', false, record.updated_at);
       }
     } catch (err: any) {
       const isPermanent = isPermanentInvalidTokenError(err);
-      await outboxService.markEventFailure(id, err.message || 'Outbox processing failed', isPermanent);
+      await outboxService.markEventFailure(id, err.message || 'Outbox processing failed', isPermanent, record.updated_at);
     }
   }
 

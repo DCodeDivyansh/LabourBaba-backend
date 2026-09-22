@@ -263,7 +263,7 @@ export async function getEligibleCandidatePage(
         AND NOT EXISTS (
               SELECT 1 FROM booking b
               WHERE b.worker_id = w.id
-                AND LOWER(b.status) IN ('confirmed', 'in_progress')
+                AND b.status IN ('CONFIRMED', 'IN_PROGRESS')
             )
         AND (
               ${requireLocationFreshness}::boolean = false

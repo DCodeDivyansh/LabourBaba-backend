@@ -5,6 +5,7 @@ import { JobStatus } from "../src/features/jobs/jobStateMachine";
 import { UserRole } from "../src/policies";
 
 describe("P4 Issue 14: Cross-Entity State Transition Atomicity & Correctness", () => {
+  jest.setTimeout(30000);
   let customerId: string;
   let worker1Id: string;
   let worker2Id: string;

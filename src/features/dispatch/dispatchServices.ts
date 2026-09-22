@@ -6,7 +6,7 @@ import { io } from '../../server';
 import { customerSummarySelect, bookingSafeSelect, toDispatchDTO, toWorkerPublicDTO, toDispatchWaveDTO } from '../../shared/prismaSelects';
 import { PolicyActor, AuthorizationError, UserRole } from '../../policies';
 
-import { jobStateService, JobAction } from '../jobs/jobStateMachine';
+import { jobStateService, JobAction, JobInvalidTransitionError, JobStatus } from '../jobs/jobStateMachine';
 import {
   RequirementStatus,
   RequirementAction,
@@ -28,7 +28,7 @@ async function checkJobComplete(
   const unfilledCount = await tx.job_requirement.count({
     where: {
       job_id: jobId,
-      status: { notIn: [RequirementStatus.FILLED, 'filled', 'FILLED'] },
+      status: { notIn: [RequirementStatus.FILLED] },
     },
   });
 
@@ -41,7 +41,18 @@ async function checkJobComplete(
         reason: "All job requirements filled",
       });
     } catch (err: any) {
-      logger.warn(`[dispatchServices] Note: Job transition to BOOKED: ${err.message}`);
+      // P5 Issue 14: Only suppress explicitly proven idempotent conditions.
+      if (
+        err instanceof JobInvalidTransitionError &&
+        (err.fromStatus === JobStatus.BOOKED ||
+          err.fromStatus === JobStatus.IN_PROGRESS ||
+          err.fromStatus === JobStatus.COMPLETED)
+      ) {
+        // Safe idempotent ignore: job was already transitioned
+      } else {
+        // Any unexpected database/Prisma/domain error MUST propagate to abort the transaction!
+        throw err;
+      }
     }
 
     await tx.job.update({
@@ -203,6 +214,29 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
           otp_attempts: 0,
         },
       });
+
+      // Mandatory Transactional Outbox (Issue 12): Record booking_confirmed event atomically
+      if (typeof (tx as any).notification_outbox?.create === 'function') {
+        await (tx as any).notification_outbox.create({
+          data: {
+            event_type: 'booking_confirmed',
+            aggregate_type: 'booking',
+            aggregate_id: booking.id,
+            recipient_type: 'customer',
+            recipient_id: req.job.customer_id,
+            payload: {
+              bookingId: booking.id,
+              jobId: req.job_id,
+              workerId,
+              skillType: req.skill_type,
+              title: 'Worker Confirmed',
+              body: 'A worker has accepted and confirmed your booking.',
+            },
+            idempotency_key: `booking_confirmed:${booking.id}:customer:${req.job.customer_id}`,
+            status: 'PENDING',
+          },
+        });
+      }
 
       let expiredWorkerIds: string[] = [];
       let jobFullyBooked = false;

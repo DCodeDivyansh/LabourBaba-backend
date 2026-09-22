@@ -296,7 +296,7 @@ export const bookingService = {
       }
 
       // Transition AWAITING_CONFIRMATION -> COMPLETED (or idempotent if already COMPLETED)
-      await bookingStateService.transition(tx, {
+      const transitionResult = await bookingStateService.transition(tx, {
         bookingId,
         action: BookingAction.CONFIRM_COMPLETION,
         actor: { id: effectiveCustomerId, role: actor?.role || UserRole.CUSTOMER },
@@ -349,6 +349,28 @@ export const bookingService = {
             }
           }
         }
+      }
+
+      // Mandatory Transactional Outbox (Issue 12): Record booking_completed event atomically if not idempotent retry
+      if (!transitionResult.isIdempotent && typeof (tx as any).notification_outbox?.create === 'function' && booking.worker_id) {
+        await (tx as any).notification_outbox.create({
+          data: {
+            event_type: 'booking_completed',
+            aggregate_type: 'booking',
+            aggregate_id: bookingId,
+            recipient_type: 'worker',
+            recipient_id: booking.worker_id,
+            payload: {
+              bookingId,
+              jobId: booking.job_id,
+              rating: payload.rating,
+              title: 'Booking Completed',
+              body: 'Customer has confirmed completion of the booking.',
+            },
+            idempotency_key: `booking_completed:${bookingId}:worker:${booking.worker_id}`,
+            status: 'PENDING',
+          },
+        });
       }
 
       return { success: true, message: "Booking completion confirmed" };
@@ -493,6 +515,33 @@ export const bookingService = {
               }
             }
           }
+        }
+      }
+
+      // Mandatory Transactional Outbox (Issue 12): Record booking_cancelled event atomically if not idempotent retry
+      if (!transitionResult.isIdempotent && typeof (tx as any).notification_outbox?.create === 'function') {
+        const isWorkerCancelling = effectiveRole === UserRole.WORKER;
+        const recipientType = isWorkerCancelling ? 'customer' : 'worker';
+        const recipientId = isWorkerCancelling ? lockedBooking.customer_id : lockedBooking.worker_id;
+        if (recipientId) {
+          await (tx as any).notification_outbox.create({
+            data: {
+              event_type: 'booking_cancelled',
+              aggregate_type: 'booking',
+              aggregate_id: bookingId,
+              recipient_type: recipientType,
+              recipient_id: recipientId,
+              payload: {
+                bookingId,
+                jobId: lockedBooking.job_id,
+                reason: payload.reason,
+                title: 'Booking Cancelled',
+                body: `Booking has been cancelled: ${payload.reason || 'No reason provided'}`,
+              },
+              idempotency_key: `booking_cancelled:${bookingId}:${recipientType}:${recipientId}`,
+              status: 'PENDING',
+            },
+          });
         }
       }
 

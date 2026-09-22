@@ -198,12 +198,17 @@ export class OutboxService {
    * Marks an outbox event as successfully sent / processed.
    * Atomically checks that the event is still in PROCESSING to prevent stale workers from clobbering recovered events.
    */
-  public async markEventSuccess(id: string): Promise<boolean> {
+  public async markEventSuccess(id: string, expectedClaimedAt?: Date): Promise<boolean> {
+    const whereClause: any = {
+      id,
+      status: { in: ["PROCESSING", "PENDING"] },
+    };
+    if (expectedClaimedAt) {
+      whereClause.updated_at = expectedClaimedAt;
+    }
+
     const result = await (prisma as any).notification_outbox.updateMany({
-      where: {
-        id,
-        status: { in: ["PROCESSING", "PENDING"] },
-      },
+      where: whereClause,
       data: {
         status: "SENT",
         processed_at: new Date(),
@@ -215,25 +220,34 @@ export class OutboxService {
       logger.info(`[OUTBOX_SENT] Outbox event ${id} processed and delivered successfully.`, { outboxId: id });
       return true;
     } else {
-      logger.warn(`[OUTBOX_STALE_IGNORED] Outbox event ${id} was not in PROCESSING or PENDING. Ignoring stale completion.`, { outboxId: id });
+      logger.warn(`[OUTBOX_STALE_IGNORED] Outbox event ${id} was not in PROCESSING or PENDING (or lease expired). Ignoring stale completion.`, { outboxId: id });
       return false;
     }
   }
 
   /**
    * Records a delivery failure, scheduling a retry with backoff or marking as terminal failure.
-   * Atomically checks that the event is still in PROCESSING or PENDING to prevent stale workers from clobbering recovered events.
+   * Atomically checks that the event is still in PROCESSING or PENDING (and matches expected lease) to prevent stale workers from clobbering recovered events.
    */
   public async markEventFailure(
     id: string,
     errorMessage: string,
-    isPermanent = false
+    isPermanent = false,
+    expectedClaimedAt?: Date
   ): Promise<boolean> {
+    const whereClause: any = {
+      id,
+      status: { in: ["PROCESSING", "PENDING"] },
+    };
+    if (expectedClaimedAt) {
+      whereClause.updated_at = expectedClaimedAt;
+    }
+
     const record = await (prisma as any).notification_outbox.findFirst({
-      where: { id, status: { in: ["PROCESSING", "PENDING"] } },
+      where: whereClause,
     });
     if (!record) {
-      logger.warn(`[OUTBOX_STALE_FAILURE_IGNORED] Outbox event ${id} not found in expected PROCESSING or PENDING state. Ignoring stale failure.`, { outboxId: id });
+      logger.warn(`[OUTBOX_STALE_FAILURE_IGNORED] Outbox event ${id} not found in expected state (or lease expired). Ignoring stale failure.`, { outboxId: id });
       return false;
     }
 
@@ -242,7 +256,7 @@ export class OutboxService {
 
     if (isTerminal) {
       const updateResult = await (prisma as any).notification_outbox.updateMany({
-        where: { id, status: { in: ["PROCESSING", "PENDING"] } },
+        where: whereClause,
         data: {
           status: "FAILED",
           attempts: nextAttempt,
@@ -267,7 +281,7 @@ export class OutboxService {
       const nextAvailableAt = new Date(Date.now() + backoffSeconds * 1000);
 
       const updateResult = await (prisma as any).notification_outbox.updateMany({
-        where: { id, status: { in: ["PROCESSING", "PENDING"] } },
+        where: whereClause,
         data: {
           status: "PENDING",
           attempts: nextAttempt,
