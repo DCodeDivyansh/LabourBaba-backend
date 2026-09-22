@@ -92,13 +92,34 @@ Ensure you have the following installed before running the project:
    APP_URL="com.labourbaba.app://"
    ```
 
-3. **Database Setup (Prisma):**
-   Push the schema to your PostgreSQL database and generate the Prisma Client:
+3. **Database Setup & Migrations:**
+   
+   #### A. Production & Staging Deployment (Canonical Path)
+   Always apply versioned Prisma migrations deterministically using `prisma migrate deploy`:
    ```bash
+   # 1. Generate Prisma Client
    npx prisma generate
-   npx prisma db push
+
+   # 2. Deploy versioned migrations to PostgreSQL
+   npx prisma migrate deploy
    ```
-   *(Ensure PostGIS is installed on your Postgres server or the push may fail on geography columns).*
+   > **Important Deployment Invariant:** Never use `prisma db push` or `prisma migrate reset` in production or staging environments. All schema evolutions must be tracked in versioned migration files under `prisma/migrations/`.
+
+   #### B. Local Development Workflow
+   For developing and prototyping schema changes locally:
+   ```bash
+   # Create and apply a new migration during development
+   npx prisma migrate dev --name <migration_name>
+   ```
+
+   #### C. Database Backup & Disaster Recovery Policy
+   Before executing destructive schema migrations or major version upgrades:
+   ```bash
+   # Create a verified SQL backup with SHA-256 checksum:
+   npx tsx scripts/backup-db.ts
+   ```
+   - **Rollback Limitations & Forward-Fix Strategy:** Prisma does not execute automatic down-migrations. If a production migration encounters an unrecoverable failure or data issue, restore from the pre-migration backup via `npx tsx scripts/restore-db.ts` or deploy a tested forward-fix migration.
+   - **PostGIS Requirement:** PostgreSQL must have the `postgis` extension enabled (`CREATE EXTENSION IF NOT EXISTS postgis;`).
 
 ---
 
