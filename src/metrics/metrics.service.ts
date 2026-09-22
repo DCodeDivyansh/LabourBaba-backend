@@ -355,8 +355,21 @@ export class MetricsService {
       help: "Unix timestamp in seconds of the last verified database backup",
       registers: [this.registry],
     });
-    // Initialize to current time so alert doesn't fire immediately on clean boot
-    this.backupLastSuccessfulTimestampSeconds.set(Math.floor(Date.now() / 1000));
+    // Initialize strictly from verified backup metadata if available, otherwise 0.
+    // Must NEVER initialize to Date.now() to avoid fake operational confidence (P4 Issue 27).
+    let initialBackupTime = 0;
+    try {
+      const metadataPath = path.resolve(process.cwd(), "backups", "latest_backup_metadata.json");
+      if (fs.existsSync(metadataPath)) {
+        const data = JSON.parse(fs.readFileSync(metadataPath, "utf-8"));
+        if (data && typeof data.timestampSeconds === "number") {
+          initialBackupTime = data.timestampSeconds;
+        }
+      }
+    } catch {
+      initialBackupTime = 0;
+    }
+    this.backupLastSuccessfulTimestampSeconds.set(initialBackupTime);
   }
 
   // --- Dynamic Compatibility Helpers ---
@@ -659,7 +672,7 @@ export class MetricsService {
     this.healthReadyDatabaseStatus.set(1);
     this.healthReadyRedisStatus.set(1);
     this.healthReadyStatus.set(1);
-    this.backupLastSuccessfulTimestampSeconds.set(Math.floor(Date.now() / 1000));
+    this.backupLastSuccessfulTimestampSeconds.set(0);
   }
 }
 
