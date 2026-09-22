@@ -30,13 +30,22 @@ export const chatService = {
     });
 
     if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: {
-          booking_id: bookingId,
-          customer_id: context.customer_id,
-          worker_id: context.worker_id,
-        },
-      });
+      try {
+        conversation = await prisma.conversation.create({
+          data: {
+            booking_id: bookingId,
+            customer_id: context.customer_id,
+            worker_id: context.worker_id,
+          },
+        });
+      } catch (err: any) {
+        conversation = await prisma.conversation.findFirst({
+          where: { booking_id: bookingId },
+        });
+        if (!conversation) {
+          throw err;
+        }
+      }
     }
 
     return conversation;

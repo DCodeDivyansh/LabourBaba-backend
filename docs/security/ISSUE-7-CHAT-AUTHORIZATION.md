@@ -166,36 +166,49 @@ Internal database columns, foreign keys, or participant credentials cannot leak.
 
 ## 9. Verification & Test Matrix
 
-The dedicated regression test suite [`tests/chatSecurity.test.ts`](file:///e:/LabourBaba/LabourBaba-backend/tests/chatSecurity.test.ts) covers 25 comprehensive test scenarios:
+The dedicated regression test suite [`tests/chatSecurity.test.ts`](file:///e:/LabourBaba/LabourBaba-backend/tests/chatSecurity.test.ts) covers 32 comprehensive test scenarios:
 
-1. **HTTP Authentication & Authorization:**
+1. **HTTP Authentication & 4-Way Cross-IDOR Authorization:**
    - Anonymous history retrieval rejected (401).
    - Anonymous message sending rejected (401).
-   - Customer A retrieves own chat history (200).
+   - Customer A retrieves Customer A's booking chat history (200).
    - Customer B rejected from Customer A's chat history (403/404).
-   - Worker A retrieves assigned chat history (200).
-   - Worker B rejected from Worker A's chat history (403/404).
-   - Platform Admin retrieves chat history (200).
+   - Worker A retrieves Customer A's booking chat history (200).
+   - Worker B rejected from Worker A's booking chat history (403/404).
+   - Customer B retrieves Customer B's booking chat history (Booking B) (200).
+   - Worker B retrieves Booking B chat history (200).
+   - Customer A rejected from Customer B's booking chat history (Booking B) (403/404).
+   - Worker A rejected from Booking B chat history (403/404).
+   - Platform Admin retrieves chat history for any booking (200).
    - Malformed `bookingId` rejected before database lookup (400).
+   - Nonexistent booking returns 404 Not Found.
 2. **HTTP Message Creation & Identity Spoofing:**
    - Customer A sends message to own booking (201).
    - Customer B rejected from sending message to Customer A's booking (403/404).
    - Worker A sends message to assigned booking (201).
    - Worker B rejected from sending message to Worker A's booking (403/404).
+   - Customer A rejected from sending message to Booking B (403/404).
+   - Worker A rejected from sending message to Booking B (403/404).
    - Client body with injected `sender_id` rejected by strict schema (400).
-3. **Socket.IO Room Joining & Messaging Authorization:**
+   - Chat message DTO verified to not leak sensitive internal database fields.
+3. **Socket.IO Room Joining, Messaging & Cross-Room Isolation:**
    - Unauthenticated handshake rejected.
-   - Customer A joins booking room via `join:booking` and alias `join:chat`.
-   - Worker A joins booking room via `join:booking`.
-   - Customer B rejected from joining Customer A's room (FORBIDDEN, not joined).
-   - Worker B rejected from joining Worker A's room (FORBIDDEN, not joined).
+   - Suspended worker socket connection rejected during handshake.
+   - Customer A joins Booking A room via `join:booking` and alias `join:chat`.
+   - Worker A joins Booking A room via `join:booking`.
+   - Customer B rejected from joining Customer A's Booking A room (FORBIDDEN, not joined).
+   - Worker B rejected from joining Worker A's Booking A room (FORBIDDEN, not joined).
+   - Customer A rejected from joining Booking B room (FORBIDDEN, not joined).
+   - Worker A rejected from joining Booking B room (FORBIDDEN, not joined).
    - Malformed `bookingId` rejected on socket event (INVALID_REQUEST).
    - Customer A sends `chat:message` -> emitted to canonical room with authoritative `sender_id`.
    - Customer B rejected from sending `chat:message` on Customer A's booking (FORBIDDEN).
-4. **Service-Layer Direct Invariants:**
+   - Cross-Room Isolation: Booking A broadcast is NOT received by Booking B participants.
+4. **Service-Layer Direct Invariants & Concurrency:**
    - `chatService.getMessages` throws 401 when `actor` is missing.
    - `chatService.sendMessage` throws 401 when `actor` is missing.
    - `chatService.sendMessage` overrides any passed `senderId` with `actor.id`.
+   - Concurrent messages sent to `chatService` are all processed with correct sender identity and conversation binding.
 
 ---
 
@@ -207,11 +220,11 @@ The dedicated regression test suite [`tests/chatSecurity.test.ts`](file:///e:/La
 | [`src/type/api_req.type.ts`](file:///e:/LabourBaba/LabourBaba-backend/src/type/api_req.type.ts) | Exported `SendChatMessageBody` type. |
 | [`src/socket/roomHelpers.ts`](file:///e:/LabourBaba/LabourBaba-backend/src/socket/roomHelpers.ts) | Created canonical room naming helpers (`getBookingChatRoom`, etc.). |
 | [`src/policies/chat.policy.ts`](file:///e:/LabourBaba/LabourBaba-backend/src/policies/chat.policy.ts) | Hardened role checks and booking room forbidden reason. |
-| [`src/features/chat/chatServices.ts`](file:///e:/LabourBaba/LabourBaba-backend/src/features/chat/chatServices.ts) | Made `actor` mandatory; enforced server-derived `actor.id` sender; scoped queries. |
+| [`src/features/chat/chatServices.ts`](file:///e:/LabourBaba/LabourBaba-backend/src/features/chat/chatServices.ts) | Made `actor` mandatory; enforced server-derived `actor.id` sender; scoped queries; handled concurrent creation races. |
 | [`src/features/chat/chatController.ts`](file:///e:/LabourBaba/LabourBaba-backend/src/features/chat/chatController.ts) | Handled `AuthorizationError`; added canonical room socket broadcast on message send. |
 | [`src/features/chat/chatRoutes.ts`](file:///e:/LabourBaba/LabourBaba-backend/src/features/chat/chatRoutes.ts) | Mounted `validateParams(BookingIdParamSchema)` and `validateBody(SendChatMessageBodySchema)`. |
 | [`src/socket/socketHandlers.ts`](file:///e:/LabourBaba/LabourBaba-backend/src/socket/socketHandlers.ts) | Integrated room helpers, input validation, `join:chat` alias, and authoritative sender derivation. |
-| [`tests/chatSecurity.test.ts`](file:///e:/LabourBaba/LabourBaba-backend/tests/chatSecurity.test.ts) | Dedicated 25-scenario automated security test suite. |
+| [`tests/chatSecurity.test.ts`](file:///e:/LabourBaba/LabourBaba-backend/tests/chatSecurity.test.ts) | Dedicated 32-scenario automated security test suite covering 4-way cross-IDOR, cross-room isolation, and concurrency. |
 
 ---
 
