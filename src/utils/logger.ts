@@ -74,7 +74,19 @@ export function redactSensitiveData(data: unknown, depth = 0): any {
   const sanitized: Record<string, any> = {};
   for (const [key, value] of Object.entries(data)) {
     const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (SENSITIVE_KEYS.has(normalizedKey)) {
+    const isSensitive =
+      SENSITIVE_KEYS.has(normalizedKey) ||
+      normalizedKey.includes('password') ||
+      normalizedKey.includes('otphash') ||
+      normalizedKey.includes('refreshtoken') ||
+      normalizedKey.includes('accesstoken') ||
+      normalizedKey.includes('privatekey') ||
+      normalizedKey.includes('webhooksecret') ||
+      normalizedKey.includes('keysecret') ||
+      normalizedKey.includes('clientsecret') ||
+      normalizedKey.includes('jwtsecret');
+
+    if (isSensitive) {
       sanitized[key] = REDACTED_MASK;
     } else {
       sanitized[key] = redactSensitiveData(value, depth + 1);

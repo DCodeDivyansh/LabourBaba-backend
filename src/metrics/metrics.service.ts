@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import client, { Registry, Counter, Gauge, Histogram, collectDefaultMetrics } from "prom-client";
 import { logger } from "../utils/logger";
 
@@ -629,8 +631,6 @@ export class MetricsService {
    */
   async formatPrometheus(): Promise<string> {
     try {
-      const fs = await import("fs");
-      const path = await import("path");
       const metadataPath = path.resolve(process.cwd(), "backups", "latest_backup_metadata.json");
       if (fs.existsSync(metadataPath)) {
         const data = JSON.parse(fs.readFileSync(metadataPath, "utf-8"));
