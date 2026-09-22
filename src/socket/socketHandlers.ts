@@ -10,6 +10,7 @@ import {
 } from "./socketTypes";
 import { chatService } from "../features/chat/chatServices";
 import { chatPolicy, jobPolicy, requirementPolicy, AuthorizationError } from "../policies";
+import { AppError } from "../errors/AppError";
 import { toChatMessageDTO } from "../shared/prismaSelects";
 import {
   getBookingChatRoom,
@@ -253,10 +254,11 @@ export function registerSocketHandlers(io: Server): void {
             await workerLocationService.updateLocation(user.id, validLat, validLng);
           } catch (locErr: any) {
             logger.warn(`[SOCKET] Failed to persist worker location for ${user.id}:`, { userId: user.id, error: locErr.message });
+            const clientMsg = locErr instanceof AppError ? locErr.message : "Failed to persist worker location";
             const response: SocketAckResponse = {
               success: false,
-              code: "INVALID_REQUEST",
-              message: locErr.message || "Invalid coordinates",
+              code: locErr.code || "INVALID_REQUEST",
+              message: clientMsg,
             };
             socket.emit("error", response);
             callback?.(response);
@@ -575,10 +577,18 @@ export function registerSocketHandlers(io: Server): void {
               : err.code === "RESOURCE_NOT_FOUND" ||
                 err.message === "Booking not found";
 
+          const clientMsg = isForbidden
+            ? "Access denied to this booking conversation"
+            : isNotFound
+            ? "Booking not found"
+            : err instanceof AppError
+            ? err.message
+            : "Failed to send message";
+
           const response: SocketAckResponse = {
             success: false,
             code: isForbidden ? "FORBIDDEN" : (isNotFound ? "RESOURCE_NOT_FOUND" : (err.code || "INTERNAL_ERROR")),
-            message: err.message || "Failed to send message",
+            message: clientMsg,
           };
           socket.emit("error", response);
           callback?.(response);

@@ -26,6 +26,51 @@ function sanitizeId(rawId?: string): string | null {
   return trimmed;
 }
 
+/**
+ * Sanitizes request URLs by redacting signed object-storage tokens, secrets, signatures, and credentials.
+ */
+export function sanitizeUrlForLogging(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl, 'http://localhost');
+    const sensitiveQueryParams = [
+      'signature',
+      'sig',
+      'x-amz-signature',
+      'x-amz-credential',
+      'x-amz-security-token',
+      'token',
+      'access_token',
+      'refreshtoken',
+      'refresh_token',
+      'secret',
+      'key',
+      'auth',
+      'password',
+      'otp',
+    ];
+
+    let hasRedacted = false;
+    for (const [key] of Array.from(url.searchParams.entries())) {
+      const lowerKey = key.toLowerCase();
+      if (
+        sensitiveQueryParams.includes(lowerKey) ||
+        lowerKey.includes('signature') ||
+        lowerKey.includes('secret') ||
+        lowerKey.includes('token') ||
+        lowerKey.includes('password') ||
+        lowerKey.includes('credential')
+      ) {
+        url.searchParams.set(key, '[REDACTED]');
+        hasRedacted = true;
+      }
+    }
+
+    return url.pathname + (url.search ? url.search : '');
+  } catch {
+    return rawUrl.split('?')[0];
+  }
+}
+
 export function requestLogger(req: Request, res: Response, next: NextFunction): void {
   const startTime = Date.now();
   req.startTime = startTime;
@@ -73,12 +118,14 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
       metricsService.recordHttpRequest(req.method, req.baseUrl ? `${req.baseUrl}${req.path}` : req.path, statusCode, durationMs);
     } catch {}
 
+    const sanitizedUrl = sanitizeUrlForLogging(req.originalUrl || req.path);
+
     if (statusCode >= 500) {
-      reqLogger.error(`HTTP ${req.method} ${req.originalUrl || req.path} ${statusCode} (${durationMs}ms)`, logMeta);
+      reqLogger.error(`HTTP ${req.method} ${sanitizedUrl} ${statusCode} (${durationMs}ms)`, logMeta);
     } else if (statusCode >= 400) {
-      reqLogger.warn(`HTTP ${req.method} ${req.originalUrl || req.path} ${statusCode} (${durationMs}ms)`, logMeta);
+      reqLogger.warn(`HTTP ${req.method} ${sanitizedUrl} ${statusCode} (${durationMs}ms)`, logMeta);
     } else {
-      reqLogger.info(`HTTP ${req.method} ${req.originalUrl || req.path} ${statusCode} (${durationMs}ms)`, logMeta);
+      reqLogger.info(`HTTP ${req.method} ${sanitizedUrl} ${statusCode} (${durationMs}ms)`, logMeta);
     }
   });
 

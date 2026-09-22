@@ -116,6 +116,10 @@ export const JOB_TRANSITION_TABLE: Record<string, Partial<Record<JobAction, Tran
       targetStatus: JobStatus.DISPATCHING,
       allowedRoles: [UserRole.ADMIN, "SYSTEM", "DISPATCH_WORKER"],
     },
+    [JobAction.MARK_BOOKED]: {
+      targetStatus: JobStatus.BOOKED,
+      allowedRoles: [UserRole.ADMIN, "SYSTEM", "DISPATCH_WORKER", UserRole.WORKER],
+    },
     [JobAction.CANCEL]: {
       targetStatus: JobStatus.CANCELLED,
       allowedRoles: [UserRole.CUSTOMER, UserRole.ADMIN, "SYSTEM"],

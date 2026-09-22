@@ -1,8 +1,19 @@
+jest.mock('../src/middlewares/rateLimiter', () => {
+  const actual = jest.requireActual('../src/middlewares/rateLimiter');
+  return {
+    ...actual,
+    createDistributedRateLimiter: () => (_req: any, _res: any, next: any) => next(),
+    authLimiter: (_req: any, _res: any, next: any) => next(),
+    authEndpointRateLimiter: (_req: any, _res: any, next: any) => next(),
+  };
+});
+
 import request from 'supertest';
 import { app } from '../src/server';
 import { AppError, NotFoundError, ConflictError, AuthorizationError, ValidationError } from '../src/errors/AppError';
 
 describe('P4 Issue 19: Safe Controller Error Responses & Global Error Contract', () => {
+
   it('Validation error returns safe 400 with structured validation details without leaking internals', async () => {
     const res = await request(app)
       .post('/api/workers/registerWorker')

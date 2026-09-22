@@ -34,12 +34,20 @@ const SENSITIVE_KEYS = new Set([
   'jwtrefreshsecret',
   'privatekey',
   'apikey',
+  'apikeysecret',
+  'signature',
+  'x-amz-signature',
+  'x-amz-credential',
+  'x-amz-security-token',
+  'sig',
+  'cvv',
+  'cardnumber',
 ]);
 
 const REDACTED_MASK = '[REDACTED]';
 
 /**
- * Deeply sanitizes any object or array by redacting sensitive keys and masking bearer tokens.
+ * Deeply sanitizes any object or array by redacting sensitive keys, signed URLs, and masking bearer tokens.
  */
 export function redactSensitiveData(data: unknown, depth = 0): any {
   if (depth > 6 || data === null || data === undefined) {
@@ -47,11 +55,19 @@ export function redactSensitiveData(data: unknown, depth = 0): any {
   }
 
   if (typeof data === 'string') {
+    let result = data;
     // Redact bearer tokens in strings
-    if (/Bearer\s+[A-Za-z0-9\-._~+/]+=*/i.test(data)) {
-      return data.replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, 'Bearer [REDACTED]');
+    if (/Bearer\s+[A-Za-z0-9\-._~+/]+=*/i.test(result)) {
+      result = result.replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, 'Bearer [REDACTED]');
     }
-    return data;
+    // Redact sensitive query parameters in URL strings (e.g. signed object-storage URLs)
+    if (result.includes('?') && /[?&](?:x-amz-signature|signature|sig|access_token|token|secret|key)=/i.test(result)) {
+      result = result.replace(
+        /([?&](?:x-amz-signature|signature|sig|access_token|token|secret|key)=)[^&]*/gi,
+        '$1[REDACTED]'
+      );
+    }
+    return result;
   }
 
   if (typeof data !== 'object') {
