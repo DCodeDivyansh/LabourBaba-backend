@@ -276,13 +276,17 @@ export const sessionService = {
     });
 
     if (txResult.conflict || !txResult.newSession) {
-      // Another concurrent request rotated this token first → reuse detection
+      // Case A — Legitimate concurrent race:
+      // Two requests legitimately used the same currently-active refresh token at approximately the same time.
+      // One request won the atomic ACTIVE transition and created a valid successor.
+      // This losing request MUST NOT revoke the token family or invalidate the winner's valid successor.
+      // The loser receives a deterministic failure, while the winner's successor remains usable.
       logger.warn(
-        `[SESSION_AUDIT] Concurrent rotation conflict for session ${sessionId}. Revoking family ${session.family_id}.`
+        `[SESSION] Concurrent rotation race lost for session ${sessionId}. Token was rotated concurrently; preserving active successor in family ${session.family_id}.`
       );
-      await sessionService.revokeFamilyByFamilyId(session.family_id, REVOKE_REASON.REUSE);
-      const err: any = new Error("Concurrent refresh detected — please log in again.");
-      err.code = "REFRESH_TOKEN_REUSE";
+      const err: any = new Error("Concurrent refresh detected — please retry with your latest active session.");
+      err.code = "CONCURRENT_REFRESH_CONFLICT";
+      err.statusCode = 401;
       throw err;
     }
 

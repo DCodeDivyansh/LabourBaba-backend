@@ -46,7 +46,7 @@ async function checkJobComplete(
 
     await tx.job.update({
       where: { id: jobId },
-      data: { dispatch_status: 'fully_booked' },
+      data: { dispatch_status: 'FILLED' },
     });
     logger.info(`[dispatchServices] Job ${jobId} is fully booked.`);
     return true;
@@ -80,13 +80,14 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
 
   let result: any;
   try {
-    result = await prisma.$transaction(async (tx) => {
-      // PostgreSQL FOR UPDATE is required here: an application-only read of the
-      // filled counter permits two concurrent callers to observe the final slot.
-      await tx.$queryRaw<{ id: string }[]>`
-        SELECT id FROM job_requirement
-        WHERE id = ${requirementId}::uuid FOR UPDATE
-      `;
+    result = await prisma.$transaction(
+      async (tx) => {
+        // PostgreSQL FOR UPDATE is required here: an application-only read of the
+        // filled counter permits two concurrent callers to observe the final slot.
+        await tx.$queryRaw<{ id: string }[]>`
+          SELECT id FROM job_requirement
+          WHERE id = ${requirementId}::uuid FOR UPDATE
+        `;
 
       const req = await tx.job_requirement.findUnique({
         where: { id: requirementId },
@@ -185,7 +186,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
         where: { id: requirementId },
         data: {
           worker_count_filled: newFilled,
-          status: nowFilled ? 'filled' : 'partially_filled',
+          status: nowFilled ? 'FILLED' : 'PARTIALLY_FILLED',
         },
       });
 
@@ -196,7 +197,7 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
           requirement_id: requirementId,
           worker_id: workerId,
           customer_id: req.job.customer_id,
-          status: 'confirmed',
+          status: 'CONFIRMED',
           otp_hash,
           otp_expires_at,
           otp_attempts: 0,
@@ -269,13 +270,18 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
         );
       }
     }
-    // If transaction failed due to conflict/lock timeout (P2034, P2028, deadlock), check if requirement was filled by the winner
+    // If transaction failed due to conflict/lock timeout (P2034, P2028, DriverAdapterError, deadlock, lock timeout), check if requirement was filled by the winner
     if (
       err.code === 'P2034' ||
       err.code === 'P2028' ||
+      err.name === 'DriverAdapterError' ||
+      err.constructor?.name === 'DriverAdapterError' ||
       err.message?.includes('deadlock') ||
       err.message?.includes('timeout') ||
-      err.message?.includes('Transaction')
+      err.message?.includes('Transaction') ||
+      err.message?.includes('lock') ||
+      err.message?.includes('could not obtain lock') ||
+      err.message?.includes('canceling statement')
     ) {
       const latestReq = await prisma.job_requirement.findUnique({
         where: { id: requirementId },

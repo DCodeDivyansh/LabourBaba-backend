@@ -31,7 +31,7 @@ export const jobService = {
           longitude: validLon ?? null,
           location: payload.location,
           status: JobStatus.OPEN,
-          dispatch_status: 'PENDING',
+          dispatch_status: 'IDLE',
         },
       });
 

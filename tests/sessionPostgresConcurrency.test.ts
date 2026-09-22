@@ -213,7 +213,7 @@ describe("P3 Issue 1 — Adversarial & Concurrency Verification (Real PostgreSQL
       expect(rejected.length).toBe(CONCURRENCY - 1);
 
       for (const rej of rejected) {
-        expect(["REFRESH_TOKEN_REUSE", "INVALID_REFRESH_TOKEN"]).toContain(rej.reason?.code);
+        expect(["REFRESH_TOKEN_REUSE", "CONCURRENT_REFRESH_CONFLICT", "INVALID_REFRESH_TOKEN"]).toContain(rej.reason?.code);
       }
 
       // Invariant 3: Check database records in the session family
@@ -226,9 +226,19 @@ describe("P3 Issue 1 — Adversarial & Concurrency Verification (Real PostgreSQL
         where: { family_id: originalRecord!.family_id },
       });
 
-      // Exactly 2 sessions exist: original (ROTATED/REVOKED) and exactly 1 successor
-      expect(allSessionsInFamily.length).toBeLessThanOrEqual(2);
-      expect(originalRecord!.status).not.toBe(SESSION_STATUS.ACTIVE);
+      // Exactly 2 sessions exist: original (ROTATED) and exactly 1 successor (ACTIVE)
+      expect(allSessionsInFamily.length).toBe(2);
+      expect(originalRecord!.status).toBe(SESSION_STATUS.ROTATED);
+
+      // Invariant 4: The winner's valid successor MUST remain ACTIVE and usable (not revoked by losers)
+      const winningSuccessor = allSessionsInFamily.find((s) => s.id === fulfilled[0].value.newSessionId);
+      expect(winningSuccessor).toBeDefined();
+      expect(winningSuccessor!.status).toBe(SESSION_STATUS.ACTIVE);
+
+      // Prove the successor can legitimately rotate again
+      const subsequentRotation = await sessionService.rotateSession(fulfilled[0].value.newRawToken);
+      expect(subsequentRotation.newSessionId).toBeDefined();
+      expect(subsequentRotation.newRawToken).toBeDefined();
     });
   });
 

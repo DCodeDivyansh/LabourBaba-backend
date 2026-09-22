@@ -308,7 +308,8 @@ export const authService = {
         sessionErr.code === "REFRESH_TOKEN_REUSE" ||
         sessionErr.code === "REFRESH_SESSION_EXPIRED" ||
         sessionErr.code === "ACCOUNT_SUSPENDED" ||
-        sessionErr.code === "ACCOUNT_INACTIVE"
+        sessionErr.code === "ACCOUNT_INACTIVE" ||
+        sessionErr.code === "CONCURRENT_REFRESH_CONFLICT"
       ) {
         throw sessionErr;
       }

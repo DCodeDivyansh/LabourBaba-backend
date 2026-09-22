@@ -126,6 +126,14 @@ export const refreshToken = async (req: Request, res: Response): Promise<void> =
       });
       return;
     }
+    if (code === "CONCURRENT_REFRESH_CONFLICT") {
+      res.status(401).json({
+        success: false,
+        code: "CONCURRENT_REFRESH_CONFLICT",
+        message: "Concurrent refresh detected — please retry with your latest active session.",
+      });
+      return;
+    }
     if (code === "REFRESH_SESSION_EXPIRED") {
       res.status(401).json({
         success: false,
