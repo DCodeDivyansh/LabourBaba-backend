@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-09-22T17:19:34.171Z",
+  "status": "PASS",
+  "secretFindings": [],
+  "dependencyAudit": {
+    "scanned": true,
+    "totalVulnerabilities": 21,
+    "critical": 0,
+    "high": 8,
+    "moderate": 13,
+    "low": 0,
+    "info": 0,
+    "unapprovedBlockingVulnerabilities": 0,
+    "approvedExceptionsCount": 16
+  },
+  "dockerfileAudit": {
+    "hasNonRootUser": true,
+    "hasReadinessHealthcheck": true,
+    "isHardened": true
+  },
+  "errors": []
+}
