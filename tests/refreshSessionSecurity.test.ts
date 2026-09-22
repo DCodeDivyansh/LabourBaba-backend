@@ -87,7 +87,7 @@ describe("P2 Security Suite — Issue #10: Server-Side Refresh Sessions", () => 
 
     (prisma.refresh_session.create as jest.Mock).mockImplementation(async ({ data }: any) => {
       const record: MockSession = {
-        id: crypto.randomUUID(),
+        id: data.id || crypto.randomUUID(),
         user_id: data.user_id,
         user_role: data.user_role,
         token_hash: data.token_hash,

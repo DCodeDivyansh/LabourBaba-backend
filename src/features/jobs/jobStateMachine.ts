@@ -326,23 +326,19 @@ export const jobStateService = {
 
     // 6. Record durable transition history within the exact same transaction
     let transitionRecord: any = null;
-    try {
-      if ((tx as any).job_transition?.create) {
-        transitionRecord = await (tx as any).job_transition.create({
-          data: {
-            job_id: jobId,
-            from_status: currentStatus,
-            to_status: targetStatus,
-            action: action,
-            actor_type: String(actor.role),
-            actor_id: actor.id || null,
-            reason: reason || null,
-            metadata: metadata ? (metadata as Prisma.InputJsonValue) : undefined,
-          },
-        });
-      }
-    } catch (err: any) {
-      console.warn(`[jobStateMachine] Note: Unable to write transition record: ${err?.message}`);
+    if ((tx as any).job_transition?.create) {
+      transitionRecord = await (tx as any).job_transition.create({
+        data: {
+          job_id: jobId,
+          from_status: currentStatus,
+          to_status: targetStatus,
+          action: action,
+          actor_type: String(actor.role),
+          actor_id: actor.id || null,
+          reason: reason || null,
+          metadata: metadata ? (metadata as Prisma.InputJsonValue) : undefined,
+        },
+      });
     }
 
     console.log(

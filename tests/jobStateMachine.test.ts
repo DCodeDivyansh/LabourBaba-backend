@@ -471,5 +471,20 @@ describe("P1 Security & Marketplace Correctness — Issue #14: Job State Machine
       expect(res.status).toBe(403);
       expect(res.body.success).toBe(false);
     });
+
+    it("MUST roll back job status transition if audit record creation fails", async () => {
+      const mockJob = { id: JOB_ID, customer_id: CUSTOMER_A_ID, status: JobStatus.OPEN };
+      (prisma.job.findUnique as jest.Mock).mockResolvedValue(mockJob);
+      (prisma.job.update as jest.Mock).mockResolvedValue({ ...mockJob, status: JobStatus.CANCELLED });
+      (prisma.job_transition.create as jest.Mock).mockRejectedValue(new Error("AUDIT_DB_FAILURE"));
+
+      await expect(
+        jobStateService.transition(prisma as any, {
+          jobId: JOB_ID,
+          action: JobAction.CANCEL,
+          actor: { id: CUSTOMER_A_ID, role: UserRole.CUSTOMER },
+        })
+      ).rejects.toThrow("AUDIT_DB_FAILURE");
+    });
   });
 });
