@@ -158,6 +158,10 @@ export const JOB_TRANSITION_TABLE: Record<string, Partial<Record<JobAction, Tran
     },
   },
   [JobStatus.IN_PROGRESS]: {
+    [JobAction.REOPEN_DISPATCH]: {
+      targetStatus: JobStatus.DISPATCHING,
+      allowedRoles: [UserRole.ADMIN, "SYSTEM", "DISPATCH_WORKER"],
+    },
     [JobAction.COMPLETE]: {
       targetStatus: JobStatus.COMPLETED,
       allowedRoles: [UserRole.CUSTOMER, UserRole.ADMIN, "SYSTEM"],

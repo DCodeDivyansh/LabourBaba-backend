@@ -83,6 +83,7 @@ import prisma from "../src/config/prisma";
 import { generateToken, hashOTP } from "../src/utils/authUtils";
 import { UserRole } from "../src/type/userRole";
 import { BookingStatus, BookingAction } from "../src/features/booking/bookingStateMachine";
+import { JobStatus } from "../src/features/jobs/jobStateMachine";
 import { bookingConfig } from "../src/config/bookingConfig";
 
 describe("Issue #17 — Harden Booking OTP Verification", () => {
@@ -161,7 +162,7 @@ describe("Issue #17 — Harden Booking OTP Verification", () => {
         }),
       },
       job: {
-        findUnique: jest.fn().mockResolvedValue({ id: jobId, status: "DISPATCHED" }),
+        findUnique: jest.fn().mockResolvedValue({ id: jobId, status: JobStatus.BOOKED }),
         update: jest.fn().mockResolvedValue({ id: jobId, status: "IN_PROGRESS" }),
       },
       booking_transition: {
@@ -517,7 +518,7 @@ describe("Issue #17 — Harden Booking OTP Verification", () => {
           }),
         },
         job: {
-          findUnique: jest.fn().mockResolvedValue({ id: jobId, status: "DISPATCHED" }),
+          findUnique: jest.fn().mockResolvedValue({ id: jobId, status: JobStatus.BOOKED }),
           update: jest.fn().mockResolvedValue({ id: jobId, status: "IN_PROGRESS" }),
         },
         booking_transition: {

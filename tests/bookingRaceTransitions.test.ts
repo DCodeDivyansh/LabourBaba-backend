@@ -27,20 +27,30 @@ describe("Issue 53 - Real PostgreSQL Booking State Transitions & Race Tests", ()
     }
     skillCategoryId = category.id;
 
+    // Clean up pre-existing customer and worker with conflicting phones/IDs
+    await prisma.notification_outbox.deleteMany({ where: { aggregate_id: BOOKING_ID } }).catch(() => {});
+    await prisma.review.deleteMany({ where: { booking_id: BOOKING_ID } }).catch(() => {});
+    await prisma.booking_transition.deleteMany({ where: { booking_id: BOOKING_ID } }).catch(() => {});
+    await prisma.booking.deleteMany({ where: { id: BOOKING_ID } }).catch(() => {});
+    await prisma.job_requirement.deleteMany({ where: { id: REQ_ID } }).catch(() => {});
+    await prisma.job.deleteMany({ where: { id: JOB_ID } }).catch(() => {});
+    await prisma.customer.deleteMany({ where: { OR: [{ id: CUSTOMER_ID }, { phone: "+919811004003" }] } }).catch(() => {});
+    await prisma.worker.deleteMany({ where: { OR: [{ id: WORKER_ID }, { phone: "+919711004003" }] } }).catch(() => {});
+
     // Seed customer
     await prisma.customer.upsert({
       where: { id: CUSTOMER_ID },
-      update: { phone: "+919811000001" },
-      create: { id: CUSTOMER_ID, phone: "+919811000001", name: "Race Customer", password: "hash" },
+      update: { phone: "+919811004003" },
+      create: { id: CUSTOMER_ID, phone: "+919811004003", name: "Race Customer", password: "hash" },
     });
 
     // Seed worker
     await prisma.worker.upsert({
       where: { id: WORKER_ID },
-      update: { phone: "+919711000001", skill_category_id: skillCategoryId, verification_status: "verified" },
+      update: { phone: "+919711004003", skill_category_id: skillCategoryId, verification_status: "verified" },
       create: {
         id: WORKER_ID,
-        phone: "+919711000001",
+        phone: "+919711004003",
         name: "Race Worker",
         password: "hash",
         skill_type: "BookingRaceSkill",
@@ -51,6 +61,7 @@ describe("Issue 53 - Real PostgreSQL Booking State Transitions & Race Tests", ()
   });
 
   afterAll(async () => {
+    await prisma.notification_outbox.deleteMany({ where: { aggregate_id: BOOKING_ID } }).catch(() => {});
     await prisma.review.deleteMany({ where: { booking_id: BOOKING_ID } }).catch(() => {});
     await prisma.booking_transition.deleteMany({ where: { booking_id: BOOKING_ID } }).catch(() => {});
     await prisma.booking.deleteMany({ where: { id: BOOKING_ID } }).catch(() => {});
@@ -63,18 +74,19 @@ describe("Issue 53 - Real PostgreSQL Booking State Transitions & Race Tests", ()
 
   beforeEach(async () => {
     // Reset test state
+    await prisma.notification_outbox.deleteMany({ where: { aggregate_id: BOOKING_ID } }).catch(() => {});
     await prisma.review.deleteMany({ where: { booking_id: BOOKING_ID } }).catch(() => {});
     await prisma.booking_transition.deleteMany({ where: { booking_id: BOOKING_ID } }).catch(() => {});
     await prisma.booking.deleteMany({ where: { id: BOOKING_ID } }).catch(() => {});
     await prisma.job_requirement.deleteMany({ where: { id: REQ_ID } }).catch(() => {});
     await prisma.job.deleteMany({ where: { id: JOB_ID } }).catch(() => {});
 
-    // Create Job
+    // Create Job in BOOKED status (canonical status when booking is confirmed)
     await prisma.job.create({
       data: {
         id: JOB_ID,
         customer_id: CUSTOMER_ID,
-        status: "OPEN",
+        status: "BOOKED",
       },
     });
 
@@ -141,7 +153,11 @@ describe("Issue 53 - Real PostgreSQL Booking State Transitions & Race Tests", ()
 
   describe("2. Concurrent Cancel vs Completion Race", () => {
     it("leaves booking in a single legal consistent state when customer cancels while worker completes", async () => {
-      // Transition booking to IN_PROGRESS first
+      // Transition booking and job to IN_PROGRESS first
+      await prisma.job.update({
+        where: { id: JOB_ID },
+        data: { status: "IN_PROGRESS" },
+      });
       await prisma.booking.update({
         where: { id: BOOKING_ID },
         data: { status: "IN_PROGRESS", otp_verified: true, verified_at: new Date() },
@@ -173,7 +189,11 @@ describe("Issue 53 - Real PostgreSQL Booking State Transitions & Race Tests", ()
 
   describe("3. Duplicate Confirmation & Review Idempotency", () => {
     it("prevents duplicate reviews when multiple concurrent confirmation requests are received", async () => {
-      // Transition booking to AWAITING_CONFIRMATION
+      // Transition job to IN_PROGRESS and booking to AWAITING_CONFIRMATION
+      await prisma.job.update({
+        where: { id: JOB_ID },
+        data: { status: "IN_PROGRESS" },
+      });
       await prisma.booking.update({
         where: { id: BOOKING_ID },
         data: {

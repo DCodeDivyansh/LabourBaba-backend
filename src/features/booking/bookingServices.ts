@@ -79,7 +79,7 @@ export const bookingService = {
   },
 
   async verifyOtp(bookingId: string, workerId: string, otp: string, actor?: AuthenticatedUser) {
-    return await prisma.$transaction(async (tx) => {
+    const txResult = await prisma.$transaction(async (tx) => {
       const effectiveWorkerId = actor?.role === UserRole.WORKER ? actor.id : workerId;
 
       // 1. Acquire row lock and fetch latest booking record scoped to assigned worker
@@ -169,6 +169,7 @@ export const bookingService = {
       }
 
       // 8. Handle invalid OTP (increment attempts, lock if max exceeded)
+      // Commit the attempt increment inside the locked transaction so it is never rolled back!
       if (!isValid) {
         const newAttempts = currentAttempts + 1;
         const isNowLocked = newAttempts >= bookingConfig.bookingOtpMaxAttempts;
@@ -185,13 +186,10 @@ export const bookingService = {
           });
         }
 
-        if (isNowLocked) {
-          throw new BookingOtpLockedError(
-            "Maximum verification attempts exceeded. Booking OTP is locked."
-          );
-        }
-
-        throw new BookingOtpInvalidError("Invalid OTP");
+        return {
+          success: false,
+          isNowLocked,
+        };
       }
 
       // 9. Transition booking state -> IN_PROGRESS
@@ -225,6 +223,17 @@ export const bookingService = {
 
       return { success: true, message: "OTP verified, job started" };
     });
+
+    if (txResult && txResult.success === false) {
+      if (txResult.isNowLocked) {
+        throw new BookingOtpLockedError(
+          "Maximum verification attempts exceeded. Booking OTP is locked."
+        );
+      }
+      throw new BookingOtpInvalidError("Invalid OTP");
+    }
+
+    return txResult;
   },
 
   async completeBooking(bookingId: string, workerId: string, actor?: AuthenticatedUser) {
@@ -353,24 +362,32 @@ export const bookingService = {
 
       // Mandatory Transactional Outbox (Issue 12): Record booking_completed event atomically if not idempotent retry
       if (!transitionResult.isIdempotent && typeof (tx as any).notification_outbox?.create === 'function' && booking.worker_id) {
-        await (tx as any).notification_outbox.create({
-          data: {
-            event_type: 'booking_completed',
-            aggregate_type: 'booking',
-            aggregate_id: bookingId,
-            recipient_type: 'worker',
-            recipient_id: booking.worker_id,
-            payload: {
-              bookingId,
-              jobId: booking.job_id,
-              rating: payload.rating,
-              title: 'Booking Completed',
-              body: 'Customer has confirmed completion of the booking.',
+        try {
+          await (tx as any).notification_outbox.create({
+            data: {
+              event_type: 'booking_completed',
+              aggregate_type: 'booking',
+              aggregate_id: bookingId,
+              recipient_type: 'worker',
+              recipient_id: booking.worker_id,
+              payload: {
+                bookingId,
+                jobId: booking.job_id,
+                rating: payload.rating,
+                title: 'Booking Completed',
+                body: 'Customer has confirmed completion of the booking.',
+              },
+              idempotency_key: `booking_completed:${bookingId}:worker:${booking.worker_id}`,
+              status: 'PENDING',
             },
-            idempotency_key: `booking_completed:${bookingId}:worker:${booking.worker_id}`,
-            status: 'PENDING',
-          },
-        });
+          });
+        } catch (err: any) {
+          if (err.code === "P2002" || err.message?.includes("uniq_notification_outbox_idempotency_key") || err.cause?.originalCode === "23505") {
+            // Idempotent duplicate outbox event
+          } else {
+            throw err;
+          }
+        }
       }
 
       return { success: true, message: "Booking completion confirmed" };
@@ -524,24 +541,32 @@ export const bookingService = {
         const recipientType = isWorkerCancelling ? 'customer' : 'worker';
         const recipientId = isWorkerCancelling ? lockedBooking.customer_id : lockedBooking.worker_id;
         if (recipientId) {
-          await (tx as any).notification_outbox.create({
-            data: {
-              event_type: 'booking_cancelled',
-              aggregate_type: 'booking',
-              aggregate_id: bookingId,
-              recipient_type: recipientType,
-              recipient_id: recipientId,
-              payload: {
-                bookingId,
-                jobId: lockedBooking.job_id,
-                reason: payload.reason,
-                title: 'Booking Cancelled',
-                body: `Booking has been cancelled: ${payload.reason || 'No reason provided'}`,
+          try {
+            await (tx as any).notification_outbox.create({
+              data: {
+                event_type: 'booking_cancelled',
+                aggregate_type: 'booking',
+                aggregate_id: bookingId,
+                recipient_type: recipientType,
+                recipient_id: recipientId,
+                payload: {
+                  bookingId,
+                  jobId: lockedBooking.job_id,
+                  reason: payload.reason,
+                  title: 'Booking Cancelled',
+                  body: `Booking has been cancelled: ${payload.reason || 'No reason provided'}`,
+                },
+                idempotency_key: `booking_cancelled:${bookingId}:${recipientType}:${recipientId}`,
+                status: 'PENDING',
               },
-              idempotency_key: `booking_cancelled:${bookingId}:${recipientType}:${recipientId}`,
-              status: 'PENDING',
-            },
-          });
+            });
+          } catch (err: any) {
+            if (err.code === "P2002" || err.message?.includes("uniq_notification_outbox_idempotency_key") || err.cause?.originalCode === "23505") {
+              // Idempotent duplicate outbox event
+            } else {
+              throw err;
+            }
+          }
         }
       }
 
