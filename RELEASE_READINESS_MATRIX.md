@@ -1,8 +1,8 @@
 # Canonical Production Release-Readiness Matrix (P3 Governance)
 
-> **Release Candidate Build Identifier:** `LB-BACKEND-RC-2026-09-22-P3`  
-> **Repository Commit / Worktree:** `master@HEAD`  
-> **Last Verification Timestamp:** `2026-09-22T15:40:00+05:30`  
+> **Release Candidate Build Identifier:** `LB-BACKEND-RC-2026-09-22-P4-FINAL`  
+> **Repository Commit / Worktree:** `d700fbe9f1910e4cd731f4fe65a6bf772c01a9cd`  
+> **Last Verification Timestamp:** `2026-09-22T23:15:00+05:30`  
 > **Release Invariant Policy:** A document or test asserting `PASS` is not evidence unless supported by reproducible automated test output, live dependency verification, and formal reviewer sign-off. Stale PASS documents are explicitly invalidated.
 
 ---
