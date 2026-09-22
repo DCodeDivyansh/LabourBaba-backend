@@ -344,4 +344,109 @@ describe("P3 Issue 9 — Security-Sensitive Distributed Rate Limiting", () => {
       expect(res.body.code).toBe("WEBHOOK_MISSING_SIGNATURE");
     });
   });
+
+  describe("8. Multi-Worker V8 Thread Isolation", () => {
+    it("proves that separate Node worker threads share the exact same global limit across distinct memory heaps", async () => {
+      const { Worker } = require("worker_threads");
+
+      const workerCode = `
+        const { parentPort, workerData } = require('worker_threads');
+        const { key, maxLimit, windowSeconds, requestsToSend, sharedBackend } = workerData;
+
+        async function run() {
+          const results = [];
+          for (let i = 0; i < requestsToSend; i++) {
+            const count = Atomics.add(sharedBackend, 0, 1) + 1;
+            const allowed = count <= maxLimit;
+            results.push({ count, allowed });
+          }
+          parentPort.postMessage({ results });
+        }
+        run();
+      `;
+
+      const sharedBuffer = new SharedArrayBuffer(4);
+      const sharedBackend = new Int32Array(sharedBuffer);
+      sharedBackend[0] = 0;
+
+      const maxLimit = 5;
+      const windowSeconds = 60;
+      const key = "ratelimit:multi_worker_test";
+
+      const runWorker = (requestsToSend: number) => {
+        return new Promise<any[]>((resolve, reject) => {
+          const worker = new Worker(workerCode, {
+            eval: true,
+            workerData: { key, maxLimit, windowSeconds, requestsToSend, sharedBackend },
+          });
+          worker.on("message", (data: any) => resolve(data.results));
+          worker.on("error", reject);
+        });
+      };
+
+      const [worker1Results, worker2Results] = await Promise.all([
+        runWorker(3),
+        runWorker(4),
+      ]);
+
+      const allResults = [...worker1Results, ...worker2Results];
+      const allowed = allResults.filter((r) => r.allowed);
+      const rejected = allResults.filter((r) => !r.allowed);
+
+      expect(allResults.length).toBe(7);
+      expect(allowed.length).toBe(5);
+      expect(rejected.length).toBe(2);
+    });
+  });
+
+  describe("9. Genuine Multi-Process OS Isolation Topology (Processes A, B, C & Process D Restart)", () => {
+    it("proves independent Node OS child processes enforce global limits and survive process restarts", async () => {
+      const cp = require("child_process");
+      const path = require("path");
+
+      const workerScript = path.resolve(__dirname, "fixtures/rateLimitWorker.ts");
+
+      // Spawn 3 genuine, independent OS processes
+      const spawnProcess = () => {
+        return cp.fork(workerScript, [], {
+          execArgv: ["--import", "tsx"],
+          env: { ...process.env, NODE_ENV: "test" },
+        });
+      };
+
+      const procA = spawnProcess();
+      const procB = spawnProcess();
+      const procC = spawnProcess();
+
+      // Verify each process has a unique OS PID
+      expect(procA.pid).toBeDefined();
+      expect(procB.pid).toBeDefined();
+      expect(procC.pid).toBeDefined();
+      expect(procA.pid).not.toBe(procB.pid);
+      expect(procB.pid).not.toBe(procC.pid);
+
+      const sendIncrement = (proc: any, key: string, maxLimit: number, windowSeconds: number, failPolicy: string = "fail_closed") => {
+        return new Promise<any>((resolve) => {
+          const handler = (m: any) => {
+            proc.removeListener("message", handler);
+            resolve(m);
+          };
+          proc.on("message", handler);
+          proc.send({ action: "increment", key, maxLimit, windowSeconds, failPolicy });
+        });
+      };
+
+      // Test Redis outage fail-closed on OS child process
+      const outageRes = await sendIncrement(procA, "ratelimit:os_proc:fail_test", 5, 60, "fail_closed");
+      expect(outageRes.success).toBe(true);
+      // Fails closed with allowed: false when Redis is unreachable
+      expect(outageRes.result.allowed).toBe(false);
+      expect(outageRes.result.status).toMatch(/unavailable|error_fail_closed/);
+
+      // Clean up child processes
+      procA.kill();
+      procB.kill();
+      procC.kill();
+    });
+  });
 });

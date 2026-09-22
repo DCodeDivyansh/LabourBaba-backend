@@ -17,6 +17,7 @@ import { paymentConfig } from "../../config/paymentConfig";
 import {
   createOrder as razorpayCreateOrder,
   createRefund as razorpayCreateRefund,
+  fetchPayment,
   verifyWebhookSignature,
   RazorpayProviderError,
 } from "../../providers/razorpay/razorpayProvider";
@@ -36,6 +37,7 @@ export const PaymentStatus = {
   REFUND_PENDING: "REFUND_PENDING",
   REFUNDED: "REFUNDED",
   REFUND_FAILED: "REFUND_FAILED",
+  REFUND_UNKNOWN: "REFUND_UNKNOWN",
 } as const;
 
 export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
@@ -46,7 +48,8 @@ export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 export const LEGAL_PAYMENT_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
   [PaymentStatus.PENDING]: [PaymentStatus.COMPLETED, PaymentStatus.FAILED],
   [PaymentStatus.COMPLETED]: [PaymentStatus.REFUND_PENDING],
-  [PaymentStatus.REFUND_PENDING]: [PaymentStatus.REFUNDED, PaymentStatus.REFUND_FAILED],
+  [PaymentStatus.REFUND_PENDING]: [PaymentStatus.REFUNDED, PaymentStatus.REFUND_FAILED, PaymentStatus.REFUND_UNKNOWN],
+  [PaymentStatus.REFUND_UNKNOWN]: [PaymentStatus.REFUNDED, PaymentStatus.REFUND_PENDING, PaymentStatus.REFUND_FAILED],
   [PaymentStatus.REFUND_FAILED]: [PaymentStatus.REFUND_PENDING], // Allow refund retry
   [PaymentStatus.FAILED]: [PaymentStatus.PENDING], // Allow retry order creation
   [PaymentStatus.REFUNDED]: [], // Terminal state
@@ -811,10 +814,12 @@ async function processRefundProcessed(params: {
         return { message: "Event acknowledged (no matching payment for refund)" };
       }
 
-      // Transition to REFUNDED if currently in COMPLETED or REFUND_PENDING
+      // Transition to REFUNDED if currently in COMPLETED, REFUND_PENDING, REFUND_FAILED, or REFUND_UNKNOWN
       if (
         localPayment.status === PaymentStatus.COMPLETED ||
-        localPayment.status === PaymentStatus.REFUND_PENDING
+        localPayment.status === PaymentStatus.REFUND_PENDING ||
+        localPayment.status === PaymentStatus.REFUND_FAILED ||
+        localPayment.status === PaymentStatus.REFUND_UNKNOWN
       ) {
         await tx.payment.update({
           where: { id: localPayment.id },
@@ -851,6 +856,17 @@ async function processRefundProcessed(params: {
             idempotencyKey: `REFUND_COMPLETED:payment:${localPayment.id}:${booking.customer_id}`,
           }).catch((err) => logger.warn("[OUTBOX_RECORD_FAILED]", { error: err.message }));
         }
+      } else if (localPayment.status === PaymentStatus.REFUNDED && !localPayment.razorpay_refund_id && refundId) {
+        // Payment was already reconciled to REFUNDED before webhook arrived; enrich with provider refund ID
+        await tx.payment.update({
+          where: { id: localPayment.id },
+          data: {
+            razorpay_refund_id: refundId,
+            refund_amount: refundAmount || localPayment.refund_amount,
+            refund_status: "processed",
+            updated_at: new Date(),
+          },
+        });
       }
 
       await tx.paymentWebhookEvent.update({
@@ -996,12 +1012,12 @@ export async function refundPayment(
     throw new PaymentError("No payment record found for this booking.", "REFUND_NO_PAYMENT", 404);
   }
 
-  if (payment.status !== PaymentStatus.COMPLETED && payment.status !== PaymentStatus.REFUND_FAILED) {
-    throw new PaymentError(
-      `Cannot refund: payment is in status '${payment.status}', not COMPLETED.`,
-      "REFUND_INVALID_STATE",
-      409,
-    );
+  if (payment.status === PaymentStatus.REFUNDED) {
+    return {
+      success: true,
+      message: "Payment has already been refunded.",
+      refundId: payment.razorpay_refund_id || undefined,
+    };
   }
 
   if (!payment.razorpay_payment_id) {
@@ -1012,17 +1028,113 @@ export async function refundPayment(
     );
   }
 
-  // Step 3: Transition payment to REFUND_PENDING before provider side-effect
-  await prisma.$transaction(async (tx) => {
-    await tx.payment.update({
-      where: { id: payment.id },
+  // Step 3: Atomic ownership claim & pre-flight reconciliation (Issue 6)
+  if (payment.status === PaymentStatus.REFUND_UNKNOWN || payment.status === PaymentStatus.REFUND_PENDING) {
+
+    try {
+      const providerPayment = await fetchPayment(payment.razorpay_payment_id);
+      if (
+        providerPayment.status === "refunded" ||
+        (providerPayment.amountRefunded !== undefined && providerPayment.amountRefunded > 0) ||
+        (providerPayment.refundStatus !== null &&
+          providerPayment.refundStatus !== undefined &&
+          providerPayment.refundStatus !== "null")
+      ) {
+        // Provider actually completed the refund! Reconcile local state to REFUNDED.
+        await prisma.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: PaymentStatus.REFUNDED,
+            refund_amount: providerPayment.amountRefunded || payment.amount,
+            refund_status: providerPayment.refundStatus || "processed",
+            updated_at: new Date(),
+          },
+        });
+
+        return {
+          success: true,
+          message: "Payment has already been refunded (reconciled with provider).",
+          refundId: payment.razorpay_refund_id || undefined,
+        };
+      }
+
+      // If provider payment status is "captured" and amountRefunded is 0, provider never executed the refund.
+      // We safely claim the lock from REFUND_UNKNOWN / REFUND_PENDING to retry:
+      const reconciledClaim = await prisma.payment.updateMany({
+        where: {
+          id: payment.id,
+          status: { in: [PaymentStatus.REFUND_UNKNOWN, PaymentStatus.REFUND_PENDING] },
+        },
+        data: {
+          status: PaymentStatus.REFUND_PENDING,
+          refund_reason: reason || "Retry after provider reconciliation verified unrefunded",
+          updated_at: new Date(),
+        },
+      });
+
+      if (reconciledClaim.count === 0) {
+        throw new PaymentError(
+          "A refund operation is already in progress for this payment.",
+          "REFUND_ALREADY_PENDING",
+          409,
+        );
+      }
+    } catch (reconcileErr: any) {
+      if (reconcileErr instanceof PaymentError) throw reconcileErr;
+      throw new PaymentError(
+        "A refund operation is already in progress or ambiguous. Reconciliation with payment provider could not be completed. Please retry shortly.",
+        "REFUND_RECONCILIATION_REQUIRED",
+        409,
+      );
+    }
+  } else {
+    // Normal atomic claim for COMPLETED or REFUND_FAILED
+    const claimResult = await prisma.payment.updateMany({
+      where: {
+        id: payment.id,
+        status: { in: [PaymentStatus.COMPLETED, PaymentStatus.REFUND_FAILED] },
+      },
       data: {
         status: PaymentStatus.REFUND_PENDING,
         refund_reason: reason || "Customer/Admin requested refund",
         updated_at: new Date(),
       },
     });
-  });
+
+    if (claimResult.count === 0) {
+      // Another concurrent request or process claimed/completed the refund
+      const currentPayment = await prisma.payment.findUnique({
+        where: { id: payment.id },
+        select: { status: true, razorpay_refund_id: true, refund_amount: true },
+      });
+
+      if (currentPayment?.status === PaymentStatus.REFUNDED) {
+        // Deterministic idempotent success if already refunded
+        return {
+          success: true,
+          message: "Payment has already been refunded.",
+          refundId: currentPayment.razorpay_refund_id || undefined,
+        };
+      }
+
+      if (
+        currentPayment?.status === PaymentStatus.REFUND_PENDING ||
+        currentPayment?.status === PaymentStatus.REFUND_UNKNOWN
+      ) {
+        throw new PaymentError(
+          "A refund operation is already in progress for this payment.",
+          "REFUND_ALREADY_PENDING",
+          409,
+        );
+      }
+
+      throw new PaymentError(
+        `Cannot refund: payment status is '${currentPayment?.status || payment.status}', not COMPLETED.`,
+        "REFUND_INVALID_STATE",
+        409,
+      );
+    }
+  }
 
   // Step 4: Call real Razorpay Refund API (Issue 66)
   try {
@@ -1092,24 +1204,30 @@ export async function refundPayment(
       refundId: providerRefund.razorpayRefundId,
     };
   } catch (err: any) {
-    // Step 6: Mark REFUND_FAILED on provider rejection
+    // Step 6: Classify provider error: Definite failure (4xx) vs Ambiguous failure / timeout (5xx / network)
+    const statusCode = err?.statusCode || err?.status || 500;
+    const isDefiniteClientFailure = statusCode >= 400 && statusCode < 500;
+    const nextStatus = isDefiniteClientFailure ? PaymentStatus.REFUND_FAILED : PaymentStatus.REFUND_UNKNOWN;
+
     await prisma.payment.update({
       where: { id: payment.id },
       data: {
-        status: PaymentStatus.REFUND_FAILED,
-        refund_reason: `Provider refund failure: ${err?.message || "unknown"}`,
+        status: nextStatus,
+        refund_reason: `Provider refund failure (${nextStatus}): ${err?.message || "unknown"}`,
         updated_at: new Date(),
       },
     });
 
     logger.error("[REFUND_PROVIDER_FAILED]", {
       paymentId: payment.id,
+      nextStatus,
+      statusCode,
       error: err?.message,
     });
 
     throw new PaymentError(
       `Payment refund failed: ${err?.message || "provider error"}`,
-      "REFUND_FAILED",
+      nextStatus === PaymentStatus.REFUND_UNKNOWN ? "REFUND_UNKNOWN" : "REFUND_FAILED",
       502,
     );
   }

@@ -158,7 +158,7 @@ describe("Issues 66 & 67 - Real Provider Refunds & Authorization Hardening", () 
       expect(updated?.refund_status).toBe("processed");
     });
 
-    it("transitions state to REFUND_FAILED on provider error and never marks REFUNDED", async () => {
+    it("transitions state to REFUND_UNKNOWN on provider timeout/5xx error and never marks REFUNDED", async () => {
       _setRazorpayInstanceForTesting({
         payments: {
           refund: async () => {
@@ -176,7 +176,7 @@ describe("Issues 66 & 67 - Real Provider Refunds & Authorization Hardening", () 
       ).rejects.toThrow(/Payment refund failed/);
 
       const updated = await prisma.payment.findUnique({ where: { id: paymentId } });
-      expect(updated?.status).toBe(PaymentStatus.REFUND_FAILED);
+      expect(updated?.status).toBe(PaymentStatus.REFUND_UNKNOWN);
       expect(updated?.refund_reason).toContain("Gateway timeout");
     });
   });
@@ -224,7 +224,7 @@ describe("Issues 66 & 67 - Real Provider Refunds & Authorization Hardening", () 
 
       await expect(
         refundPayment(bookingId, actor, 80000, "Early refund")
-      ).rejects.toThrow(/payment is in status 'PENDING', not COMPLETED/);
+      ).rejects.toThrow(/payment status is 'PENDING', not COMPLETED|payment is in status 'PENDING'/);
     });
   });
 });

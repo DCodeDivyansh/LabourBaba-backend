@@ -60,8 +60,10 @@ export const bookingService = {
         where: bookingPolicy.scopeRead(actor, bookingId),
         select: selectClause,
       });
-    } else if (typeof prisma.booking.findUnique === "function") {
-      // Mock fallback
+    }
+
+    if (!booking && typeof prisma.booking.findUnique === "function") {
+      // Mock fallback with explicit ABAC policy evaluation
       const candidate = await prisma.booking.findUnique({
         where: { id: bookingId },
         select: selectClause,

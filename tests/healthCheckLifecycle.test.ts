@@ -30,7 +30,7 @@ describe('Issue #36: Separate Liveness and Readiness Probes', () => {
     const res = await request(app).get('/health/live');
 
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('status', 'ok');
+    expect(res.body).toHaveProperty('status', 'alive');
     expect(res.body).toHaveProperty('timestamp');
     expect(res.body).toHaveProperty('uptime');
     expect(typeof res.body.uptime).toBe('number');
@@ -91,6 +91,6 @@ describe('Issue #36: Separate Liveness and Readiness Probes', () => {
     const res = await request(app).get('/health/live');
 
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe('ok');
+    expect(res.body.status).toBe('alive');
   });
 });

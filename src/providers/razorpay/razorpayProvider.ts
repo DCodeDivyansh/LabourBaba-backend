@@ -388,6 +388,8 @@ export async function fetchPayment(paymentId: string): Promise<{
   amount: number;
   currency: string;
   status: string; // "created" | "authorized" | "captured" | "refunded" | "failed"
+  amountRefunded?: number;
+  refundStatus?: string | null;
 }> {
   const razorpay = getRazorpayInstance();
   try {
@@ -398,6 +400,8 @@ export async function fetchPayment(paymentId: string): Promise<{
       amount: Number(payment.amount),
       currency: (payment.currency || "INR").toUpperCase(),
       status: payment.status,
+      amountRefunded: Number((payment as any).amount_refunded || 0),
+      refundStatus: (payment as any).refund_status || null,
     };
   } catch (err: any) {
     throw new RazorpayProviderError(
