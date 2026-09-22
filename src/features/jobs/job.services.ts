@@ -50,23 +50,19 @@ export const jobService = {
         }
       }
 
-      // Record initial creation in transition history
-      try {
-        if ((tx as any).job_transition?.create) {
-          await (tx as any).job_transition.create({
-            data: {
-              job_id: job.id,
-              from_status: "INITIAL",
-              to_status: JobStatus.OPEN,
-              action: JobAction.CREATE,
-              actor_type: UserRole.CUSTOMER,
-              actor_id: customerId,
-              reason: "Job created by customer",
-            },
-          });
-        }
-      } catch (histErr: any) {
-        logger.warn(`[jobService] Could not write initial transition: ${histErr?.message}`);
+      // Record initial creation in transition history (Issue 13: Mandatory audit must be atomic with state change)
+      if ((tx as any).job_transition?.create) {
+        await (tx as any).job_transition.create({
+          data: {
+            job_id: job.id,
+            from_status: "INITIAL",
+            to_status: JobStatus.OPEN,
+            action: JobAction.CREATE,
+            actor_type: UserRole.CUSTOMER,
+            actor_id: customerId,
+            reason: "Job created by customer",
+          },
+        });
       }
 
       if (payload.requirements && payload.requirements.length > 0) {

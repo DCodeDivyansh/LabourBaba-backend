@@ -12,7 +12,7 @@ import {
   toWorkerLocationDTO,
 } from "../../shared/prismaSelects";
 import { bookingPolicy, assertPolicy, AuthenticatedUser, AuthorizationError, UserRole } from "../../policies";
-import { jobStateService, JobAction } from "../jobs/jobStateMachine";
+import { jobStateService, JobAction, JobStatus, JobInvalidTransitionError } from "../jobs/jobStateMachine";
 import { requirementStateService, ACTIVE_BOOKING_STATUSES } from "../jobs/requirementStateMachine";
 import { bookingConfig } from "../../config/bookingConfig";
 import {
@@ -202,7 +202,7 @@ export const bookingService = {
         reason: `Worker verified OTP for booking ${bookingId}`,
       });
 
-      // Synchronize parent job state -> IN_PROGRESS
+      // Synchronize parent job state -> IN_PROGRESS (Issue 14: Cross-entity transition)
       if (lockedBooking.job_id) {
         try {
           await jobStateService.transition(tx, {
@@ -211,8 +211,15 @@ export const bookingService = {
             actor: { id: effectiveWorkerId, role: UserRole.WORKER },
             reason: `Worker verified OTP for booking ${bookingId}`,
           });
-        } catch {
-          // If job was already in IN_PROGRESS (multi-worker), safe to proceed
+        } catch (err: any) {
+          // P4 Issue 14: Only suppress explicitly proven idempotent conditions.
+          // For multi-worker jobs, if the parent job is ALREADY in IN_PROGRESS, JobInvalidTransitionError is idempotent.
+          if (err instanceof JobInvalidTransitionError && err.fromStatus === JobStatus.IN_PROGRESS) {
+            // Idempotent: another worker on the same job already moved parent job to IN_PROGRESS
+          } else {
+            // Unexpected database/Prisma/domain error MUST propagate to abort the transaction!
+            throw err;
+          }
         }
       }
 
@@ -316,25 +323,31 @@ export const bookingService = {
         }
       }
 
-      // Check if all bookings under parent job are now completed -> transition job to COMPLETED
+      // Check if all bookings under parent job are now completed -> transition job to COMPLETED (Issue 14)
       if (booking.job_id) {
-        try {
-          const uncompletedBookings = await tx.booking.count({
-            where: {
-              job_id: booking.job_id,
-              status: { notIn: ["COMPLETED", "CANCELLED"] },
-            },
-          });
-          if (uncompletedBookings === 0) {
+        const uncompletedBookings = await tx.booking.count({
+          where: {
+            job_id: booking.job_id,
+            status: { notIn: ["COMPLETED", "CANCELLED"] },
+          },
+        });
+        if (uncompletedBookings === 0) {
+          try {
             await jobStateService.transition(tx, {
               jobId: booking.job_id,
               action: JobAction.COMPLETE,
               actor: { id: effectiveCustomerId, role: actor?.role || UserRole.CUSTOMER },
               reason: "All bookings completed and confirmed",
             });
+          } catch (err: any) {
+            // P4 Issue 14: Only ignore if job is already COMPLETED (idempotent completion)
+            if (err instanceof JobInvalidTransitionError && err.fromStatus === JobStatus.COMPLETED) {
+              // Idempotent retry: job is already completed
+            } else {
+              // Any unexpected database/Prisma/domain error MUST propagate!
+              throw err;
+            }
           }
-        } catch {
-          // Safe ignore if already completed or unable
         }
       }
 
@@ -435,7 +448,7 @@ export const bookingService = {
 
         // Reconcile worker dispatch record
         if (lockedBooking.requirement_id && lockedBooking.worker_id) {
-          try {
+          if (typeof (tx as any).job_dispatch?.updateMany === "function") {
             await (tx as any).job_dispatch.updateMany({
               where: {
                 requirement_id: lockedBooking.requirement_id,
@@ -447,30 +460,38 @@ export const bookingService = {
                 responded_at: new Date(),
               },
             });
-          } catch (dispErr: any) {
-            logger.warn(`[bookingServices] Note: Could not reconcile dispatch state: ${dispErr?.message}`);
           }
         }
 
         // If all bookings cancelled for the job, reopen dispatch if applicable
         if (lockedBooking.job_id) {
-          try {
-            const activeBookings = await tx.booking.count({
-              where: {
-                job_id: lockedBooking.job_id,
-                status: { in: Array.from(ACTIVE_BOOKING_STATUSES) },
-              },
-            });
-            if (activeBookings === 0) {
+          const activeBookings = await tx.booking.count({
+            where: {
+              job_id: lockedBooking.job_id,
+              status: { in: Array.from(ACTIVE_BOOKING_STATUSES) },
+            },
+          });
+          if (activeBookings === 0) {
+            try {
               await jobStateService.transition(tx, {
                 jobId: lockedBooking.job_id,
                 action: JobAction.REOPEN_DISPATCH,
                 actor: { role: "SYSTEM" },
                 reason: `Booking ${bookingId} cancelled, reopening dispatch`,
               });
+            } catch (err: any) {
+              // P4 Issue 14: Safe ignore only if parent job already in terminal/cancelled or dispatching state
+              if (
+                err instanceof JobInvalidTransitionError &&
+                (err.fromStatus === JobStatus.CANCELLED ||
+                  err.fromStatus === JobStatus.DISPATCHING ||
+                  err.fromStatus === JobStatus.COMPLETED)
+              ) {
+                // Safe idempotent ignore
+              } else {
+                throw err;
+              }
             }
-          } catch {
-            // Safe ignore if parent job already in terminal/cancelled state
           }
         }
       }

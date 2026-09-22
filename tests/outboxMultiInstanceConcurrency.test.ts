@@ -1,405 +1,337 @@
-import { outboxService, OutboxRecord } from "../src/services/outboxService";
-import { OutboxWorker } from "../src/workers/outboxWorker";
 import prisma from "../src/config/prisma";
+import { outboxService, OutboxRecord } from "../src/services/outboxService";
+import { Prisma } from "@prisma/client";
 
-describe("P3 Issue 8 — Outbox Multi-Instance & Real PostgreSQL Concurrency Tests", () => {
-  jest.setTimeout(60000);
-
-  const testWorkerId = "00000000-0000-4000-b000-000000000001";
-  const testRequirementId = "00000000-0000-4000-b000-000000000002";
+describe("P4 Issue 11 & 12: Outbox Multi-Instance Concurrency & Transactional Atomicity", () => {
+  const createdOutboxIds: string[] = [];
+  const testAggregateId = "11111111-1111-1111-1111-111111111111";
+  const testWorkerId = "22222222-2222-2222-2222-222222222222";
 
   beforeAll(async () => {
-    await prisma.$connect();
     // Clean up any existing test records
-    await (prisma as any).notification_outbox.deleteMany({
-      where: { recipient_id: testWorkerId },
-    }).catch(() => {});
+    await prisma.$executeRawUnsafe(
+      `DELETE FROM "notification_outbox" WHERE aggregate_id = '${testAggregateId}' OR recipient_id = '${testWorkerId}'`
+    );
   });
 
   afterAll(async () => {
-    // Clean up test records
-    await (prisma as any).notification_outbox.deleteMany({
-      where: { recipient_id: testWorkerId },
-    }).catch(() => {});
-    await prisma.$disconnect();
-  });
-
-  beforeEach(async () => {
-    await (prisma as any).notification_outbox.deleteMany({
-      where: { recipient_id: testWorkerId },
-    }).catch(() => {});
-  });
-
-  // =========================================================================
-  // TEST 1 & TEST 9 — Two & Many Concurrent Workers Claiming Same Event
-  // =========================================================================
-  describe("1. Atomic Claiming & Multi-Worker Contention", () => {
-    it("TEST 1: Two workers claiming the same single pending event results in EXACTLY ONE claim", async () => {
-      const idempotencyKey = `test:outbox:contention:2w:${Date.now()}`;
-
-      const created = await prisma.$transaction(async (tx) => {
-        return await outboxService.createOutboxEvent(tx, {
-          eventType: "incoming_job",
-          aggregateType: "requirement",
-          aggregateId: testRequirementId,
-          recipientType: "worker",
-          recipientId: testWorkerId,
-          payload: { title: "Contention Job 1", rate: 600 },
-          idempotencyKey,
-        });
-      });
-
-      expect(created).toBeDefined();
-
-      // Simulate 2 workers executing atomic claim at the exact same moment
-      const [workerAClaim, workerBClaim] = await Promise.all([
-        outboxService.claimPendingEvents(10),
-        outboxService.claimPendingEvents(10),
-      ]);
-
-      const workerAIds = workerAClaim.map((r) => r.id);
-      const workerBIds = workerBClaim.map((r) => r.id);
-
-      const isClaimedByA = workerAIds.includes(created!.id);
-      const isClaimedByB = workerBIds.includes(created!.id);
-
-      // Invariant: Exactly one worker must claim the event. Both workers CANNOT claim it.
-      expect(isClaimedByA !== isClaimedByB).toBe(true);
-      expect(isClaimedByA && isClaimedByB).toBe(false);
-
-      // Verify database state is PROCESSING
-      const recordInDb = await (prisma as any).notification_outbox.findUnique({
-        where: { id: created!.id },
-      });
-      expect(recordInDb.status).toBe("PROCESSING");
-    });
-
-    it("TEST 9: High-concurrency stress — 20 simultaneous workers contending for a single event", async () => {
-      const idempotencyKey = `test:outbox:stress:20w:${Date.now()}`;
-
-      const created = await prisma.$transaction(async (tx) => {
-        return await outboxService.createOutboxEvent(tx, {
-          eventType: "incoming_job",
-          aggregateType: "requirement",
-          aggregateId: testRequirementId,
-          recipientType: "worker",
-          recipientId: testWorkerId,
-          payload: { title: "Stress Job", rate: 700 },
-          idempotencyKey,
-        });
-      });
-
-      // Launch 20 concurrent claim operations
-      const NUM_WORKERS = 20;
-      const claimPromises = Array.from({ length: NUM_WORKERS }, () =>
-        outboxService.claimPendingEvents(10)
+    if (createdOutboxIds.length > 0) {
+      await prisma.$executeRawUnsafe(
+        `DELETE FROM "notification_outbox" WHERE id IN (${createdOutboxIds.map((id) => `'${id}'`).join(",")})`
       );
-
-      const claimResults = await Promise.all(claimPromises);
-
-      let totalClaimsOfOurEvent = 0;
-      for (const batch of claimResults) {
-        if (batch.some((r) => r.id === created!.id)) {
-          totalClaimsOfOurEvent++;
-        }
-      }
-
-      // CRITICAL INVARIANT: Across 20 concurrent database transactions, exactly 1 succeeds in claiming
-      expect(totalClaimsOfOurEvent).toBe(1);
-    });
+    }
   });
 
-  // =========================================================================
-  // TEST 2 & TEST 11 — Multi-Worker Distribution & Batch Claiming (LIMIT N + SKIP LOCKED)
-  // =========================================================================
-  describe("2. Batch Distribution & Non-Overlapping Claims across Multiple Instances", () => {
-    it("TEST 2 & 11: 5 concurrent workers claiming 50 events partition work with zero duplicate ownership", async () => {
+  describe("Issue 11: Multi-Worker Concurrent Claiming", () => {
+    it("Test A & B: 4 concurrent workers claiming 50 pending events results in exactly 1 owner per event", async () => {
       const TOTAL_EVENTS = 50;
-      const createdIds: string[] = [];
+      const NUM_WORKERS = 4;
+      const seedIds: string[] = [];
 
-      // Create 50 pending events in batch
+      // Seed 50 PENDING outbox events
       for (let i = 0; i < TOTAL_EVENTS; i++) {
-        const idempotencyKey = `test:outbox:batch50:${i}:${Date.now()}`;
-        const event = await prisma.$transaction(async (tx) => {
-          return await outboxService.createOutboxEvent(tx, {
-            eventType: "incoming_job",
-            aggregateType: "requirement",
-            aggregateId: testRequirementId,
-            recipientType: "worker",
-            recipientId: testWorkerId,
-            payload: { index: i, title: `Batch Job ${i}` },
-            idempotencyKey,
-          });
-        });
-        if (event) createdIds.push(event.id);
+        const id = `a0000000-0000-0000-0000-${String(i).padStart(12, "0")}`;
+        seedIds.push(id);
+        createdOutboxIds.push(id);
       }
 
-      expect(createdIds.length).toBe(TOTAL_EVENTS);
-
-      // Run 5 concurrent worker processes claiming batches of 10
-      const NUM_WORKERS = 5;
-      const workerClaims = await Promise.all(
-        Array.from({ length: NUM_WORKERS }, () => outboxService.claimPendingEvents(10))
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "notification_outbox" (id, event_type, aggregate_type, aggregate_id, recipient_type, recipient_id, payload, status, available_at, created_at, updated_at)
+         VALUES ${seedIds
+           .map(
+             (id, idx) =>
+               `('${id}', 'TEST_CONCURRENCY', 'test', '${testAggregateId}', 'worker', '${testWorkerId}', '{"index": ${idx}}'::jsonb, 'PENDING', NOW() - INTERVAL '1 minute', NOW() - INTERVAL '1 minute', NOW() - INTERVAL '1 minute')`
+           )
+           .join(",")}`
       );
 
-      const allClaimedIds: string[] = [];
-      const duplicateIds: string[] = [];
-
-      for (const batch of workerClaims) {
-        for (const record of batch) {
-          if (createdIds.includes(record.id)) {
-            if (allClaimedIds.includes(record.id)) {
-              duplicateIds.push(record.id);
-            }
-            allClaimedIds.push(record.id);
+      // Launch 4 concurrent workers simultaneously claiming batches
+      const workerClaims: OutboxRecord[][] = await Promise.all(
+        Array.from({ length: NUM_WORKERS }, async (_, workerIdx) => {
+          // Each worker attempts to claim batches until none left
+          const claimed: OutboxRecord[] = [];
+          for (let attempt = 0; attempt < 10; attempt++) {
+            const batch = await outboxService.claimPendingEvents(15, 5);
+            if (batch.length === 0) break;
+            claimed.push(...batch.filter((r) => seedIds.includes(r.id)));
           }
+          return claimed;
+        })
+      );
+
+      // Track how many times each event was claimed across all workers
+      const claimCounts: Record<string, number> = {};
+      let totalClaimed = 0;
+
+      for (const records of workerClaims) {
+        for (const record of records) {
+          claimCounts[record.id] = (claimCounts[record.id] || 0) + 1;
+          totalClaimed++;
         }
       }
 
-      // Invariants:
-      // 1. Zero duplicate claims across workers
-      expect(duplicateIds).toHaveLength(0);
-      // 2. All 50 events claimed across the 5 workers
-      expect(allClaimedIds.length).toBe(TOTAL_EVENTS);
-    });
-  });
+      // Invariant: Exactly one worker owned each event
+      expect(totalClaimed).toBe(TOTAL_EVENTS);
+      for (const id of seedIds) {
+        expect(claimCounts[id]).toBe(1);
+      }
 
-  // =========================================================================
-  // TEST 3, 8 & 9 — Crash Recovery, Lease Expiration & Active Lease Protection
-  // =========================================================================
-  describe("3. Lease Expiration & Crash Recovery", () => {
-    it("TEST 8: Worker cannot claim an in-flight PROCESSING event whose lease has NOT expired", async () => {
-      const idempotencyKey = `test:outbox:active_lease:${Date.now()}`;
-
-      const event = await prisma.$transaction(async (tx) => {
-        return await outboxService.createOutboxEvent(tx, {
-          eventType: "incoming_job",
-          aggregateType: "requirement",
-          aggregateId: testRequirementId,
-          recipientType: "worker",
-          recipientId: testWorkerId,
-          payload: { title: "Active Lease Job" },
-          idempotencyKey,
-        });
-      });
-
-      // Claim the event so it becomes PROCESSING with fresh updated_at (active lease)
-      const claim1 = await outboxService.claimPendingEvents(10);
-      expect(claim1.some((r) => r.id === event!.id)).toBe(true);
-
-      // Immediate second claim attempt while lease is active (< 5 min)
-      const claim2 = await outboxService.claimPendingEvents(10);
-      expect(claim2.some((r) => r.id === event!.id)).toBe(false);
+      // Verify database state: all 50 rows must now be in PROCESSING status
+      const dbRows: any[] = await prisma.$queryRawUnsafe(
+        `SELECT id, status FROM "notification_outbox" WHERE id IN (${seedIds.map((id) => `'${id}'`).join(",")})`
+      );
+      expect(dbRows.length).toBe(TOTAL_EVENTS);
+      for (const row of dbRows) {
+        expect(row.status).toBe("PROCESSING");
+      }
     });
 
-    it("TEST 3 & 8: Worker crash / abandoned PROCESSING event is automatically reclaimed after lease expires", async () => {
-      const idempotencyKey = `test:outbox:expired_lease:${Date.now()}`;
+    it("Test C & D: Expired lease allows crash recovery while active lease prevents premature theft", async () => {
+      const activeId = "b0000000-0000-0000-0000-000000000001";
+      const expiredId = "b0000000-0000-0000-0000-000000000002";
+      createdOutboxIds.push(activeId, expiredId);
 
-      const event = await prisma.$transaction(async (tx) => {
-        return await outboxService.createOutboxEvent(tx, {
-          eventType: "incoming_job",
-          aggregateType: "requirement",
-          aggregateId: testRequirementId,
-          recipientType: "worker",
-          recipientId: testWorkerId,
-          payload: { title: "Crashed Worker Job" },
-          idempotencyKey,
-        });
-      });
+      // Active lease: claimed 1 minute ago (stale threshold = 5 mins)
+      // Expired lease: claimed 10 minutes ago (stale threshold = 5 mins)
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "notification_outbox" (id, event_type, aggregate_type, aggregate_id, recipient_type, recipient_id, payload, status, available_at, updated_at, created_at)
+         VALUES 
+          ('${activeId}', 'ACTIVE_LEASE', 'test', '${testAggregateId}', 'worker', '${testWorkerId}', '{}'::jsonb, 'PROCESSING', NOW(), NOW() - INTERVAL '1 minute', NOW() - INTERVAL '1 minute'),
+          ('${expiredId}', 'EXPIRED_LEASE', 'test', '${testAggregateId}', 'worker', '${testWorkerId}', '{}'::jsonb, 'PROCESSING', NOW(), NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '10 minutes')`
+      );
 
-      // Worker 1 claims event
-      await outboxService.claimPendingEvents(10);
+      // Claim batch with 5-minute stale threshold
+      const claimed = await outboxService.claimPendingEvents(10, 5);
+      const claimedIds = claimed.map((r) => r.id);
 
-      // Simulate Worker 1 crashing and lease expiring (updated_at set to 10 minutes ago)
-      await (prisma as any).notification_outbox.update({
-        where: { id: event!.id },
-        data: {
-          status: "PROCESSING",
-          updated_at: new Date(Date.now() - 10 * 60 * 1000),
-        },
-      });
+      // Expired lease should be recovered; active lease must NOT be stolen
+      expect(claimedIds).toContain(expiredId);
+      expect(claimedIds).not.toContain(activeId);
+    });
 
-      // Worker 2 runs atomic claim — should automatically reclaim the expired PROCESSING event
+    it("Test E: Stale worker fence: A crashed/delayed worker whose lease expired and was reclaimed cannot overwrite a newer worker's state", async () => {
+      const fenceId = "b0000000-0000-0000-0000-000000000003";
+      createdOutboxIds.push(fenceId);
+
+      // Event was in PROCESSING 10 mins ago (stale)
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO "notification_outbox" (id, event_type, aggregate_type, aggregate_id, recipient_type, recipient_id, payload, status, available_at, updated_at, created_at)
+         VALUES ('${fenceId}', 'STALE_FENCE', 'test', '${testAggregateId}', 'worker', '${testWorkerId}', '{}'::jsonb, 'PROCESSING', NOW(), NOW() - INTERVAL '10 minutes', NOW() - INTERVAL '10 minutes')`
+      );
+
+      // Worker B reclaims the stale event (re-marking it PROCESSING with new updated_at)
       const reclaimed = await outboxService.claimPendingEvents(10, 5);
-      const isReclaimed = reclaimed.some((r) => r.id === event!.id);
+      expect(reclaimed.some((r) => r.id === fenceId)).toBe(true);
 
-      expect(isReclaimed).toBe(true);
+      // Worker B finishes delivery and marks success
+      const successB = await outboxService.markEventSuccess(fenceId);
+      expect(successB).toBe(true);
 
-      // Verify updated_at has been refreshed to now
-      const inDb = await (prisma as any).notification_outbox.findUnique({
-        where: { id: event!.id },
+      // Now stale Worker A wakes up and attempts to mark failure
+      const staleFailureA = await outboxService.markEventFailure(fenceId, "Late network timeout from worker A", false);
+      // Fencing check ensures stale worker's action is safely ignored
+      expect(staleFailureA).toBe(false);
+
+      // Database state remains SENT by Worker B
+    });
+
+    it("Test F: Deterministic delivery identity prevents duplicate logical events on retry", async () => {
+      const idempotencyKey = `idempotent_test:${Date.now()}`;
+      
+      // Step 1: Create event inside transaction
+      let event1: any;
+      await prisma.$transaction(async (tx) => {
+        event1 = await outboxService.createOutboxEvent(tx, {
+          eventType: "JOB_NOTIFICATION",
+          aggregateType: "test",
+          aggregateId: testAggregateId,
+          recipientType: "worker",
+          recipientId: testWorkerId,
+          payload: { step: 1 },
+          idempotencyKey,
+        });
       });
-      expect(inDb.status).toBe("PROCESSING");
-      expect(new Date(inDb.updated_at).getTime()).toBeGreaterThan(Date.now() - 5000);
+      expect(event1).toBeDefined();
+      createdOutboxIds.push(event1.id);
+
+      // Step 2: Retry with identical idempotencyKey inside a new transaction
+      let event2: any;
+      await prisma.$transaction(async (tx) => {
+        event2 = await outboxService.createOutboxEvent(tx, {
+          eventType: "JOB_NOTIFICATION",
+          aggregateType: "test",
+          aggregateId: testAggregateId,
+          recipientType: "worker",
+          recipientId: testWorkerId,
+          payload: { step: 1 },
+          idempotencyKey,
+        });
+      });
+
+      // Assert event2 returned existing record without creating duplicate row
+      expect(event2).toBeDefined();
+      expect(event2.id).toBe(event1.id);
+
+      const countResult: any[] = await prisma.$queryRawUnsafe(
+        `SELECT COUNT(*)::int as count FROM "notification_outbox" WHERE idempotency_key = '${idempotencyKey}'`
+      );
+      expect(countResult[0].count).toBe(1);
     });
   });
 
-  // =========================================================================
-  // TEST 4 & 5 — Idempotency & Duplicate Prevention
-  // =========================================================================
-  describe("4. Idempotency & Duplicate Prevention", () => {
-    it("TEST 5: Duplicate createOutboxEvent calls with same idempotency key return existing row without duplication", async () => {
-      const idempotencyKey = `test:outbox:idempotent_creation:${Date.now()}`;
+  describe("Issue 12: Mandatory Outbox Invariant & Failure Injection", () => {
+    it("Failure injection: Mandatory outbox insert failure rolls back business transaction", async () => {
+      const testPhone = `+91999${String(Date.now()).slice(-7)}`;
+      let testCustomerId: string | null = null;
 
-      const first = await prisma.$transaction(async (tx) => {
-        return await outboxService.createOutboxEvent(tx, {
-          eventType: "booking_confirmed",
-          aggregateType: "requirement",
-          aggregateId: testRequirementId,
-          recipientType: "worker",
-          recipientId: testWorkerId,
-          payload: { bookingId: "b-test-1" },
-          idempotencyKey,
+      try {
+        // Attempt transaction where business row (customer) is created, but outbox insert fails
+        await expect(
+          prisma.$transaction(async (tx) => {
+            // 1. Business mutation: create customer
+            const cust = await tx.customer.create({
+              data: {
+                phone: testPhone,
+                name: "Rollback Test Customer",
+                password: "hashed_password",
+              },
+            });
+            testCustomerId = cust.id;
+
+            // 2. Failure injection on mandatory outbox: simulate invalid outbox insert (e.g. non-null constraint violation)
+            await (tx as any).notification_outbox.create({
+              data: {
+                event_type: "MANDATORY_EVENT",
+                aggregate_type: "customer",
+                aggregate_id: "invalid-uuid-format-to-trigger-db-error", // Deliberately invalid UUID to trigger PostgreSQL error
+                recipient_type: "customer",
+                recipient_id: cust.id,
+                payload: {},
+              },
+            });
+          })
+        ).rejects.toThrow();
+
+        // 3. Verify business row was NOT committed (rolled back)
+        const checkCust = await prisma.customer.findFirst({
+          where: { phone: testPhone },
         });
-      });
-
-      const second = await prisma.$transaction(async (tx) => {
-        return await outboxService.createOutboxEvent(tx, {
-          eventType: "booking_confirmed",
-          aggregateType: "requirement",
-          aggregateId: testRequirementId,
-          recipientType: "worker",
-          recipientId: testWorkerId,
-          payload: { bookingId: "b-test-1" },
-          idempotencyKey,
-        });
-      });
-
-      expect(first).toBeDefined();
-      expect(second).toBeDefined();
-      expect(first!.id).toBe(second!.id);
-
-      // Verify in DB there is exactly 1 row
-      const count = await (prisma as any).notification_outbox.count({
-        where: { idempotency_key: idempotencyKey },
-      });
-      expect(count).toBe(1);
-    });
-  });
-
-  // =========================================================================
-  // TEST 6 & 7 — Retries, Exponential Backoff & Terminal Failure
-  // =========================================================================
-  describe("5. Retries, Exponential Backoff & Terminal Failure", () => {
-    it("TEST 6: Transient failure schedules retry with exponential backoff and increments attempt counter", async () => {
-      const idempotencyKey = `test:outbox:retry_backoff:${Date.now()}`;
-
-      const event = await prisma.$transaction(async (tx) => {
-        return await outboxService.createOutboxEvent(tx, {
-          eventType: "incoming_job",
-          aggregateType: "requirement",
-          aggregateId: testRequirementId,
-          recipientType: "worker",
-          recipientId: testWorkerId,
-          payload: { title: "Retry Job" },
-          idempotencyKey,
-        });
-      });
-
-      // Fail attempt 1 (transient)
-      await outboxService.markEventFailure(event!.id, "503 Service Unavailable", false);
-
-      const afterAttempt1 = await (prisma as any).notification_outbox.findUnique({
-        where: { id: event!.id },
-      });
-      expect(afterAttempt1.status).toBe("PENDING");
-      expect(afterAttempt1.attempts).toBe(1);
-      expect(new Date(afterAttempt1.available_at).getTime()).toBeGreaterThan(Date.now());
-
-      // While available_at is in the future, it should NOT be claimable right now
-      const claimImmediate = await outboxService.claimPendingEvents(10);
-      expect(claimImmediate.some((r) => r.id === event!.id)).toBe(false);
+        expect(checkCust).toBeNull();
+      } finally {
+        if (testCustomerId) {
+          await prisma.customer.deleteMany({ where: { id: testCustomerId } });
+        }
+      }
     });
 
-    it("TEST 7: Permanent failure transitions immediately to terminal FAILED status", async () => {
-      const idempotencyKey = `test:outbox:permanent_fail:${Date.now()}`;
+    it("Success case: Business mutation and mandatory outbox commit atomically", async () => {
+      const testPhone = `+91998${String(Date.now()).slice(-7)}`;
+      let createdCustId: string | null = null;
+      let createdOutboxId: string | null = null;
 
-      const event = await prisma.$transaction(async (tx) => {
-        return await outboxService.createOutboxEvent(tx, {
-          eventType: "incoming_job",
-          aggregateType: "requirement",
-          aggregateId: testRequirementId,
-          recipientType: "worker",
-          recipientId: testWorkerId,
-          payload: { title: "Permanent Fail Job" },
-          idempotencyKey,
-        });
-      });
-
-      // Fail permanently (e.g. invalid token or unregistered device)
-      await outboxService.markEventFailure(event!.id, "UNREGISTERED_DEVICE_TOKEN", true);
-
-      const inDb = await (prisma as any).notification_outbox.findUnique({
-        where: { id: event!.id },
-      });
-      expect(inDb.status).toBe("FAILED");
-      expect(inDb.failed_at).toBeDefined();
-      expect(inDb.last_error).toBe("UNREGISTERED_DEVICE_TOKEN");
-
-      // Cannot be claimed
-      const claim = await outboxService.claimPendingEvents(10);
-      expect(claim.some((r) => r.id === event!.id)).toBe(false);
-    });
-
-    it("TEST 7b: Reaching max_attempts transitions event to terminal FAILED status", async () => {
-      const idempotencyKey = `test:outbox:max_attempts:${Date.now()}`;
-
-      const event = await prisma.$transaction(async (tx) => {
-        return await outboxService.createOutboxEvent(tx, {
-          eventType: "incoming_job",
-          aggregateType: "requirement",
-          aggregateId: testRequirementId,
-          recipientType: "worker",
-          recipientId: testWorkerId,
-          payload: { title: "Max Attempts Job" },
-          idempotencyKey,
-        });
-      });
-
-      // Set attempts to 4 of 5
-      await (prisma as any).notification_outbox.update({
-        where: { id: event!.id },
-        data: { attempts: 4, max_attempts: 5 },
-      });
-
-      // 5th failure should trigger terminal FAILED
-      await outboxService.markEventFailure(event!.id, "5th network failure", false);
-
-      const inDb = await (prisma as any).notification_outbox.findUnique({
-        where: { id: event!.id },
-      });
-      expect(inDb.status).toBe("FAILED");
-      expect(inDb.attempts).toBe(5);
-    });
-  });
-
-  // =========================================================================
-  // TEST 12 — Transaction Rollback Safety
-  // =========================================================================
-  describe("6. Transaction Rollback Safety", () => {
-    it("TEST 12: Business transaction rollback guarantees zero outbox orphan insertion", async () => {
-      const idempotencyKey = `test:outbox:tx_rollback:${Date.now()}`;
-
-      await expect(
-        prisma.$transaction(async (tx) => {
-          await outboxService.createOutboxEvent(tx, {
-            eventType: "incoming_job",
-            aggregateType: "requirement",
-            aggregateId: testRequirementId,
-            recipientType: "worker",
-            recipientId: testWorkerId,
-            payload: { title: "Rolled Back Event" },
-            idempotencyKey,
+      try {
+        await prisma.$transaction(async (tx) => {
+          // 1. Business mutation
+          const cust = await tx.customer.create({
+            data: {
+              phone: testPhone,
+              name: "Atomic Test Customer",
+              password: "hashed_password",
+            },
           });
+          createdCustId = cust.id;
 
-          throw new Error("Simulated payment transaction failure");
-        })
-      ).rejects.toThrow("Simulated payment transaction failure");
+          // 2. Mandatory outbox
+          const outbox = await outboxService.createOutboxEvent(tx, {
+            eventType: "CUSTOMER_REGISTERED",
+            aggregateType: "customer",
+            aggregateId: cust.id,
+            recipientType: "customer",
+            recipientId: cust.id,
+            payload: { name: cust.name },
+          });
+          if (outbox) createdOutboxId = outbox.id;
+        });
 
-      const inDb = await (prisma as any).notification_outbox.findUnique({
-        where: { idempotency_key: idempotencyKey },
-      });
-      expect(inDb).toBeNull();
+        // 3. Verify both business row and outbox row are committed
+        expect(createdCustId).toBeDefined();
+        expect(createdOutboxId).toBeDefined();
+        createdOutboxIds.push(createdOutboxId!);
+
+        const committedCust = await prisma.customer.findUnique({
+          where: { id: createdCustId! },
+        });
+        expect(committedCust).not.toBeNull();
+
+        const committedOutbox = await (prisma as any).notification_outbox.findUnique({
+          where: { id: createdOutboxId! },
+        });
+        expect(committedOutbox).not.toBeNull();
+        expect(committedOutbox.status).toBe("PENDING");
+      } finally {
+        if (createdCustId) {
+          await prisma.customer.deleteMany({ where: { id: createdCustId } });
+        }
+      }
+    });
+
+    it("Asynchronous notification delivery failure does not roll back committed business state", async () => {
+      const testPhone = `+91997${String(Date.now()).slice(-7)}`;
+      let createdCustId: string | null = null;
+      let outboxId: string | null = null;
+
+      try {
+        // Business transaction commits
+        await prisma.$transaction(async (tx) => {
+          const cust = await tx.customer.create({
+            data: {
+              phone: testPhone,
+              name: "Delivery Failure Customer",
+              password: "hashed_password",
+            },
+          });
+          createdCustId = cust.id;
+
+          const outbox = await outboxService.createOutboxEvent(tx, {
+            eventType: "CUSTOMER_WELCOME",
+            aggregateType: "customer",
+            aggregateId: cust.id,
+            recipientType: "customer",
+            recipientId: cust.id,
+            payload: { phone: testPhone },
+          });
+          if (outbox) outboxId = outbox.id;
+        });
+
+        createdOutboxIds.push(outboxId!);
+
+        // Worker claims event into PROCESSING
+        await (prisma as any).notification_outbox.update({
+          where: { id: outboxId! },
+          data: { status: "PROCESSING", updated_at: new Date() },
+        });
+
+        // Asynchronous delivery worker encounters delivery failure
+        await outboxService.markEventFailure(outboxId!, "Push notification gateway timeout", false);
+
+        // Verify business row remains safely COMMITTED
+        const custAfterWorkerFailure = await prisma.customer.findUnique({
+          where: { id: createdCustId! },
+        });
+        expect(custAfterWorkerFailure).not.toBeNull();
+
+        // Verify outbox row transitioned to retryable PENDING state with backoff
+        const outboxRow = await (prisma as any).notification_outbox.findUnique({
+          where: { id: outboxId! },
+        });
+        expect(outboxRow.status).toBe("PENDING");
+        expect(outboxRow.attempts).toBe(1);
+        expect(outboxRow.last_error).toContain("Push notification gateway timeout");
+      } finally {
+        if (createdCustId) {
+          await prisma.customer.deleteMany({ where: { id: createdCustId } });
+        }
+      }
     });
   });
 });

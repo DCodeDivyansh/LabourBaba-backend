@@ -447,26 +447,22 @@ export const bookingStateService = {
       updatedBooking = { ...lockedBooking, ...updateData };
     }
 
-    // 7. Write durable booking_transition record
+    // 7. Write durable booking_transition record (Issue 13: Mandatory audit must be atomic with state change)
     let transitionRecord: any = null;
     if ((tx as any).booking_transition?.create) {
-      try {
-        transitionRecord = await (tx as any).booking_transition.create({
-          data: {
-            booking_id: bookingId,
-            from_status: currentStatus,
-            to_status: targetStatus,
-            action,
-            actor_type: String(actor.role),
-            actor_id: actor.id || null,
-            reason: reason || null,
-            metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : Prisma.JsonNull,
-            created_at: now,
-          },
-        });
-      } catch (logErr: any) {
-        logger.warn(`[bookingStateService] Note: Could not record transition audit: ${logErr?.message}`);
-      }
+      transitionRecord = await (tx as any).booking_transition.create({
+        data: {
+          booking_id: bookingId,
+          from_status: currentStatus,
+          to_status: targetStatus,
+          action,
+          actor_type: String(actor.role),
+          actor_id: actor.id || null,
+          reason: reason || null,
+          metadata: metadata ? JSON.parse(JSON.stringify(metadata)) : Prisma.JsonNull,
+          created_at: now,
+        },
+      });
     }
 
     return {
