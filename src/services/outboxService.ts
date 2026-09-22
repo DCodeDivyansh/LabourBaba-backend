@@ -202,7 +202,7 @@ export class OutboxService {
     const result = await (prisma as any).notification_outbox.updateMany({
       where: {
         id,
-        status: "PROCESSING",
+        status: { in: ["PROCESSING", "PENDING"] },
       },
       data: {
         status: "SENT",
@@ -215,14 +215,14 @@ export class OutboxService {
       logger.info(`[OUTBOX_SENT] Outbox event ${id} processed and delivered successfully.`, { outboxId: id });
       return true;
     } else {
-      logger.warn(`[OUTBOX_STALE_IGNORED] Outbox event ${id} was not in PROCESSING or was reclaimed by another worker generation. Ignoring stale completion.`, { outboxId: id });
+      logger.warn(`[OUTBOX_STALE_IGNORED] Outbox event ${id} was not in PROCESSING or PENDING. Ignoring stale completion.`, { outboxId: id });
       return false;
     }
   }
 
   /**
    * Records a delivery failure, scheduling a retry with backoff or marking as terminal failure.
-   * Atomically checks that the event is still in PROCESSING to prevent stale workers from clobbering recovered events.
+   * Atomically checks that the event is still in PROCESSING or PENDING to prevent stale workers from clobbering recovered events.
    */
   public async markEventFailure(
     id: string,
@@ -230,10 +230,10 @@ export class OutboxService {
     isPermanent = false
   ): Promise<boolean> {
     const record = await (prisma as any).notification_outbox.findFirst({
-      where: { id, status: "PROCESSING" },
+      where: { id, status: { in: ["PROCESSING", "PENDING"] } },
     });
     if (!record) {
-      logger.warn(`[OUTBOX_STALE_FAILURE_IGNORED] Outbox event ${id} not found in expected PROCESSING state. Ignoring stale failure.`, { outboxId: id });
+      logger.warn(`[OUTBOX_STALE_FAILURE_IGNORED] Outbox event ${id} not found in expected PROCESSING or PENDING state. Ignoring stale failure.`, { outboxId: id });
       return false;
     }
 
@@ -242,7 +242,7 @@ export class OutboxService {
 
     if (isTerminal) {
       const updateResult = await (prisma as any).notification_outbox.updateMany({
-        where: { id, status: "PROCESSING" },
+        where: { id, status: { in: ["PROCESSING", "PENDING"] } },
         data: {
           status: "FAILED",
           attempts: nextAttempt,
@@ -267,7 +267,7 @@ export class OutboxService {
       const nextAvailableAt = new Date(Date.now() + backoffSeconds * 1000);
 
       const updateResult = await (prisma as any).notification_outbox.updateMany({
-        where: { id, status: "PROCESSING" },
+        where: { id, status: { in: ["PROCESSING", "PENDING"] } },
         data: {
           status: "PENDING",
           attempts: nextAttempt,

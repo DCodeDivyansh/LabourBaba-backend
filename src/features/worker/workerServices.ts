@@ -14,6 +14,7 @@ import {
   toWorkerAnalyticsDTO,
 } from "../../shared/prismaSelects";
 import { storageService } from "../../providers/storage/storage.service";
+import { storageConfig } from "../../config/storageConfig";
 import { workerPolicy, assertPolicy, AuthorizationError, AuthenticatedUser } from "../../policies";
 import { skillService } from "../skill/skill.service";
 import { logger } from "../../utils/logger";
@@ -25,18 +26,16 @@ export const workerService = {
       where: { phone },
     });
     if (existingWorker) {
-      const err: any = new Error("Worker with this phone number already exists");
+      const err: any = new Error("Worker already exists");
       err.code = "PHONE_ALREADY_REGISTERED";
       throw err;
     }
 
-    // Resolve canonical skill ID
     let canonicalSkillId = payload.skill_category_id;
     if (!canonicalSkillId && payload.skill_type) {
       const resolved = await skillService.resolveSkillId(payload.skill_type);
       if (resolved) canonicalSkillId = resolved;
     }
-
     if (!canonicalSkillId) {
       const err: any = new Error("Valid skill_category_id or resolvable skill_type is required");
       err.statusCode = 400;
@@ -53,10 +52,17 @@ export const workerService = {
           password: hashedPassword,
           skill_type: payload.skill_type || "General",
           aadhaar_last4: payload.aadhaar_last4,
-          device_token: payload.device_token,
         },
         select: workerSelfSelect,
       });
+
+      if (payload.device_token && worker.id) {
+        await workerDeviceService.registerDevice(worker.id, {
+          device_token: payload.device_token,
+          device_id: (payload as any).device_id,
+          platform: (payload as any).platform || "android",
+        }).catch(() => {});
+      }
 
       // Populate worker_skill relation
       if (worker.id && worker.skill_category_id && typeof (prisma as any).worker_skill?.upsert === "function") {
@@ -215,12 +221,26 @@ export const workerService = {
     return toWorkerDocumentDTO(doc);
   },
 
-  async requestUploadUrl(workerId: string, documentType: string, extension?: string) {
-    const key = storageService.generateDocumentKey(workerId, extension || "pdf");
-    const result = await storageService.getSignedUploadUrl(key, "application/octet-stream");
+  async requestUploadUrl(workerId: string, documentType: string, extension?: string, mimeType?: string) {
+    const effectiveMime = (mimeType || "application/pdf").toLowerCase().trim();
+    if (!storageConfig.allowedMimeTypes.includes(effectiveMime)) {
+      throw new AuthorizationError(
+        `MIME type '${effectiveMime}' is not permitted. Allowed types: ${storageConfig.allowedMimeTypes.join(", ")}`,
+        422,
+        "INVALID_MIME_TYPE"
+      );
+    }
+
+    let defaultExt = "pdf";
+    if (effectiveMime === "image/jpeg") defaultExt = "jpg";
+    else if (effectiveMime === "image/png") defaultExt = "png";
+
+    const key = storageService.generateDocumentKey(workerId, extension || defaultExt);
+    const result = await storageService.getSignedUploadUrl(key, effectiveMime);
     return {
       upload_url: result.uploadUrl,
       object_key: result.objectKey,
+      mime_type: effectiveMime,
       expires_in: result.expiresIn,
       expires_at: result.expiresAt,
     };

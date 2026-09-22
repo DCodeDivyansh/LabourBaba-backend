@@ -6,7 +6,7 @@ export type PolicyActor = AuthenticatedUser;
 export interface PolicyDecision {
   allowed: boolean;
   reason?: string;
-  statusCode?: 401 | 403 | 404;
+  statusCode?: number;
   code?: string;
 }
 
@@ -20,7 +20,7 @@ export class AuthorizationError extends Error {
 
   constructor(
     message: string,
-    statusCode: 401 | 403 | 404 = 403,
+    statusCode: number = 403,
     code = "FORBIDDEN"
   ) {
     super(message);

@@ -569,6 +569,7 @@ export const WorkerIdAndDocumentIdParamSchema = z.object({
 export const RequestDocumentUploadUrlReqSchema = z.object({
   document_type: DocumentTypeSchema,
   file_extension: z.string().trim().max(10).optional(),
+  mime_type: z.enum(["application/pdf", "image/jpeg", "image/png"]).default("application/pdf"),
 }).strict().openapi("RequestDocumentUploadUrlReq");
 
 export const WorkerDocumentAccessResponseSchema = z.object({

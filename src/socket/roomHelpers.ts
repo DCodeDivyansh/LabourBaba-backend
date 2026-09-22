@@ -37,3 +37,17 @@ export function getCustomerPersonalRoom(customerId: string): string {
 export function getAdminPersonalRoom(adminId: string): string {
   return `admin:${adminId}`;
 }
+
+/**
+ * Returns the canonical job updates room name.
+ */
+export function getJobRoom(jobId: string): string {
+  return `job:${jobId}`;
+}
+
+/**
+ * Returns the canonical requirement updates room name.
+ */
+export function getRequirementRoom(requirementId: string): string {
+  return `requirement:${requirementId}`;
+}

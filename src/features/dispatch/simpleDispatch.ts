@@ -51,7 +51,6 @@ const DISPATCH_CONFIG: DispatchConfig = {
 
 interface NearbyWorker {
   id: string;
-  device_token: string | null;
   dist_m: number;
 }
 

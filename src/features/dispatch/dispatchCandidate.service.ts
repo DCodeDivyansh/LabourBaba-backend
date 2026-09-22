@@ -64,7 +64,6 @@ export function validateDispatchCoordinates(latitude: unknown, longitude: unknow
 export interface EligibleWorkerCandidate {
   id: string;
   name: string | null;
-  device_token: string | null;
   worker_score: number | null;
   dist_m: number;
 }
@@ -229,7 +228,6 @@ export async function getEligibleCandidatePage(
     const rows = await prisma.$queryRaw<EligibleWorkerCandidate[]>`
       SELECT w.id,
              w.name,
-             w.device_token,
              w.worker_score::float,
              ST_Distance(
                w.location_geo,

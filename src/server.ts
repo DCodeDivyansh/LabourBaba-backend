@@ -171,6 +171,7 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/storage", storageRoutes);
+app.use(storageRoutes);
 
 setupSwagger(app);
 

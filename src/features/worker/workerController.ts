@@ -14,8 +14,10 @@ const getWorkerId = (req: Request) => {
 
 function handleWorkerError(error: any, req: Request, res: Response): void {
   const reqLogger = (req as any).logger || logger;
-  if (error instanceof AuthorizationError || error.statusCode === 403) {
-    res.status(403).json({ success: false, code: "FORBIDDEN", message: error.message || "Forbidden" });
+  if (error instanceof AuthorizationError || error.statusCode === 403 || error.statusCode === 404) {
+    const status = typeof error.statusCode === "number" ? error.statusCode : (typeof error.status === "number" ? error.status : 403);
+    const code = error.code || (status === 404 ? "NOT_FOUND" : "FORBIDDEN");
+    res.status(status).json({ success: false, code, message: error.message || (status === 404 ? "Not found" : "Forbidden") });
     return;
   }
   if (error.code === "PHONE_ALREADY_REGISTERED" || error.code === "P2002") {
@@ -189,8 +191,8 @@ export const requestUploadUrl = async (req: Request, res: Response): Promise<voi
     const actor = (req as AuthenticatedRequest).user;
     if (!actor?.id) { res.status(401).json({ success: false, message: "Unauthorized" }); return; }
     assertPolicy(workerPolicy.canUploadDocuments(actor, actor.id));
-    const { document_type, file_extension } = req.body;
-    const result = await workerService.requestUploadUrl(actor.id, document_type, file_extension);
+    const { document_type, file_extension, mime_type } = req.body;
+    const result = await workerService.requestUploadUrl(actor.id, document_type, file_extension, mime_type);
     res.status(200).json({ success: true, data: result });
   } catch (error: any) {
     handleWorkerError(error, req, res);

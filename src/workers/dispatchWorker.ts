@@ -227,6 +227,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
   // 4. PERSISTENCE FIRST: Write dispatch_wave and job_dispatch rows
   // Database unique constraints backstop against concurrency races
   let createdWave: any = null;
+  let outboxCommitted = false;
 
   const executeWrites = async (client: any) => {
     createdWave = await client.dispatch_wave.create({
@@ -253,7 +254,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
       skipDuplicates: true,
     });
 
-    // Durable Notification Outbox (Issue #44 & P4 Issue 12): Record outbox rows inside the same transaction
+    // Durable Notification Outbox (Issue 10): Record outbox rows inside the same transaction
     if (typeof client.notification_outbox?.createMany === 'function') {
       await client.notification_outbox.createMany({
         data: waveWorkers.map((w) => ({
@@ -279,6 +280,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
         })),
         skipDuplicates: true,
       });
+      outboxCommitted = true;
     }
   };
 
@@ -370,37 +372,45 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
     throw err;
   }
 
-  // 6. DURABLE NOTIFICATION ENQUEUE: enqueue a notification job to deliver FCM and
-  // Socket.IO events to the dispatched workers. This enqueue happens AFTER the DB
-  // transaction has committed and the timeout job has been queued.
-  try {
-    await notificationQueue.add(
-      DISPATCH_JOB_NAMES.DISPATCH_NOTIFY,
-      {
-        type: 'dispatch-notify' as const,
-        operationId,
-        requirementId,
-        jobId,
-        waveNumber,
-        expiresAt: expiresAt.toISOString(),
-        workers: waveWorkers.map((w) => ({ id: w.id })),
-        skillType: req.skill_type,
-        ratePerDay: req.rate_per_day,
-        location: req.job.location ?? null,
-        customerName: req.job.customer.name,
-      },
-      {
-        jobId: `notify:${requirementId}:wave-${waveNumber}`,
-        attempts: 5,
-        backoff: { type: 'exponential', delay: 2000 },
-      },
+  // 6. SINGLE DURABLE NOTIFICATION PIPELINE (Issue 10):
+  // Direct notification enqueue paths are ABSENT where outbox delivery is authoritative.
+  // The business transaction committed durable notification_outbox rows which outboxWorker delivers.
+  // We only fall back to direct notificationQueue.add in test environments where notification_outbox is absent.
+  if (!outboxCommitted) {
+    try {
+      await notificationQueue.add(
+        DISPATCH_JOB_NAMES.DISPATCH_NOTIFY,
+        {
+          type: 'dispatch-notify' as const,
+          operationId,
+          requirementId,
+          jobId,
+          waveNumber,
+          expiresAt: expiresAt.toISOString(),
+          workers: waveWorkers.map((w) => ({ id: w.id })),
+          skillType: req.skill_type,
+          ratePerDay: req.rate_per_day,
+          location: req.job.location ?? null,
+          customerName: req.job.customer.name,
+        },
+        {
+          jobId: `notify:${requirementId}:wave-${waveNumber}`,
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 2000 },
+        },
+      );
+    } catch (err: any) {
+      logger.error(
+        `[dispatchWorker] Failed to enqueue notification job for requirement ${requirementId} wave ${waveNumber}:`,
+        { error: err?.message },
+      );
+      throw err;
+    }
+  } else {
+    logger.info(
+      `[dispatchWorker] Wave ${waveNumber} (operation ${operationId}) persisted with ${waveWorkers.length} durable notification outbox event(s). Direct BullMQ enqueue bypassed in favor of authoritative durable outbox pipeline.`,
+      { requirementId, waveNumber, workerCount: waveWorkers.length },
     );
-  } catch (err: any) {
-    logger.error(
-      `[dispatchWorker] Failed to enqueue notification job for requirement ${requirementId} wave ${waveNumber}:`,
-      { error: err?.message },
-    );
-    throw err;
   }
 
   logger.info(

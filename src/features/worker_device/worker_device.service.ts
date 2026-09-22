@@ -20,10 +20,9 @@ export class WorkerDeviceService {
     payload: RegisterWorkerDeviceReq,
   ): Promise<WorkerDeviceDTO> {
     const rawDeviceId = payload.device_id && payload.device_id.trim();
-    // Stable device identity fallback if client omitted device_id (legacy mobile clients)
-    const deviceId =
-      rawDeviceId ||
-      crypto.createHash("sha256").update(payload.device_token).digest("hex").slice(0, 32);
+    // Issue 9: Stable device identity. FCM token rotation must NEVER create a new logical device.
+    // If client omitted device_id (legacy client), use deterministic per-worker fallback.
+    const deviceId = rawDeviceId || `legacy_${workerId}_default`;
 
     const platform = payload.platform || "android";
     const now = new Date();
@@ -53,15 +52,6 @@ export class WorkerDeviceService {
         updated_at: now,
       },
     });
-
-    // Best-effort legacy field sync for DB backward compatibility
-    await prisma.worker
-      .update({
-        where: { id: workerId },
-        data: { device_token: payload.device_token },
-        select: { id: true },
-      })
-      .catch(() => {});
 
     return toWorkerDeviceDTO(device)!;
   }

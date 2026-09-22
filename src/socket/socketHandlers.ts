@@ -9,13 +9,15 @@ import {
   SocketAckResponse,
 } from "./socketTypes";
 import { chatService } from "../features/chat/chatServices";
-import { chatPolicy, AuthorizationError } from "../policies";
+import { chatPolicy, jobPolicy, requirementPolicy, AuthorizationError } from "../policies";
 import { toChatMessageDTO } from "../shared/prismaSelects";
 import {
   getBookingChatRoom,
   getWorkerPersonalRoom,
   getCustomerPersonalRoom,
   getAdminPersonalRoom,
+  getJobRoom,
+  getRequirementRoom,
 } from "./roomHelpers";
 import { isValidIdentifier } from "../schemas";
 import { setSocketServer } from "./socketLifecycle";
@@ -367,6 +369,149 @@ export function registerSocketHandlers(io: Server): void {
 
     socket.on("join:booking", handleJoinBooking);
     socket.on("join:chat", handleJoinBooking);
+
+    // ========================================================================
+    // Secure "join:job" Handler (Issue 6)
+    // Enforces database-backed relationship authorization using jobPolicy.scopeRead
+    // ========================================================================
+    socket.on("join:job", async (payload: { jobId?: string } | string, callback?: (res: SocketAckResponse) => void) => {
+      try {
+        const jobId = typeof payload === "string" ? payload : payload?.jobId;
+        if (!jobId || typeof jobId !== "string" || !isValidIdentifier(jobId)) {
+          const response: SocketAckResponse = {
+            success: false,
+            code: "INVALID_REQUEST",
+            message: "Valid jobId is required",
+          };
+          socket.emit("error", response);
+          callback?.(response);
+          return;
+        }
+
+        let job: any = null;
+        if (prisma.job?.findFirst) {
+          job = await prisma.job.findFirst({
+            where: jobPolicy.scopeRead(user, jobId),
+            select: { id: true, customer_id: true },
+          });
+        }
+
+        if (!job && prisma.job?.findUnique) {
+          const rawJob = await prisma.job.findUnique({
+            where: { id: jobId },
+            include: {
+              booking: { select: { worker_id: true } },
+              job_requirement: { include: { job_dispatch: { select: { worker_id: true } } } },
+            },
+          });
+          if (rawJob) {
+            const decision = jobPolicy.canRead(user, rawJob as any);
+            if (!decision.allowed) {
+              logger.warn(`[SOCKET_SECURITY] Unauthorized job join attempt by user ${user.id}`, { userId: user.id, jobId });
+              const response: SocketAckResponse = {
+                success: false,
+                code: decision.code || "FORBIDDEN",
+                message: decision.reason || "Forbidden: Not authorized to access this job",
+              };
+              socket.emit("error", response);
+              callback?.(response);
+              return;
+            }
+            job = rawJob;
+          }
+        }
+
+        if (!job) {
+          const response: SocketAckResponse = {
+            success: false,
+            code: "RESOURCE_NOT_FOUND",
+            message: "Job not found",
+          };
+          socket.emit("error", response);
+          callback?.(response);
+          return;
+        }
+
+        const roomName = getJobRoom(jobId);
+        socket.join(roomName);
+        callback?.({ success: true, message: `Joined job room: ${roomName}` });
+      } catch (err: any) {
+        logger.error(`[SOCKET] Error processing join:job:`, { userId: user.id, error: err?.message });
+        callback?.({ success: false, code: "INTERNAL_ERROR", message: "Failed to join job room" });
+      }
+    });
+
+    // ========================================================================
+    // Secure "join:requirement" Handler (Issue 6)
+    // Enforces database-backed relationship authorization using requirementPolicy.scopeRead
+    // ========================================================================
+    socket.on("join:requirement", async (payload: { requirementId?: string } | string, callback?: (res: SocketAckResponse) => void) => {
+      try {
+        const requirementId = typeof payload === "string" ? payload : payload?.requirementId;
+        if (!requirementId || typeof requirementId !== "string" || !isValidIdentifier(requirementId)) {
+          const response: SocketAckResponse = {
+            success: false,
+            code: "INVALID_REQUEST",
+            message: "Valid requirementId is required",
+          };
+          socket.emit("error", response);
+          callback?.(response);
+          return;
+        }
+
+        let requirement: any = null;
+        if (prisma.job_requirement?.findFirst) {
+          requirement = await prisma.job_requirement.findFirst({
+            where: requirementPolicy.scopeRead(user, requirementId),
+            select: { id: true, job_id: true },
+          });
+        }
+
+        if (!requirement && prisma.job_requirement?.findUnique) {
+          const rawReq = await prisma.job_requirement.findUnique({
+            where: { id: requirementId },
+            include: {
+              job: { select: { customer_id: true } },
+              job_dispatch: { select: { worker_id: true } },
+              booking: { select: { worker_id: true } },
+            },
+          });
+          if (rawReq) {
+            const decision = requirementPolicy.canRead(user, rawReq as any);
+            if (!decision.allowed) {
+              logger.warn(`[SOCKET_SECURITY] Unauthorized requirement join attempt by user ${user.id}`, { userId: user.id, requirementId });
+              const response: SocketAckResponse = {
+                success: false,
+                code: decision.code || "FORBIDDEN",
+                message: decision.reason || "Forbidden: Not authorized to access this requirement",
+              };
+              socket.emit("error", response);
+              callback?.(response);
+              return;
+            }
+            requirement = rawReq;
+          }
+        }
+
+        if (!requirement) {
+          const response: SocketAckResponse = {
+            success: false,
+            code: "RESOURCE_NOT_FOUND",
+            message: "Requirement not found",
+          };
+          socket.emit("error", response);
+          callback?.(response);
+          return;
+        }
+
+        const roomName = getRequirementRoom(requirementId);
+        socket.join(roomName);
+        callback?.({ success: true, message: `Joined requirement room: ${roomName}` });
+      } catch (err: any) {
+        logger.error(`[SOCKET] Error processing join:requirement:`, { userId: user.id, error: err?.message });
+        callback?.({ success: false, code: "INTERNAL_ERROR", message: "Failed to join requirement room" });
+      }
+    });
 
     // ========================================================================
     // 6. Secure "chat:message" Handler

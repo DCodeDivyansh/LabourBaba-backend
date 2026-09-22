@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { storageService } from "./storage.service";
+import { storageConfig } from "../../config/storageConfig";
 import { logger } from "../../utils/logger";
 
 export const storageController = {
@@ -78,19 +79,38 @@ export const storageController = {
 
   /**
    * PUT /api/storage/upload/*
-   * Validates presigned upload URL and writes binary data to durable storage.
+   * Validates presigned upload URL, enforces MIME allowlist & file size, and writes binary data to durable storage.
    */
   async uploadObject(req: Request, res: Response): Promise<void> {
     try {
       const rawKey = req.params[0] || (req.params as any).key || "";
       const { exp, sig } = req.query as { exp?: string; sig?: string };
-      const contentType = req.headers["content-type"] || "application/octet-stream";
+      const rawContentType = req.headers["content-type"];
 
       if (!rawKey || !exp || !sig) {
         res.status(403).json({
           success: false,
           code: "STORAGE_SIGNATURE_MISSING",
           message: "Missing signature, key, or expiration parameters.",
+        });
+        return;
+      }
+
+      if (!rawContentType) {
+        res.status(400).json({
+          success: false,
+          code: "STORAGE_MIME_MISSING",
+          message: "Content-Type header is required for document upload.",
+        });
+        return;
+      }
+
+      const contentType = rawContentType.split(";")[0].trim().toLowerCase();
+      if (!storageConfig.allowedMimeTypes.includes(contentType)) {
+        res.status(415).json({
+          success: false,
+          code: "STORAGE_MIME_UNSUPPORTED",
+          message: `MIME type '${contentType}' is not permitted. Allowed types: ${storageConfig.allowedMimeTypes.join(", ")}`,
         });
         return;
       }
@@ -102,14 +122,38 @@ export const storageController = {
         res.status(403).json({
           success: false,
           code: "STORAGE_SIGNATURE_INVALID",
-          message: "The upload link is invalid or has expired.",
+          message: "The upload link is invalid, expired, or does not match the content type.",
         });
         return;
       }
 
       // Read binary buffer
       const rawBody = (req as any).rawBody || req.body;
-      const data = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody || "");
+      const data = Buffer.isBuffer(rawBody)
+        ? rawBody
+        : typeof rawBody === "string"
+        ? Buffer.from(rawBody)
+        : Buffer.isBuffer(req.body)
+        ? req.body
+        : Buffer.from("");
+
+      if (data.length === 0) {
+        res.status(400).json({
+          success: false,
+          code: "STORAGE_EMPTY_PAYLOAD",
+          message: "Upload payload cannot be empty.",
+        });
+        return;
+      }
+
+      if (data.length > storageConfig.maxSizeBytes) {
+        res.status(413).json({
+          success: false,
+          code: "STORAGE_PAYLOAD_TOO_LARGE",
+          message: `File size (${data.length} bytes) exceeds maximum permitted limit (${storageConfig.maxSizeBytes} bytes).`,
+        });
+        return;
+      }
 
       await storageService.putObject(key, data, contentType);
 
@@ -119,6 +163,7 @@ export const storageController = {
         data: {
           key,
           size: data.length,
+          contentType,
         },
       });
     } catch (err: any) {
