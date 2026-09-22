@@ -229,8 +229,10 @@ registry.registerPath({
   },
 });
 
-router.post("/registerWorker", validateBody(CreateWorkerReqSchema), registerWorker);
-router.post("/login", validateBody(LoginWorkerReqSchema), loginWorker);
+import { authEndpointRateLimiter } from "../../middlewares/rateLimiter";
+
+router.post("/registerWorker", authEndpointRateLimiter, validateBody(CreateWorkerReqSchema), registerWorker);
+router.post("/login", authEndpointRateLimiter, validateBody(LoginWorkerReqSchema), loginWorker);
 router.get("/me", authenticateJWT, requireRole(UserRole.WORKER), getMe);
 router.patch("/me", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UpdateWorkerProfileReqSchema), updateMe);
 router.patch("/me/location", authenticateJWT, requireRole(UserRole.WORKER), validateBody(UpdateWorkerLocationReqSchema), updateLocation);

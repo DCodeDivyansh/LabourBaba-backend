@@ -1,79 +1,14 @@
 import { Request, Response, NextFunction } from "express";
-import crypto from "crypto";
-import { redis } from "../config/redis";
 import { normalizePhoneToE164 } from "../utils/authUtils";
 import { authConfig } from "../config/authConfig";
+import {
+  incrementRateLimit,
+  hashIdentifier,
+  resetAllMemoryRateLimiters,
+  enableTestMemoryFallback,
+} from "./rateLimiter";
 
-interface MemoryRateLimitRecord {
-  count: number;
-  resetAt: number;
-}
-
-const memoryStore = new Map<string, MemoryRateLimitRecord>();
-
-/**
- * Hashes sensitive identifiers using SHA-256 to ensure rate limiter keys
- * do not leak plaintext PII (phone numbers, IP addresses, device IDs) into Redis logs or stores.
- */
-export function hashIdentifier(val: string): string {
-  return crypto.createHash("sha256").update(val).digest("hex").slice(0, 16);
-}
-
-/**
- * Atomic rate limiting increment with window expiration and memory fallback.
- */
-async function incrementRateLimit(
-  key: string,
-  maxLimit: number,
-  windowSeconds: number
-): Promise<{ allowed: boolean; remaining: number }> {
-  // If in test environment or Redis token is absent, use in-memory store
-  const isTest = process.env.NODE_ENV === "test";
-  const hasRedisToken = Boolean(process.env.REDIS_TOKEN);
-
-  if (isTest || !hasRedisToken) {
-    const now = Date.now();
-    const existing = memoryStore.get(key);
-
-    if (!existing || existing.resetAt <= now) {
-      memoryStore.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
-      return { allowed: true, remaining: maxLimit - 1 };
-    }
-
-    if (existing.count >= maxLimit) {
-      return { allowed: false, remaining: 0 };
-    }
-
-    existing.count += 1;
-    return { allowed: true, remaining: maxLimit - existing.count };
-  }
-
-  // Production Redis-backed rate limiting using atomic incr + expire
-  try {
-    const count = await redis.incr(key);
-    if (count === 1) {
-      await redis.expire(key, windowSeconds);
-    }
-    if (count > maxLimit) {
-      return { allowed: false, remaining: 0 };
-    }
-    return { allowed: true, remaining: maxLimit - count };
-  } catch (err) {
-    console.warn(`[RATE_LIMIT] Redis check failed for key ${key}, falling back to memory:`, err);
-    // Graceful fallback to memory on transient Redis error
-    const now = Date.now();
-    const existing = memoryStore.get(key);
-    if (!existing || existing.resetAt <= now) {
-      memoryStore.set(key, { count: 1, resetAt: now + windowSeconds * 1000 });
-      return { allowed: true, remaining: maxLimit - 1 };
-    }
-    if (existing.count >= maxLimit) {
-      return { allowed: false, remaining: 0 };
-    }
-    existing.count += 1;
-    return { allowed: true, remaining: maxLimit - existing.count };
-  }
-}
+export { hashIdentifier };
 
 function safeNormalizePhone(rawPhone?: string): string | null {
   if (!rawPhone || typeof rawPhone !== "string") return null;
@@ -101,6 +36,9 @@ function extractDeviceId(req: Request): string | null {
  * - IP limit: 10 requests per 15 minutes
  * - Phone limit: 5 requests per 15 minutes
  * - Device limit: 5 requests per 15 minutes (if device_id provided)
+ *
+ * Security Invariant: FAIL CLOSED.
+ * When Redis is down/unavailable, requests are rejected with 503 to prevent brute-force attacks across instances.
  */
 export async function otpRequestRateLimiter(req: Request, res: Response, next: NextFunction): Promise<void> {
   const ip = req.ip || req.socket.remoteAddress || "unknown_ip";
@@ -111,9 +49,24 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
 
   // 1. IP rate limit check
   const ipKey = `ratelimit:otp:req:ip:${hashIdentifier(ip)}`;
-  const ipResult = await incrementRateLimit(ipKey, authConfig.otpMaxRequestsPerIp, windowSeconds);
+  const ipResult = await incrementRateLimit(ipKey, authConfig.otpMaxRequestsPerIp, windowSeconds, "fail_closed");
   if (!ipResult.allowed) {
-    res.setHeader("Retry-After", String(windowSeconds));
+    if (ipResult.status === "unavailable") {
+      res.setHeader("Retry-After", String(ipResult.resetAfterSeconds));
+      res.status(503).json({
+        success: false,
+        code: "SECURITY_LIMITER_UNAVAILABLE",
+        message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+        error: {
+          code: "SECURITY_LIMITER_UNAVAILABLE",
+          message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+          request_id: (req as any).id,
+        },
+      });
+      return;
+    }
+
+    res.setHeader("Retry-After", String(ipResult.resetAfterSeconds));
     res.status(429).json({
       success: false,
       code: "OTP_RATE_LIMITED",
@@ -121,7 +74,7 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
       error: {
         code: "OTP_RATE_LIMITED",
         message: "Too many OTP requests from this IP. Please try again later.",
-        request_id: req.id,
+        request_id: (req as any).id,
       },
     });
     return;
@@ -130,9 +83,24 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
   // 2. Phone rate limit check (if phone provided and valid)
   if (phone) {
     const phoneKey = `ratelimit:otp:req:phone:${hashIdentifier(phone)}`;
-    const phoneResult = await incrementRateLimit(phoneKey, authConfig.otpMaxRequestsPerPhone, windowSeconds);
+    const phoneResult = await incrementRateLimit(phoneKey, authConfig.otpMaxRequestsPerPhone, windowSeconds, "fail_closed");
     if (!phoneResult.allowed) {
-      res.setHeader("Retry-After", String(windowSeconds));
+      if (phoneResult.status === "unavailable") {
+        res.setHeader("Retry-After", String(phoneResult.resetAfterSeconds));
+        res.status(503).json({
+          success: false,
+          code: "SECURITY_LIMITER_UNAVAILABLE",
+          message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+          error: {
+            code: "SECURITY_LIMITER_UNAVAILABLE",
+            message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+            request_id: (req as any).id,
+          },
+        });
+        return;
+      }
+
+      res.setHeader("Retry-After", String(phoneResult.resetAfterSeconds));
       res.status(429).json({
         success: false,
         code: "OTP_RATE_LIMITED",
@@ -140,7 +108,7 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
         error: {
           code: "OTP_RATE_LIMITED",
           message: "Too many OTP requests for this phone number. Please wait before requesting another.",
-          request_id: req.id,
+          request_id: (req as any).id,
         },
       });
       return;
@@ -150,8 +118,23 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
   // 3. Device rate limit check (if device ID provided)
   if (deviceId) {
     const deviceKey = `ratelimit:otp:req:device:${hashIdentifier(deviceId)}`;
-    const deviceResult = await incrementRateLimit(deviceKey, authConfig.otpMaxRequestsPerDevice, windowSeconds);
+    const deviceResult = await incrementRateLimit(deviceKey, authConfig.otpMaxRequestsPerDevice, windowSeconds, "fail_closed");
     if (!deviceResult.allowed) {
+      if (deviceResult.status === "unavailable") {
+        res.setHeader("Retry-After", String(deviceResult.resetAfterSeconds));
+        res.status(503).json({
+          success: false,
+          code: "SECURITY_LIMITER_UNAVAILABLE",
+          message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+          error: {
+            code: "SECURITY_LIMITER_UNAVAILABLE",
+            message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+            request_id: (req as any).id,
+          },
+        });
+        return;
+      }
+
       res.setHeader("Retry-After", String(windowSeconds));
       res.status(429).json({
         success: false,
@@ -160,7 +143,7 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
         error: {
           code: "OTP_RATE_LIMITED",
           message: "Too many OTP requests from this device. Please wait before requesting another.",
-          request_id: req.id,
+          request_id: (req as any).id,
         },
       });
       return;
@@ -175,6 +158,9 @@ export async function otpRequestRateLimiter(req: Request, res: Response, next: N
  * - IP limit: 15 attempts per 15 minutes
  * - Phone limit: 10 attempts per 15 minutes
  * - Device limit: 10 attempts per 15 minutes (if device_id provided)
+ *
+ * Security Invariant: FAIL CLOSED.
+ * When Redis is down/unavailable, requests are rejected with 503 to prevent brute-force attacks across instances.
  */
 export async function otpVerifyRateLimiter(req: Request, res: Response, next: NextFunction): Promise<void> {
   const ip = req.ip || req.socket.remoteAddress || "unknown_ip";
@@ -185,9 +171,24 @@ export async function otpVerifyRateLimiter(req: Request, res: Response, next: Ne
 
   // 1. IP rate limit check
   const ipKey = `ratelimit:otp:verify:ip:${hashIdentifier(ip)}`;
-  const ipResult = await incrementRateLimit(ipKey, authConfig.otpMaxVerifyAttemptsPerIp, windowSeconds);
+  const ipResult = await incrementRateLimit(ipKey, authConfig.otpMaxVerifyAttemptsPerIp, windowSeconds, "fail_closed");
   if (!ipResult.allowed) {
-    res.setHeader("Retry-After", String(windowSeconds));
+    if (ipResult.status === "unavailable") {
+      res.setHeader("Retry-After", String(ipResult.resetAfterSeconds));
+      res.status(503).json({
+        success: false,
+        code: "SECURITY_LIMITER_UNAVAILABLE",
+        message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+        error: {
+          code: "SECURITY_LIMITER_UNAVAILABLE",
+          message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+          request_id: (req as any).id,
+        },
+      });
+      return;
+    }
+
+    res.setHeader("Retry-After", String(ipResult.resetAfterSeconds));
     res.status(429).json({
       success: false,
       code: "OTP_RATE_LIMITED",
@@ -195,7 +196,7 @@ export async function otpVerifyRateLimiter(req: Request, res: Response, next: Ne
       error: {
         code: "OTP_RATE_LIMITED",
         message: "Too many verification attempts from this IP. Please try again later.",
-        request_id: req.id,
+        request_id: (req as any).id,
       },
     });
     return;
@@ -204,9 +205,24 @@ export async function otpVerifyRateLimiter(req: Request, res: Response, next: Ne
   // 2. Phone rate limit check
   if (phone) {
     const phoneKey = `ratelimit:otp:verify:phone:${hashIdentifier(phone)}`;
-    const phoneResult = await incrementRateLimit(phoneKey, authConfig.otpMaxVerifyAttemptsPerPhone, windowSeconds);
+    const phoneResult = await incrementRateLimit(phoneKey, authConfig.otpMaxVerifyAttemptsPerPhone, windowSeconds, "fail_closed");
     if (!phoneResult.allowed) {
-      res.setHeader("Retry-After", String(windowSeconds));
+      if (phoneResult.status === "unavailable") {
+        res.setHeader("Retry-After", String(phoneResult.resetAfterSeconds));
+        res.status(503).json({
+          success: false,
+          code: "SECURITY_LIMITER_UNAVAILABLE",
+          message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+          error: {
+            code: "SECURITY_LIMITER_UNAVAILABLE",
+            message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+            request_id: (req as any).id,
+          },
+        });
+        return;
+      }
+
+      res.setHeader("Retry-After", String(phoneResult.resetAfterSeconds));
       res.status(429).json({
         success: false,
         code: "OTP_RATE_LIMITED",
@@ -214,7 +230,7 @@ export async function otpVerifyRateLimiter(req: Request, res: Response, next: Ne
         error: {
           code: "OTP_RATE_LIMITED",
           message: "Too many verification attempts for this phone number. Please try again later.",
-          request_id: req.id,
+          request_id: (req as any).id,
         },
       });
       return;
@@ -224,9 +240,24 @@ export async function otpVerifyRateLimiter(req: Request, res: Response, next: Ne
   // 3. Device rate limit check
   if (deviceId) {
     const deviceKey = `ratelimit:otp:verify:device:${hashIdentifier(deviceId)}`;
-    const deviceResult = await incrementRateLimit(deviceKey, authConfig.otpMaxVerifyAttemptsPerDevice, windowSeconds);
+    const deviceResult = await incrementRateLimit(deviceKey, authConfig.otpMaxVerifyAttemptsPerDevice, windowSeconds, "fail_closed");
     if (!deviceResult.allowed) {
-      res.setHeader("Retry-After", String(windowSeconds));
+      if (deviceResult.status === "unavailable") {
+        res.setHeader("Retry-After", String(deviceResult.resetAfterSeconds));
+        res.status(503).json({
+          success: false,
+          code: "SECURITY_LIMITER_UNAVAILABLE",
+          message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+          error: {
+            code: "SECURITY_LIMITER_UNAVAILABLE",
+            message: "Authentication service is temporarily unavailable. Please try again in a few moments.",
+            request_id: (req as any).id,
+          },
+        });
+        return;
+      }
+
+      res.setHeader("Retry-After", String(deviceResult.resetAfterSeconds));
       res.status(429).json({
         success: false,
         code: "OTP_RATE_LIMITED",
@@ -234,7 +265,7 @@ export async function otpVerifyRateLimiter(req: Request, res: Response, next: Ne
         error: {
           code: "OTP_RATE_LIMITED",
           message: "Too many verification attempts from this device. Please try again later.",
-          request_id: req.id,
+          request_id: (req as any).id,
         },
       });
       return;
@@ -245,6 +276,8 @@ export async function otpVerifyRateLimiter(req: Request, res: Response, next: Ne
 }
 
 export function resetMemoryRateLimiter(): void {
-  memoryStore.clear();
+  resetAllMemoryRateLimiters();
+  enableTestMemoryFallback(true);
 }
+
 

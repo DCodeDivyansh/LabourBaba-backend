@@ -152,11 +152,13 @@ registry.registerPath({
   },
 });
 
+import { authEndpointRateLimiter } from "../../middlewares/rateLimiter";
+
 // Express route mappings
 clientRoute.get("/", authenticateJWT, getClient);
 clientRoute.post("/add", authenticateJWT, validateBody(CreateCustomerReqSchema), postClient);
-clientRoute.post("/signup", validateBody(SignupCustomerReqSchema), signupCustomer);
-clientRoute.post("/login", validateBody(LoginCustomerReqSchema), loginCustomer);
+clientRoute.post("/signup", authEndpointRateLimiter, validateBody(SignupCustomerReqSchema), signupCustomer);
+clientRoute.post("/login", authEndpointRateLimiter, validateBody(LoginCustomerReqSchema), loginCustomer);
 clientRoute.get(
   "/me",
   authenticateJWT,
