@@ -129,6 +129,22 @@ export async function createDatabaseBackup(options?: {
 
   const sizeBytes = fs.statSync(backupFilePath).size;
   const durationMs = Date.now() - startTime;
+  const timestampSeconds = Math.floor(startTime / 1000);
+
+  // Write metadata file for metrics collection
+  const metadataPath = path.join(backupDir, "latest_backup_metadata.json");
+  fs.writeFileSync(
+    metadataPath,
+    JSON.stringify({
+      timestampSeconds,
+      timestamp,
+      backupPath: backupFilePath,
+      checksum,
+      sizeBytes,
+      durationMs,
+    }, null, 2),
+    "utf-8"
+  );
 
   return {
     backupPath: backupFilePath,

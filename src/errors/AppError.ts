@@ -66,8 +66,11 @@ export class ValidationError extends AppError {
   public readonly errors?: any;
   public readonly details?: any;
 
-  constructor(message: string = 'Validation failed', errors?: any) {
-    super(message, 400, ErrorCode.VALIDATION_ERROR);
+  constructor(message: string = 'Validation failed', errorsOrCode?: any, code: string = ErrorCode.VALIDATION_ERROR) {
+    const isCode = typeof errorsOrCode === 'string';
+    const errCode = isCode ? errorsOrCode : code;
+    const errors = isCode ? undefined : errorsOrCode;
+    super(message, 400, errCode);
     this.errors = errors;
     this.details = errors;
   }

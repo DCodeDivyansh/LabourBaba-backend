@@ -628,6 +628,19 @@ export class MetricsService {
    * Returns Prometheus exposition text output for scraping.
    */
   async formatPrometheus(): Promise<string> {
+    try {
+      const fs = await import("fs");
+      const path = await import("path");
+      const metadataPath = path.resolve(process.cwd(), "backups", "latest_backup_metadata.json");
+      if (fs.existsSync(metadataPath)) {
+        const data = JSON.parse(fs.readFileSync(metadataPath, "utf-8"));
+        if (data && typeof data.timestampSeconds === "number") {
+          this.backupLastSuccessfulTimestampSeconds.set(data.timestampSeconds);
+        }
+      }
+    } catch {
+      // Non-blocking fallback
+    }
     return await this.registry.metrics();
   }
 

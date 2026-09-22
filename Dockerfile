@@ -52,8 +52,8 @@ USER nodejs
 EXPOSE 5000
 
 # Health check using the dependency-aware application /health/ready endpoint
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:5000/health/ready || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:5000/health/ready', (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1))"
 
 # Start production API server
 CMD ["node", "dist/server.js"]
