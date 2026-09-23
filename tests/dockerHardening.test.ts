@@ -50,6 +50,10 @@ describe('Issue #35: Docker Hardening & Multi-Stage Configuration', () => {
     expect(dockerignore).toContain('tests');
     expect(dockerignore).toContain('docs');
     expect(dockerignore).toContain('scratch');
+    expect(dockerignore).toContain('backups/');
+    expect(dockerignore).toContain('*.dump');
+    expect(dockerignore).toContain('*.backup');
+    expect(dockerignore).toContain('*.bak');
   });
 
   test('docker-compose pins database image to PostGIS compatible version', () => {

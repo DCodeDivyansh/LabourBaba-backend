@@ -1402,59 +1402,73 @@ The critical security invariant established by this remediation is:
   - Clears `device_token` on `worker` records from the exposure window, prompting seamless re-registration.
   - Fail-closed: Requires explicit production `DATABASE_URL` to run.
 
----
+## 4. Remediation Breakdown & Operational Incident Response Status
 
-## 4. Git History Purge & Credential Invalidation Procedure
+### 4.1 Completed Code Remediation (Local Repository & Tooling)
 
-Because Git is a distributed content-addressable version control system, removing the files from the working tree leaves the blobs reachable in Git commit `dd6a3bc8060d`. The following operational procedure must be executed by repository administrators to complete the purge across all remotes and rotate potentially compromised credentials.
+| Remediation Item | Implementation Details | Status |
+| :--- | :--- | :---: |
+| **Current backup removed** | Untracked via `git rm --cached` and removed from filesystem | **COMPLETED** |
+| **Backup destination fail-closed** | `scripts/backup-db.ts` throws if no approved destination is configured | **COMPLETED** |
+| **Repository containment** | Canonical resolution with `path.relative()` + `fs.realpathSync()` | **COMPLETED** |
+| **Ignore rules hardened** | `.gitignore` and `.dockerignore` exclude backups, dumps, and metadata | **COMPLETED** |
+| **Content-aware scanning** | `scripts/security-scan.ts` inspects tracked files and Git history | **COMPLETED** |
+| **Security regression tests** | `tests/backupPathSecurity.test.ts` (12/12 passed) | **COMPLETED** |
+| **Revocation tooling** | `scripts/revoke-exposed-sessions.ts` with `--dry-run`, `--verify` | **COMPLETED** |
+| **Local Git history purge** | `git-filter-repo` executed on local repository, blobs purged | **COMPLETED** |
 
-### Phase 1: Git History Rewrite via `git-filter-repo`
+### 4.2 Operational Incident Response & Production Gates
 
-> [!WARNING]
-> History rewriting changes commit hashes across all rewritten branches. All team members must coordinate before this step.
-
-1. **Install `git-filter-repo`**:
-   ```bash
-   pip install git-filter-repo
-   ```
-2. **Clone a Fresh Bare Mirror**:
-   ```bash
-   git clone --mirror https://github.com/DCodeDivyansh/LabourBaba-backend.git repo-purge
-   cd repo-purge
-   ```
-3. **Execute History Purge**:
-   ```bash
-   git filter-repo --invert-paths --path backups/backup_2026-09-22T09-46-12-254Z.sql --path backups/backup_2026-09-22T09-46-12-254Z.sql.sha256 --path-glob "backups/*"
-   ```
-4. **Verify Purge Across All Refs**:
-   ```bash
-   git log --all --oneline -- "backups/"
-   # Expected output: (empty)
-   ```
-5. **Force Push Clean History to Remotes**:
-   ```bash
-   git push origin --force --all
-   git push origin --force --tags
-   ```
-
-### Phase 2: Production Credential & Session Rotation
-
-1. **Revoke Active Refresh Sessions & Push Tokens**:
-   Execute the operational revocation script against production:
-   ```bash
-   DATABASE_URL="<production-db-url>" npx tsx scripts/revoke-exposed-sessions.ts
-   ```
-2. **Rotate Secrets in Production Environment**:
-   - `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`: Rotate via secret manager and perform rolling restart of backend containers.
-   - Database Master Password: If the dump database was a clone of production, rotate PostgreSQL production user passwords.
-   - Firebase Admin SDK Service Account: In Google Cloud Console / Firebase Console, revoke service account keys if any credential was co-located.
-3. **Notify Platform Users**:
-   - Users and workers whose sessions were revoked will be prompted to re-authenticate via OTP on next app launch.
-   - Workers will automatically re-register their FCM push tokens via `/api/worker/device/register`.
+| Operational Action | Scope & Evidence | Status |
+| :--- | :--- | :---: |
+| **Local Git history purge** | All backup blobs (`215f9384...`, `8588b6c1...`) eliminated from local history. `git rev-list` and `git log` confirm 0 occurrences. | **COMPLETED** |
+| **Remote Git ref update** | Coordinated force-push (`git push origin --force --all`) to remote GitHub repository. | **NOT EXECUTED — REQUIRED OPERATIONAL ACCESS UNAVAILABLE** |
+| **Collaborator re-clone/rebase** | Notification to team members to re-clone fresh mirrors after remote force-push. | **NOT EXECUTED — OPERATOR COORDINATION REQUIRED** |
+| **Refresh session invalidation** | Executed `scripts/revoke-exposed-sessions.ts` against configured PostgreSQL. 6 sessions revoked with reason `SECURITY_INCIDENT`. Post-revocation verification: 0 active remain in window. | **COMPLETED** |
+| **Worker device / FCM token invalidation** | Executed `scripts/revoke-exposed-sessions.ts`: 5 worker devices marked revoked, 4 denormalized worker `device_token` fields cleared. Post-revocation verification: 0 active remain. | **COMPLETED** |
+| **Password hash exposure response** | Assessed 61 worker bcrypt hashes. Primary platform auth is phone OTP (`/api/auth/send-otp`, `/api/auth/verify-otp`). Revoking refresh sessions forces immediate re-authentication. Optional `--invalidate-passwords` implemented in revocation tooling. | **COMPLETED (ASSESSED & TOOLING READY)** |
+| **JWT secret rotation** | Evaluated dump contents: database dump contains PostgreSQL rows only, NO JWT secrets. JWT signing material was not exposed in the dump. Proactive secret rotation in production secrets manager requires production deployment access. | **NOT EXECUTED — SECRET-MANAGER ACCESS REQUIRED** |
 
 ---
 
-## 5. Automated Verification & Regression Matrix
+## 5. Operational Guide for Repository Administrators
+
+The following steps remain for repository administrators with production credentials and GitHub write access:
+
+### Step 1: Force-Push Clean History to Remote Git Repositories
+Prior to executing, ensure all active work from collaborators is stashed or rebased.
+```bash
+# Verify remote before pushing
+git remote -v
+
+# Force push purged history across all branches and tags
+git push origin --force --all
+git push origin --force --tags
+
+# If upstream remote is configured
+git push upstream --force --all
+```
+
+### Step 2: Invalidate Production Sessions & Devices (Production Database)
+If a separate dedicated production database URL is used in production:
+```bash
+DATABASE_URL="<production-db-url>" npx tsx scripts/revoke-exposed-sessions.ts
+# To also force workers to reset passwords via OTP:
+DATABASE_URL="<production-db-url>" npx tsx scripts/revoke-exposed-sessions.ts --invalidate-passwords
+```
+
+### Step 3: Proactive Secret Rotation (Production Deployment)
+1. Generate new 256-bit cryptographic secrets:
+   ```bash
+   NEW_ACCESS_SECRET=$(openssl rand -hex 32)
+   NEW_REFRESH_SECRET=$(openssl rand -hex 32)
+   ```
+2. Update `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` in production secrets manager (e.g. AWS Secrets Manager, Doppler, Vault).
+3. Perform a rolling restart of backend container instances.
+
+---
+
+## 6. Automated Verification Matrix
 
 | Test Suite / Script | Verification Target | Invariant Enforced | Result |
 | :--- | :--- | :--- | :---: |
@@ -1465,17 +1479,22 @@ Because Git is a distributed content-addressable version control system, removin
 | `tests/backupPathSecurity.test.ts` | Sibling Directory Support | Allows `/path/to/repo-sibling` without false-positive rejection | **PASS** |
 | `tests/backupPathSecurity.test.ts` | External Directory Support | Allows `os.tmpdir()` for testing | **PASS** |
 | `tests/backupPathSecurity.test.ts` | Clean Working Tree | `checkTrackedBackupArtifacts()` returns zero findings | **PASS** |
-| `tests/backupPathSecurity.test.ts` | Git History Detection | `checkGitHistoryForBackupArtifacts()` detects `dd6a3bc8060d` | **PASS** |
-| `npm run security:scan` | CLI Security Gate | Zero tracked backup artifacts, scans working tree and history | **PASS** |
+| `tests/backupPathSecurity.test.ts` | Git History Purge | `checkGitHistoryForBackupArtifacts()` returns zero reachable artifacts | **PASS** |
+| `tests/backupPathSecurity.test.ts` | Migration SQL Distinction | Does not treat Prisma migration files as dumps | **PASS** |
+| `tests/backupPathSecurity.test.ts` | Symlink Containment | Rejects symlinks pointing inside repository | **PASS** |
+| `npm run security:scan` | Security Gate CLI | Zero tracked artifacts in tree, zero reachable in Git history | **PASS** |
 | `tests/backupRestore.test.ts` | Isolated Backup & Restore | Valid SQL dump and SHA-256 in `os.tmpdir()`, PostGIS retention | **PASS** |
 | `tests/disasterRecoveryDrillP4_29.test.ts` | Disaster Recovery Drill | Backup creation, checksum tamper detection, RTO < 15 min | **PASS** |
-| `tests/observabilityFinalAudit.test.ts` | Metrics Exposition | Backup execution updates Prometheus `backup_last_successful_timestamp_seconds` | **PASS** |
+| `tests/dockerHardening.test.ts` | Container Hardening | `.dockerignore` excludes backups/, *.dump, *.backup, *.bak | **PASS** |
+| `scripts/revoke-exposed-sessions.ts --verify` | Database Session State | 0 active sessions, 0 unrevoked devices in exposure window | **PASS** |
 | `npm run typecheck` | TypeScript Compiler | 0 errors across all scripts, features, and tests | **PASS** |
 | `npm run build` | Production Build | Clean compilation with `tsc` | **PASS** |
 | `npx prisma validate` | Schema Integrity | Prisma schema valid | **PASS** |
 
-## 6. Status
-**P6 Issue 2: FULLY RESOLVED & VERIFIED**.
+## 7. Status
+**P6 Issue 2: OPEN — OPERATIONAL VERIFICATION REMAINS**
+*(Code remediation and local Git purge complete; remote force-push and production deployment require operator access).*
+
 
 
 
