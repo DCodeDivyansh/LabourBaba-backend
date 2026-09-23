@@ -10,6 +10,7 @@ import { AppError, ValidationError, AuthenticationError, AuthorizationError, Not
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 describe('P3 Issues 16–20 Final Adversarial Evidence Audit', () => {
 
@@ -86,7 +87,7 @@ describe('P3 Issues 16–20 Final Adversarial Evidence Audit', () => {
     });
 
     test('Real database backup execution updates backup_last_successful_timestamp_seconds', async () => {
-      const testBackupDir = path.resolve(process.cwd(), 'scratch', 'test-backup-audit');
+      const testBackupDir = path.join(os.tmpdir(), 'labourbaba-test-backup-audit');
       if (!fs.existsSync(testBackupDir)) {
         fs.mkdirSync(testBackupDir, { recursive: true });
       }

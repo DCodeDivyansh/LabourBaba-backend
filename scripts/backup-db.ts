@@ -27,10 +27,83 @@ export async function createDatabaseBackup(options?: {
     throw new Error("[BACKUP_ERROR] DATABASE_URL is required to perform database backup.");
   }
 
-  const backupDir = options?.backupDir || path.resolve(process.cwd(), "backups");
-  if (!fs.existsSync(backupDir)) {
-    fs.mkdirSync(backupDir, { recursive: true });
+  // ── Backup destination resolution (fail-closed) ───────────────────────────
+  //
+  // SECURITY: Backups must NEVER be written inside the Git repository.
+  //
+  // Resolution order:
+  //   1. options.backupDir (explicit caller override — for tests only)
+  //   2. BACKUP_DEST_DIR environment variable (production configuration)
+  //   3. Fail closed — no default destination
+  //
+  // The production operator must set BACKUP_DEST_DIR to an approved external
+  // storage path (e.g. a mounted volume outside the repo, or an S3-compatible
+  // destination handled by the caller before invoking this function).
+  // Do NOT set BACKUP_DEST_DIR to any path inside the repository root.
+
+  const rawBackupDir = options?.backupDir ?? process.env.BACKUP_DEST_DIR;
+
+  if (!rawBackupDir) {
+    throw new Error(
+      "[BACKUP_SECURITY] No backup destination configured. " +
+      "Set the BACKUP_DEST_DIR environment variable to an approved external path " +
+      "(e.g. a mounted volume outside the repository). " +
+      "Never set BACKUP_DEST_DIR to a path inside the repository. " +
+      "See SECURITY.md for the approved backup workflow."
+    );
   }
+
+  // Resolve the candidate path (following symlinks to defeat symlink attacks).
+  // We create the directory first so realpathSync works on the resolved path.
+  const candidateResolved = path.resolve(rawBackupDir);
+  fs.mkdirSync(candidateResolved, { recursive: true });
+
+  let backupDir: string;
+  try {
+    backupDir = fs.realpathSync(candidateResolved);
+  } catch {
+    backupDir = candidateResolved; // fallback if realpathSync fails (new dir)
+  }
+
+  // Determine the repository root (the directory containing package.json).
+  // Use realpathSync to resolve any symlinks in the repo path as well.
+  let repoRoot: string;
+  try {
+    repoRoot = fs.realpathSync(path.resolve(__dirname, ".."));
+  } catch {
+    repoRoot = path.resolve(__dirname, "..");
+  }
+
+  // ── Repository containment check using path.relative() ────────────────────
+  //
+  // path.relative(repoRoot, backupDir) returns:
+  //   ''                → backupDir IS the repo root (REJECT)
+  //   'some/subdir'     → backupDir is INSIDE the repo (REJECT)
+  //   '../sibling'      → backupDir is a sibling dir — OK
+  //   '/absolute/other' → only on Windows if different drive — OK
+  //
+  // This correctly handles:
+  //   - /repo/backups   → relative = 'backups'    → no leading '..' → REJECT
+  //   - /repo2          → relative = '../repo2'   → starts with '..' → OK
+  //   - /repo           → relative = ''            → is root          → REJECT
+  //   - ../traversal    → resolves before check   → handled by resolve()
+  //   - symlinks        → resolved by realpathSync above
+
+  const relative = path.relative(repoRoot, backupDir);
+  const isInsideRepo =
+    relative === "" || // IS the repo root
+    (!relative.startsWith("..") && !path.isAbsolute(relative)); // is a descendant
+
+  if (isInsideRepo) {
+    throw new Error(
+      `[BACKUP_SECURITY] Backup destination '${backupDir}' is inside or is the ` +
+      `repository root ('${repoRoot}'). ` +
+      "Backups must be written to an external storage path outside the repository. " +
+      "Set BACKUP_DEST_DIR to an approved external destination. " +
+      "See SECURITY.md for the approved backup workflow."
+    );
+  }
+
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const backupFileName = `backup_${timestamp}.sql`;

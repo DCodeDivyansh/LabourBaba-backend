@@ -12,6 +12,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import os from "os";
 // @ts-ignore
 const yaml = require("js-yaml");
 import prisma from "../src/config/prisma";
@@ -33,7 +34,7 @@ describe("LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Su
   let testBackupDir: string;
 
   beforeAll(async () => {
-    testBackupDir = path.resolve(process.cwd(), "scratch", `p5-backups-${runId}`);
+    testBackupDir = path.join(os.tmpdir(), `p5-backups-${runId}`);
     if (!fs.existsSync(testBackupDir)) {
       fs.mkdirSync(testBackupDir, { recursive: true });
     }

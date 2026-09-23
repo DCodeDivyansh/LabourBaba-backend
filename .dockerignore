@@ -19,3 +19,11 @@ scratch
 *.html
 labourbaba-*-firebase-adminsdk-*.json
 skills-lock.json
+
+# --- Database Backup Artifacts (P6 Issue 2) ---
+# Prevent backup dumps from entering the Docker build context.
+backups/
+*.dump
+*.backup
+*.bak
+latest_backup_metadata.json

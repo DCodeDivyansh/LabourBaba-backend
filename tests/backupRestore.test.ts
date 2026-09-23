@@ -1,11 +1,12 @@
 import fs from "fs";
 import path from "path";
+import os from "os";
 import { createDatabaseBackup } from "../scripts/backup-db";
 import { restoreAndVerifyDatabase } from "../scripts/restore-db";
 
 describe("Issue 50 - Database Backup & Disaster Recovery Verification", () => {
   jest.setTimeout(30000);
-  const testBackupDir = path.resolve(process.cwd(), "scratch", "test-backups");
+  const testBackupDir = path.join(os.tmpdir(), "labourbaba-test-backups");
 
   beforeAll(() => {
     if (!fs.existsSync(testBackupDir)) {

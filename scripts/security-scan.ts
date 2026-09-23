@@ -1,5 +1,5 @@
 /**
- * Automated Production Security, Supply-Chain & Container Hardening Scanner (P4 Issue 21)
+ * Automated Production Security, Supply-Chain & Container Hardening Scanner (P4 Issue 21 / P6 Issue 2)
  *
  * Enforces:
  * 1. Hardcoded private keys, JWT secrets, and high-entropy credentials.
@@ -7,7 +7,16 @@
  * 3. Unsafe error.message leaks in controller responses.
  * 4. Lockfile dependency vulnerability audit (npm audit / OSV model) with explicit security exception governance.
  * 5. Production Dockerfile container hardening (non-root execution, readiness probe).
- * 6. Generates auditable JSON report in reports/security-audit-report.json.
+ * 6. Tracked backup artifact detection (git ls-files + content heuristics).
+ * 7. Git history scan for backup artifacts across all refs.
+ * 8. Generates auditable JSON report in reports/security-audit-report.json.
+ *
+ * P6 Issue 2 additions (checks 6 & 7):
+ *   checkTrackedBackupArtifacts() — detects committed dumps using git ls-files + content heuristics.
+ *     For .sql files: distinguishes database dumps from legitimate Prisma migration SQL by inspecting
+ *     path (must be under prisma/migrations/) AND content markers (INSERT INTO, pg_dump headers, etc.).
+ *     This prevents false-positives from future legitimate SQL source files outside migrations.
+ *   checkGitHistoryForBackupArtifacts() — scans ALL refs (not only main) for backup-pattern paths.
  */
 
 import { readFileSync, readdirSync, statSync, existsSync, mkdirSync, writeFileSync } from "fs";
@@ -221,10 +230,18 @@ export interface DockerfileAuditSummary {
   isHardened: boolean;
 }
 
+export interface BackupArtifactFinding {
+  file: string;
+  source: "tracked-working-tree" | "git-history";
+  reason: string;
+  ref?: string;
+}
+
 export interface SecurityAuditReport {
   timestamp: string;
   status: "PASS" | "FAIL";
   secretFindings: ScanFinding[];
+  backupArtifactFindings: BackupArtifactFinding[];
   dependencyAudit: DependencyAuditSummary;
   dockerfileAudit: DockerfileAuditSummary;
   errors: string[];
@@ -438,6 +455,143 @@ export function scanDockerfileHardening(): DockerfileAuditSummary {
   };
 }
 
+/**
+ * Checks currently tracked files (via git ls-files) for backup artifacts.
+ * For .sql files, uses content heuristics to distinguish database dumps from
+ * legitimate Prisma migration SQL files — does NOT flag by extension alone.
+ */
+export function checkTrackedBackupArtifacts(): BackupArtifactFinding[] {
+  const findings: BackupArtifactFinding[] = [];
+
+  let trackedFiles: string[];
+  try {
+    const output = execSync("git ls-files", { cwd: ROOT_DIR, encoding: "utf-8" });
+    trackedFiles = output.split("\n").filter(Boolean);
+  } catch {
+    // git not available in this environment — skip
+    return [];
+  }
+
+  // Patterns that are unconditionally forbidden (by path/name) regardless of content:
+  const forbiddenPathPatterns = [
+    /^backups\//i,          // backups/ directory
+    /\.dump$/i,            // *.dump
+    /\.backup$/i,          // *.backup
+    /\.bak$/i,             // *.bak
+    /^backup_.*\.sql$/i,   // backup_TIMESTAMP.sql anywhere at root
+  ];
+
+  // SQL-specific heuristic: dump markers that distinguish a database export
+  // from a legitimate migration SQL file.
+  // We flag a .sql file as a dump if it matches ANY of these:
+  const DUMP_CONTENT_MARKERS = [
+    /LabourBaba Database Backup/i,
+    /SET session_replication_role/i,
+    /pg_dump\b/i,
+    /^INSERT INTO .+ \(.+\) VALUES/m,       // mass data INSERT (not DDL-only migration)
+    /^COPY .+ FROM stdin/m,                  // pg_dump COPY format
+    /-- Dumped (from|by) database/i,
+  ];
+  const DUMP_SIZE_THRESHOLD_BYTES = 10 * 1024; // 10 KB — migrations are small DDL files
+
+  for (const file of trackedFiles) {
+    const normalized = file.replace(/\\/g, "/");
+
+    // Check unconditionally forbidden path patterns
+    const isForbiddenPath = forbiddenPathPatterns.some((re) => re.test(normalized));
+    if (isForbiddenPath) {
+      findings.push({
+        file,
+        source: "tracked-working-tree",
+        reason: `File path matches forbidden backup artifact pattern.`,
+      });
+      continue;
+    }
+
+    // For .sql files not in prisma/migrations/, apply content heuristics
+    if (normalized.endsWith(".sql") && !normalized.startsWith("prisma/migrations/")) {
+      try {
+        const fullPath = join(ROOT_DIR, file);
+        const stat = statSync(fullPath);
+        if (stat.size > DUMP_SIZE_THRESHOLD_BYTES) {
+          const content = readFileSync(fullPath, "utf-8");
+          const isDump = DUMP_CONTENT_MARKERS.some((re) => re.test(content));
+          if (isDump) {
+            findings.push({
+              file,
+              source: "tracked-working-tree",
+              reason:
+                `SQL file outside prisma/migrations/ (${(stat.size / 1024).toFixed(1)} KB) ` +
+                `contains database dump markers (INSERT INTO mass data / pg_dump headers / session_replication_role).`,
+            });
+          }
+        }
+      } catch {
+        // File unreadable — skip content check, flag by name if it matches backup pattern
+        if (/backup/i.test(normalized)) {
+          findings.push({
+            file,
+            source: "tracked-working-tree",
+            reason: `SQL file outside prisma/migrations/ with 'backup' in name and unreadable content.`,
+          });
+        }
+      }
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Scans Git history across ALL refs (branches, tags, remotes) for backup artifacts.
+ * Uses `git log --all --diff-filter=A --name-only` to find paths added in any commit.
+ * Does NOT inspect blob content to avoid loading large historical blobs into memory.
+ */
+export function checkGitHistoryForBackupArtifacts(): BackupArtifactFinding[] {
+  const findings: BackupArtifactFinding[] = [];
+
+  const historyForbiddenPatterns = [
+    /^backups\//i,
+    /\.dump$/i,
+    /\.backup$/i,
+    /\.bak$/i,
+    /backup_.*\.sql$/i,
+  ];
+
+  try {
+    // Get all files ever added across ALL refs (branches + remotes)
+    const output = execSync(
+      "git log --all --diff-filter=A --name-only --pretty=format:%H",
+      { cwd: ROOT_DIR, encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 }
+    );
+
+    let currentCommit = "";
+    for (const line of output.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      // Lines with no slash and 40 hex chars are commit hashes
+      if (/^[0-9a-f]{40}$/.test(trimmed)) {
+        currentCommit = trimmed;
+        continue;
+      }
+      const normalized = trimmed.replace(/\\/g, "/");
+      const isForbidden = historyForbiddenPatterns.some((re) => re.test(normalized));
+      if (isForbidden) {
+        findings.push({
+          file: normalized,
+          source: "git-history",
+          reason: `File path matches backup artifact pattern in Git history.`,
+          ref: currentCommit.slice(0, 12),
+        });
+      }
+    }
+  } catch {
+    // git not available — skip
+  }
+
+  return findings;
+}
+
 export function runSecurityAudit(): { pass: boolean; report: SecurityAuditReport } {
   const errors: string[] = [];
 
@@ -466,6 +620,36 @@ export function runSecurityAudit(): { pass: boolean; report: SecurityAuditReport
     );
   }
 
+  // P6 Issue 2: Check for tracked backup artifacts (git ls-files + content heuristics)
+  console.log("[SECURITY_SCAN] Checking for tracked backup artifacts (working tree + git history)...");
+  const trackedBackupFindings = checkTrackedBackupArtifacts();
+  const historyBackupFindings = checkGitHistoryForBackupArtifacts();
+  const backupArtifactFindings = [...trackedBackupFindings, ...historyBackupFindings];
+
+  if (trackedBackupFindings.length > 0) {
+    console.error(`[SECURITY_SCAN] FAILED: ${trackedBackupFindings.length} tracked backup artifact(s) detected:`);
+    for (const f of trackedBackupFindings) {
+      console.error(`  - [TRACKED] ${f.file}: ${f.reason}`);
+      errors.push(`TRACKED_BACKUP_ARTIFACT: ${f.file} — ${f.reason}`);
+    }
+  } else {
+    console.log("[SECURITY_SCAN] SUCCESS: No tracked backup artifacts in working tree.");
+  }
+
+  if (historyBackupFindings.length > 0) {
+    // History findings are WARNING-level (history cleanup requires manual git filter-repo).
+    // They do NOT fail the CI build automatically because the remote history purge
+    // requires a coordinated force-push with collaborators.
+    // They ARE recorded in the report and logged as warnings.
+    console.warn(`[SECURITY_SCAN] WARNING: ${historyBackupFindings.length} backup artifact(s) found in Git history (manual purge required):`);
+    for (const f of historyBackupFindings) {
+      console.warn(`  - [HISTORY] ${f.file} @ ${f.ref}: ${f.reason}`);
+    }
+    // Record but do not add to errors (would block CI before remote history is purged)
+  } else {
+    console.log("[SECURITY_SCAN] Git history: No backup artifact paths detected.");
+  }
+
   console.log("[SECURITY_SCAN] Validating Dockerfile container hardening...");
   const dockerfileAudit = scanDockerfileHardening();
   if (!dockerfileAudit.isHardened) {
@@ -476,6 +660,7 @@ export function runSecurityAudit(): { pass: boolean; report: SecurityAuditReport
     timestamp: new Date().toISOString(),
     status: errors.length === 0 ? "PASS" : "FAIL",
     secretFindings,
+    backupArtifactFindings,
     dependencyAudit,
     dockerfileAudit,
     errors,

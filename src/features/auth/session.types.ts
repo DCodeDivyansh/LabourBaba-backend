@@ -22,6 +22,8 @@ export const REVOKE_REASON = {
   REUSE: "REUSE",
   ADMIN: "ADMIN",
   SUSPENDED: "SUSPENDED",
+  /** Used when sessions/tokens may have been exposed in a security incident. */
+  SECURITY_INCIDENT: "SECURITY_INCIDENT",
 } as const;
 export type RevokeReason = typeof REVOKE_REASON[keyof typeof REVOKE_REASON];
 

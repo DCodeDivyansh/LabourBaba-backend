@@ -1,7 +1,21 @@
 {
-  "timestamp": "2026-09-22T21:29:19.195Z",
+  "timestamp": "2026-09-23T13:38:11.561Z",
   "status": "PASS",
   "secretFindings": [],
+  "backupArtifactFindings": [
+    {
+      "file": "backups/backup_2026-09-22T09-46-12-254Z.sql",
+      "source": "git-history",
+      "reason": "File path matches backup artifact pattern in Git history.",
+      "ref": "dd6a3bc8060d"
+    },
+    {
+      "file": "backups/backup_2026-09-22T09-46-12-254Z.sql.sha256",
+      "source": "git-history",
+      "reason": "File path matches backup artifact pattern in Git history.",
+      "ref": "dd6a3bc8060d"
+    }
+  ],
   "dependencyAudit": {
     "scanned": true,
     "totalVulnerabilities": 21,

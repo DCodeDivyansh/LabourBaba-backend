@@ -11,12 +11,13 @@
 
 import fs from "fs";
 import path from "path";
+import os from "os";
 import { createDatabaseBackup } from "../scripts/backup-db";
 import { restoreAndVerifyDatabase } from "../scripts/restore-db";
 
 describe("P4 Issue 29: Disaster Recovery & Isolated Restore Drill", () => {
   jest.setTimeout(45000);
-  const testBackupDir = path.resolve(process.cwd(), "scratch", "drill-backups");
+  const testBackupDir = path.join(os.tmpdir(), "labourbaba-drill-backups");
 
   beforeAll(() => {
     if (!fs.existsSync(testBackupDir)) {
