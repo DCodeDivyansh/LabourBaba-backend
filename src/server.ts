@@ -32,7 +32,7 @@ dotenv.config();
 const app = express();
 const httpServer = createServer(app);
 
-const port = process.env.PORT || 5000;
+const port = Number(process.env.PORT) || 5000;
 
 // 1. Explicit Trusted Proxy Configuration (Issue #43)
 const trustProxyConfig = process.env.TRUST_PROXY || (process.env.NODE_ENV === "production" ? 1 : false);
@@ -202,8 +202,8 @@ async function startServer() {
     // Execute authoritative, validated startup sequence (Issue #38 & #45)
     await lifecycleManager.startup();
 
-    httpServer.listen(port, () => {
-      logger.info(`Server running on port ${port}`);
+    httpServer.listen(port, "0.0.0.0", () => {
+      logger.info(`Server running on port ${port} (0.0.0.0)`);
       logger.info("Allowed Origins initialized", { allowedOrigins });
     });
   } catch (err: any) {

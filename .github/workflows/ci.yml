@@ -148,6 +148,27 @@ jobs:
           load: true
           tags: labourbaba-backend:test
 
+      - name: Verify Production Docker Image Boot, Health & Real BullMQ Lifecycle (P6 Issue 10)
+        run: npm run test:docker-boot
+        env:
+          DOCKER_IMAGE_TAG: labourbaba-backend:test
+          CI: true
+
+      - name: Capture Production Docker Container Logs on Failure
+        if: failure()
+        run: |
+          docker logs labourbaba-ci-backend > docker-backend-failure.log 2>&1 || true
+          docker logs labourbaba-ci-postgres > docker-postgres-failure.log 2>&1 || true
+          docker logs labourbaba-ci-redis > docker-redis-failure.log 2>&1 || true
+
+      - name: Archive Container Failure Diagnostic Logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: docker-boot-failure-logs
+          path: docker-*-failure.log
+          retention-days: 7
+
       - name: Scan Production Docker Image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
