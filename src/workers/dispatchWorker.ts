@@ -16,6 +16,7 @@ import {
 } from '../features/dispatch/dispatchOperation';
 import { planDispatchWave } from '../features/dispatch/wavePlanner';
 import { dispatchWaveConfig } from '../config/dispatchWaveConfig';
+import { metricsService } from '../metrics/metrics.service';
 import { logger } from '../utils/logger';
 
 /** @deprecated Import dispatchWaveConfig.timeoutMs or planDispatchWave instead. */
@@ -48,6 +49,11 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
     waveNumber,
     operationType: 'WAVE_DISPATCH',
   });
+
+  const startTime = Date.now();
+  try {
+    metricsService.recordDispatchAttempt();
+  } catch {}
 
   logger.info(
     `[dispatchWorker] Processing requirement=${requirementId} wave=${waveNumber} offset=${offset} operationId=${operationId}`,
@@ -146,6 +152,9 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
       latitude: req.job.latitude,
       longitude: req.job.longitude,
     });
+    try {
+      metricsService.recordDispatchFailure('invalid_coordinates');
+    } catch {}
     await prisma.job_requirement.update({
       where: { id: requirementId },
       data: { status: RequirementStatus.NO_WORKERS_AVAILABLE },
@@ -203,6 +212,9 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
     logger.info(
       `[dispatchWorker] No eligible workers found for requirement ${requirementId} in wave ${waveNumber} (radius: ${radiusMeters}m) at offset ${offset}`,
     );
+    try {
+      metricsService.recordDispatchFailure('no_workers');
+    } catch {}
     await prisma.job_requirement.update({
       where: { id: requirementId },
       data: { status: RequirementStatus.NO_WORKERS_AVAILABLE },
@@ -341,6 +353,9 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
         workerIds: existingDispatches.map((d) => d.worker_id),
       };
     }
+    try {
+      metricsService.recordDispatchFailure('database_error');
+    } catch {}
     logger.error(`[dispatchWorker] Failed to persist dispatch state for requirement ${requirementId}:`, { error: err?.message, stack: err?.stack });
     throw err; // Re-throw to trigger BullMQ retry
   }
@@ -367,6 +382,9 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
       },
     );
   } catch (err: any) {
+    try {
+      metricsService.recordDispatchFailure('queue_error');
+    } catch {}
     logger.error(`[dispatchWorker] Failed to enqueue durable timeout for requirement ${requirementId}:`, { error: err?.message });
     // Queue error will be retried by BullMQ
     throw err;
@@ -416,6 +434,11 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
   logger.info(
     `[dispatchWorker] Wave ${waveNumber} (operation ${operationId}) persisted and notification job enqueued for requirement ${requirementId}. Timeout queued in BullMQ.`,
   );
+
+  try {
+    const durationMs = Date.now() - startTime;
+    metricsService.recordDispatchSuccess(waveWorkers.length, durationMs);
+  } catch {}
 
   return {
     operationId,

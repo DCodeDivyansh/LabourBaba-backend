@@ -27,6 +27,19 @@ export class MetricsService {
   public readonly bullmqWaitingJobsTotal: Gauge<string>;
   public readonly bullmqActiveJobsTotal: Gauge<string>;
   public readonly bullmqFailedJobsTotal: Gauge<string>;
+  public readonly bullmqDelayedJobsTotal: Gauge<string>;
+
+  // Database Connection Pool Metrics
+  public readonly databasePoolTotalConnections: Gauge<string>;
+  public readonly databasePoolActiveConnections: Gauge<string>;
+  public readonly databasePoolIdleConnections: Gauge<string>;
+  public readonly databasePoolWaitingClients: Gauge<string>;
+  public readonly databasePoolMaxConnections: Gauge<string>;
+
+  // Infrastructure Error Metrics
+  public readonly redisErrorsTotal: Counter<string>;
+  public readonly databaseErrorsTotal: Counter<string>;
+  public readonly httpErrorsTotal: Counter<string>;
 
   // Dispatch Metrics
   public readonly jobsCreatedTotal: Counter<string>;
@@ -144,6 +157,66 @@ export class MetricsService {
       name: "bullmq_failed_jobs_total",
       help: "Total number of failed jobs across BullMQ queues",
       labelNames: ["queue"],
+      registers: [this.registry],
+    });
+
+    this.bullmqDelayedJobsTotal = new Gauge({
+      name: "bullmq_delayed_jobs_total",
+      help: "Total number of delayed jobs across BullMQ queues",
+      labelNames: ["queue"],
+      registers: [this.registry],
+    });
+
+    // Database Connection Pool Gauges
+    this.databasePoolTotalConnections = new Gauge({
+      name: "database_pool_total_connections",
+      help: "Total allocated connections in the PostgreSQL connection pool",
+      registers: [this.registry],
+    });
+
+    this.databasePoolActiveConnections = new Gauge({
+      name: "database_pool_active_connections",
+      help: "Number of active connections currently in use by queries",
+      registers: [this.registry],
+    });
+
+    this.databasePoolIdleConnections = new Gauge({
+      name: "database_pool_idle_connections",
+      help: "Number of idle connections available in the pool",
+      registers: [this.registry],
+    });
+
+    this.databasePoolWaitingClients = new Gauge({
+      name: "database_pool_waiting_clients",
+      help: "Number of clients queued waiting for an available connection (pool saturation indicator)",
+      registers: [this.registry],
+    });
+
+    this.databasePoolMaxConnections = new Gauge({
+      name: "database_pool_max_connections",
+      help: "Configured maximum connections limit for the pool",
+      registers: [this.registry],
+    });
+
+    // Infrastructure Error Counters
+    this.redisErrorsTotal = new Counter({
+      name: "redis_errors_total",
+      help: "Total number of Redis connection and operation errors",
+      labelNames: ["component"],
+      registers: [this.registry],
+    });
+
+    this.databaseErrorsTotal = new Counter({
+      name: "database_errors_total",
+      help: "Total number of PostgreSQL connection pool and query errors",
+      labelNames: ["component"],
+      registers: [this.registry],
+    });
+
+    this.httpErrorsTotal = new Counter({
+      name: "http_errors_total",
+      help: "Total number of HTTP 4xx and 5xx errors returned by API",
+      labelNames: ["method", "route", "status_class", "error_code"],
       registers: [this.registry],
     });
 
@@ -411,6 +484,9 @@ export class MetricsService {
       if (name === "webhook_signature_failures_total") return this.webhookSignatureFailuresTotal.inc(value);
       if (name === "payments_quarantined_total") return this.paymentsQuarantinedTotal.inc(sanitizedLabels, value);
       if (name === "http_requests_total") return this.httpRequestsTotal.inc(sanitizedLabels, value);
+      if (name === "redis_errors_total") return this.redisErrorsTotal.inc(sanitizedLabels, value);
+      if (name === "database_errors_total") return this.databaseErrorsTotal.inc(sanitizedLabels, value);
+      if (name === "http_errors_total") return this.httpErrorsTotal.inc(sanitizedLabels, value);
 
       // Create or reuse dynamic counter
       let counter = this.dynamicCounters.get(name);
@@ -449,6 +525,12 @@ export class MetricsService {
       if (name === "bullmq_waiting_jobs_total") return this.bullmqWaitingJobsTotal.set(sanitizedLabels, value);
       if (name === "bullmq_active_jobs_total") return this.bullmqActiveJobsTotal.set(sanitizedLabels, value);
       if (name === "bullmq_failed_jobs_total") return this.bullmqFailedJobsTotal.set(sanitizedLabels, value);
+      if (name === "bullmq_delayed_jobs_total") return this.bullmqDelayedJobsTotal.set(sanitizedLabels, value);
+      if (name === "database_pool_total_connections") return this.databasePoolTotalConnections.set(value);
+      if (name === "database_pool_active_connections") return this.databasePoolActiveConnections.set(value);
+      if (name === "database_pool_idle_connections") return this.databasePoolIdleConnections.set(value);
+      if (name === "database_pool_waiting_clients") return this.databasePoolWaitingClients.set(value);
+      if (name === "database_pool_max_connections") return this.databasePoolMaxConnections.set(value);
 
       let gauge = this.dynamicGauges.get(name);
       if (!gauge) {
@@ -568,17 +650,124 @@ export class MetricsService {
     this.locationExclusionsTotal.inc({ reason });
   }
 
+  normalizeRoute(route: string): string {
+    if (!route || typeof route !== "string") return "unknown";
+    return route
+      .split("?")[0]
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ":id")
+      .replace(/\b[6-9]\d{9}\b/g, ":phone")
+      .replace(/\b[0-9a-f]{16,}\b/gi, ":token")
+      .replace(/\/\d{4,}(?=\/|$)/g, "/:id");
+  }
+
   recordHttpRequest(method: string, route: string, statusCode: number, durationMs: number): void {
-    // Normalizing route to avoid high cardinality (UUIDs -> :id)
-    const normalizedRoute = route.split("?")[0].replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ":id");
+    const normalizedRoute = this.normalizeRoute(route);
     const labels = {
-      method,
+      method: (method || "GET").toUpperCase(),
       route: normalizedRoute,
       status: String(statusCode),
     };
     this.httpRequestsTotal.inc(labels);
     this.httpRequestDurationMs.observe(labels, durationMs);
     this.httpRequestDurationSeconds.observe(labels, durationMs / 1000);
+
+    if (statusCode >= 400) {
+      this.recordHttpError(method, normalizedRoute, statusCode);
+    }
+  }
+
+  recordHttpError(method: string, route: string, statusCode: number, errorCode: string = "ERROR"): void {
+    const statusClass = `${Math.floor(statusCode / 100)}xx`;
+    const normalizedRoute = this.normalizeRoute(route);
+    this.httpErrorsTotal.inc({
+      method: (method || "GET").toUpperCase(),
+      route: normalizedRoute,
+      status_class: statusClass,
+      error_code: errorCode.slice(0, 30),
+    });
+  }
+
+  recordRedisError(component: string = "client"): void {
+    this.redisErrorsTotal.inc({ component });
+  }
+
+  recordDatabaseError(component: string = "pool"): void {
+    this.databaseErrorsTotal.inc({ component });
+  }
+
+  setDatabasePoolMetrics(metrics: {
+    totalCount?: number;
+    idleCount?: number;
+    waitingCount?: number;
+    maxLimit?: number;
+  }): void {
+    if (typeof metrics.totalCount === "number") {
+      this.databasePoolTotalConnections.set(metrics.totalCount);
+    }
+    if (typeof metrics.idleCount === "number") {
+      this.databasePoolIdleConnections.set(metrics.idleCount);
+    }
+    if (typeof metrics.totalCount === "number" && typeof metrics.idleCount === "number") {
+      const active = Math.max(0, metrics.totalCount - metrics.idleCount);
+      this.databasePoolActiveConnections.set(active);
+    }
+    if (typeof metrics.waitingCount === "number") {
+      this.databasePoolWaitingClients.set(metrics.waitingCount);
+    }
+    if (typeof metrics.maxLimit === "number") {
+      this.databasePoolMaxConnections.set(metrics.maxLimit);
+    }
+  }
+
+  setQueueActiveJobs(queue: string, count: number): void {
+    this.bullmqActiveJobsTotal.set({ queue }, count);
+  }
+
+  setQueueFailedJobs(queue: string, count: number): void {
+    this.bullmqFailedJobsTotal.set({ queue }, count);
+  }
+
+  setQueueDelayedJobs(queue: string, count: number): void {
+    this.bullmqDelayedJobsTotal.set({ queue }, count);
+  }
+
+  async collectBullMQQueueMetrics(): Promise<void> {
+    try {
+      const { dispatchQueue, timeoutQueue, notificationQueue } = await import("../config/bullmq");
+      const queues = [
+        { name: "dispatch", queue: dispatchQueue },
+        { name: "timeout", queue: timeoutQueue },
+        { name: "notification", queue: notificationQueue },
+      ];
+
+      for (const { name, queue } of queues) {
+        if (!queue || typeof queue.getJobCounts !== "function") continue;
+        try {
+          const counts = await queue.getJobCounts("waiting", "active", "failed", "delayed");
+          this.bullmqWaitingJobsTotal.set({ queue: name }, counts.waiting ?? 0);
+          this.bullmqActiveJobsTotal.set({ queue: name }, counts.active ?? 0);
+          this.bullmqFailedJobsTotal.set({ queue: name }, counts.failed ?? 0);
+          this.bullmqDelayedJobsTotal.set({ queue: name }, counts.delayed ?? 0);
+        } catch (queueErr: any) {
+          logger.warn(`[METRICS] Failed to collect BullMQ queue counts for ${name}:`, { error: queueErr.message });
+          this.recordRedisError("bullmq_queue");
+        }
+      }
+    } catch (err: any) {
+      logger.warn(`[METRICS] Failed to import queues for BullMQ metrics:`, { error: err.message });
+    }
+  }
+
+  collectDatabasePoolMetrics(): void {
+    try {
+      const { getDatabasePoolMetrics } = require("../config/prisma");
+      const poolMetrics = getDatabasePoolMetrics();
+      if (poolMetrics) {
+        this.setDatabasePoolMetrics(poolMetrics);
+      }
+    } catch {
+      // Non-blocking fallback
+    }
   }
 
   recordOtpChallenge(purpose: string): void {
@@ -639,10 +828,39 @@ export class MetricsService {
     this.backupLastSuccessfulTimestampSeconds.set(timestampSeconds);
   }
 
+  private autoCollect = true;
+  private lastQueueCollectTime = 0;
+
+  setAutoCollect(enabled: boolean): void {
+    this.autoCollect = enabled;
+  }
+
+  isAutoCollectEnabled(): boolean {
+    return this.autoCollect;
+  }
+
   /**
    * Returns Prometheus exposition text output for scraping.
    */
   async formatPrometheus(): Promise<string> {
+    if (this.autoCollect) {
+      try {
+        this.collectDatabasePoolMetrics();
+      } catch {
+        // Non-blocking fallback
+      }
+
+      try {
+        const now = Date.now();
+        if (now - this.lastQueueCollectTime > 1000) {
+          this.lastQueueCollectTime = now;
+          await this.collectBullMQQueueMetrics();
+        }
+      } catch {
+        // Non-blocking fallback
+      }
+    }
+
     try {
       const metadataPath = path.resolve(process.cwd(), "backups", "latest_backup_metadata.json");
       if (fs.existsSync(metadataPath)) {
@@ -673,6 +891,11 @@ export class MetricsService {
     this.healthReadyRedisStatus.set(1);
     this.healthReadyStatus.set(1);
     this.backupLastSuccessfulTimestampSeconds.set(0);
+    this.databasePoolWaitingClients.set(0);
+    this.databasePoolActiveConnections.set(0);
+    this.databasePoolIdleConnections.set(0);
+    this.databasePoolTotalConnections.set(0);
+    this.databasePoolMaxConnections.set(0);
   }
 }
 

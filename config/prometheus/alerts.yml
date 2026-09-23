@@ -99,3 +99,15 @@ groups:
           summary: "Automated database backup has not succeeded in over 24 hours"
           description: "Last verified database backup is older than 24 hours. RPO target at risk."
           runbook_url: "docs/runbooks/backup-failure.md"
+
+      - alert: DatabasePoolSaturation
+        expr: database_pool_waiting_clients > 0
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "PostgreSQL connection pool exhausted"
+          description: "Clients are queuing waiting for an available database connection. Connection pool capacity is saturated."
+          runbook_url: "docs/runbooks/database-saturation.md"
+

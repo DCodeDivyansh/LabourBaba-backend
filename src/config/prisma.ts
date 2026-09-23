@@ -19,6 +19,11 @@ export const pool = new pg.Pool({
 
 // Attach pool error listener to prevent uncaught process crashes
 pool.on("error", (err) => {
+  try {
+    const { metricsService } = require("../metrics/metrics.service");
+    metricsService.setDatabaseHealth(false);
+    metricsService.recordDatabaseError("pool");
+  } catch {}
   if (process.env.NODE_ENV !== "test") {
     logger.error("[POSTGRES_POOL_ERROR]", { error: err.message });
   }

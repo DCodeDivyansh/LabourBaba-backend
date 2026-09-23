@@ -24,6 +24,7 @@ import { redisConnectionOptions, NOTIFICATION_QUEUE_NAME } from '../config/bullm
 import { sendFCMToWorker } from '../shared/fcm';
 import { io } from '../server';
 import { registerWorker } from './workerLifecycle';
+import { metricsService } from '../metrics/metrics.service';
 import { logger } from '../utils/logger';
 
 // ── Data Shape ───────────────────────────────────────────────────────────────
@@ -69,6 +70,7 @@ export async function processNotificationJob(data: DispatchNotifyJobData): Promi
     workers.map(async (w) => {
       // ── FCM push notification ────────────────────────────────────────────
       try {
+        metricsService.recordNotificationAttempt('fcm');
         await sendFCMToWorker(w.id, {
           title: 'New Job',
           body: skillType ?? 'New Job',
@@ -84,7 +86,9 @@ export async function processNotificationJob(data: DispatchNotifyJobData): Promi
             expiresAt,
           },
         });
+        metricsService.recordNotificationSuccess('fcm');
       } catch (err: any) {
+        metricsService.recordNotificationFailure('fcm', 'transient');
         // Log but do NOT rethrow: FCM failure must not roll back persisted state
         // or prevent other workers from receiving their notifications.
         logger.error(
@@ -96,6 +100,7 @@ export async function processNotificationJob(data: DispatchNotifyJobData): Promi
       // ── Socket.IO real-time event ────────────────────────────────────────
       try {
         if (io && typeof io.to === 'function') {
+          metricsService.recordNotificationAttempt('socket');
           const room = io.to(`worker:${w.id}`);
           if (room && typeof room.emit === 'function') {
             room.emit('job:incoming', {
@@ -105,9 +110,11 @@ export async function processNotificationJob(data: DispatchNotifyJobData): Promi
               ratePerDay,
               expiresAt: expiresAtDate,
             });
+            metricsService.recordNotificationSuccess('socket');
           }
         }
       } catch (err: any) {
+        metricsService.recordNotificationFailure('socket', 'transient');
         // Log but do NOT rethrow: socket failure must not affect persisted state.
         logger.error(
           `[notificationWorker] Socket.IO delivery failed for worker=${w.id} (requirement=${requirementId} wave=${waveNumber}):`,

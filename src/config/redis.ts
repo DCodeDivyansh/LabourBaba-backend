@@ -139,9 +139,28 @@ export function getRedisClient(): IORedisClient {
     sharedRedisClient = new IORedis(options);
 
     sharedRedisClient.on('error', (err) => {
+      try {
+        const { metricsService } = require('../metrics/metrics.service');
+        metricsService.setRedisHealth(false);
+        metricsService.recordRedisError('client');
+      } catch {}
       if (process.env.NODE_ENV !== 'test') {
         logger.error('[REDIS_CLIENT_ERROR]', { error: err.message });
       }
+    });
+
+    sharedRedisClient.on('ready', () => {
+      try {
+        const { metricsService } = require('../metrics/metrics.service');
+        metricsService.setRedisHealth(true);
+      } catch {}
+    });
+
+    sharedRedisClient.on('close', () => {
+      try {
+        const { metricsService } = require('../metrics/metrics.service');
+        metricsService.setRedisHealth(false);
+      } catch {}
     });
   }
   return sharedRedisClient;

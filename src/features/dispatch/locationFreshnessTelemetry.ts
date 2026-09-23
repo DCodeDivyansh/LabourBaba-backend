@@ -82,6 +82,11 @@ class LocationFreshnessTelemetry {
         this.exclusions.future_location++;
         break;
     }
+
+    try {
+      const { metricsService } = require('../../metrics/metrics.service');
+      metricsService.recordLocationExclusion(reason.toLowerCase());
+    } catch {}
   }
 
   /**

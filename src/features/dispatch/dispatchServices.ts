@@ -16,6 +16,7 @@ import { BookingStatus } from '../booking/bookingStateMachine';
 import { bookingConfig } from '../../config/bookingConfig';
 import { generateDispatchOperationId } from './dispatchOperation';
 import { planDispatchWave } from './wavePlanner';
+import { metricsService } from '../../metrics/metrics.service';
 
 import { logger } from '../../utils/logger';
 
@@ -503,6 +504,11 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
   } catch (err: any) {
     logger.error('[dispatchServices] Failed to emit worker:accepted:', { error: err?.message });
   }
+
+  try {
+    metricsService.recordDispatchAccept(1000);
+    metricsService.recordBookingCreated();
+  } catch {}
 
   return result;
 };

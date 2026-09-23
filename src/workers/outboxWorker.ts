@@ -1,6 +1,7 @@
 import { outboxService, OutboxRecord } from '../services/outboxService';
 import { sendFCMToWorker, sendFCMToTokens, isPermanentInvalidTokenError } from '../shared/fcm';
 import { io } from '../server';
+import { metricsService } from '../metrics/metrics.service';
 import { logger } from '../utils/logger';
 
 export class OutboxWorker {
@@ -26,12 +27,15 @@ export class OutboxWorker {
       if (io && typeof io.to === 'function') {
         const roomName = `${recipient_type}:${recipient_id}`;
         try {
+          metricsService.recordNotificationAttempt('socket');
           io.to(roomName).emit(`notification:${event_type}`, {
             ...payload,
             outboxId: id,
             correlationId: correlation_id,
           });
+          metricsService.recordNotificationSuccess('socket');
         } catch (socketErr: any) {
+          metricsService.recordNotificationFailure('socket', 'transient');
           logger.warn(`[OUTBOX_SOCKET_WARN] Failed socket delivery for outbox ${id}:`, { error: socketErr.message });
         }
       }
@@ -42,6 +46,10 @@ export class OutboxWorker {
       let lastErrorMessage = '';
 
       if (recipient_type === 'worker') {
+        try {
+          metricsService.recordNotificationAttempt('fcm');
+        } catch {}
+
         const results = await sendFCMToWorker(recipient_id, {
           title: payload.title || 'LabourBaba Notification',
           body: payload.body || '',
@@ -55,6 +63,9 @@ export class OutboxWorker {
         if (results.length === 0) {
           // Worker has no registered active push devices; socket delivery was completed.
           fcmSuccess = true;
+          try {
+            metricsService.recordNotificationSuccess('fcm');
+          } catch {}
         } else {
           for (const res of results) {
             if (res.success) {
@@ -63,6 +74,15 @@ export class OutboxWorker {
               hasTransientError = true;
               lastErrorMessage = res.error?.message || 'FCM delivery failed';
             }
+          }
+          if (fcmSuccess) {
+            try {
+              metricsService.recordNotificationSuccess('fcm');
+            } catch {}
+          } else {
+            try {
+              metricsService.recordNotificationFailure('fcm', hasTransientError ? 'transient' : 'permanent');
+            } catch {}
           }
         }
       } else {
@@ -77,6 +97,9 @@ export class OutboxWorker {
       }
     } catch (err: any) {
       const isPermanent = isPermanentInvalidTokenError(err);
+      try {
+        metricsService.recordNotificationFailure('fcm', isPermanent ? 'permanent' : 'transient');
+      } catch {}
       await outboxService.markEventFailure(id, err.message || 'Outbox processing failed', isPermanent, record.updated_at);
     }
   }

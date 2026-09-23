@@ -1,6 +1,7 @@
 import prisma from "../../config/prisma";
 import { toWorkerLocationDTO } from "../../shared/prismaSelects";
 import { validateCoordinatePair } from "../../utils/coordinateValidator";
+import { metricsService } from "../../metrics/metrics.service";
 
 export class WorkerLocationServiceError extends Error {
   statusCode: number;
@@ -76,13 +77,19 @@ export const workerLocationService = {
         WHERE id = ${workerLocation.id}::uuid;
       `;
 
-      return toWorkerLocationDTO({
+      const dto = toWorkerLocationDTO({
         id: workerLocation.id,
         worker_id: workerId,
         latitude: lat,
         longitude: lon,
         updated_at: now,
       });
+
+      try {
+        metricsService.recordLocationUpdate();
+      } catch {}
+
+      return dto;
     });
   },
 };

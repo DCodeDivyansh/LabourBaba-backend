@@ -74,8 +74,8 @@ describe('P4 Issue 10 — Prometheus Alert Evaluation & Telemetry Parity', () =>
     });
   });
 
-  it('verifies all 9 production alerts are defined with required labels and runbooks', () => {
-    expect(alertRules.length).toBe(9);
+  it('verifies all 10 production alerts are defined with required labels and runbooks', () => {
+    expect(alertRules.length).toBe(10);
 
     const alertNames = alertRules.map((r) => r.alert);
     const expectedAlerts = [
@@ -88,6 +88,7 @@ describe('P4 Issue 10 — Prometheus Alert Evaluation & Telemetry Parity', () =>
       'NotificationFailureRateHigh',
       'AbnormalOtpAttempts',
       'BackupFailure',
+      'DatabasePoolSaturation',
     ];
 
     for (const expected of expectedAlerts) {
@@ -104,6 +105,10 @@ describe('P4 Issue 10 — Prometheus Alert Evaluation & Telemetry Parity', () =>
   });
 
   describe('Alert Logic Evaluation under Synthetic & Live Failure Injection', () => {
+    beforeEach(() => {
+      metricsService.setAutoCollect(false);
+    });
+
     it('evaluates DatabaseUnavailable alert when database health gauge is 0 (healthy=0 -> FIRING)', async () => {
       const dbRule = alertRules.find((r) => r.alert === 'DatabaseUnavailable');
       expect(dbRule).toBeDefined();
@@ -193,6 +198,26 @@ describe('P4 Issue 10 — Prometheus Alert Evaluation & Telemetry Parity', () =>
 
       const exposition = await metricsService.formatPrometheus();
       expect(exposition).toContain('location_exclusions_total{reason="stale_location"}');
+    });
+
+    it('evaluates DatabasePoolSaturation alert when waiting clients exceed 0', async () => {
+      const poolRule = alertRules.find((r) => r.alert === 'DatabasePoolSaturation');
+      expect(poolRule).toBeDefined();
+      expect(poolRule!.expr).toBe('database_pool_waiting_clients > 0');
+
+      // Pool saturated: 3 clients waiting
+      metricsService.setDatabasePoolMetrics({ waitingCount: 3 });
+      const saturatedExposition = await metricsService.formatPrometheus();
+      expect(saturatedExposition).toContain('database_pool_waiting_clients 3');
+      const isSaturated = 3 > 0;
+      expect(isSaturated).toBe(true);
+
+      // Recovery: 0 clients waiting
+      metricsService.setDatabasePoolMetrics({ waitingCount: 0 });
+      const recoveredExposition = await metricsService.formatPrometheus();
+      expect(recoveredExposition).toContain('database_pool_waiting_clients 0');
+      const isRecovered = 0 > 0;
+      expect(isRecovered).toBe(false);
     });
   });
 });

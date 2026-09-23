@@ -79,6 +79,7 @@ describe('P3 Issues 16–20 Final Adversarial Evidence Audit', () => {
         'dispatch_attempts_total',
         'http_requests_total',
         'backup_last_successful_timestamp_seconds',
+        'database_pool_waiting_clients',
       ];
 
       for (const metric of requiredAlertMetrics) {

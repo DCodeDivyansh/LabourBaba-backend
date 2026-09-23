@@ -8,6 +8,15 @@ describe("Issue 44 - Durable Notification Outbox", () => {
   const testWorkerId = "00000000-0000-4000-a000-000000000001";
   const testRequirementId = "00000000-0000-4000-a000-000000000002";
 
+  beforeAll(async () => {
+    // Clean up stale uncompleted outbox records from previous test runs
+    await (prisma as any).notification_outbox.deleteMany({
+      where: {
+        status: { in: ['PENDING', 'PROCESSING'] },
+      },
+    }).catch(() => {});
+  });
+
   afterAll(async () => {
     // Clean up test outbox records
     await (prisma as any).notification_outbox.deleteMany({

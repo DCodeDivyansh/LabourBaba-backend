@@ -115,7 +115,10 @@ export function requestLogger(req: Request, res: Response, next: NextFunction): 
     // Record HTTP metrics
     try {
       const { metricsService } = require('../metrics/metrics.service');
-      metricsService.recordHttpRequest(req.method, req.baseUrl ? `${req.baseUrl}${req.path}` : req.path, statusCode, durationMs);
+      const routePath = (req.route && req.route.path)
+        ? (req.baseUrl ? `${req.baseUrl}${req.route.path}` : req.route.path)
+        : (req.baseUrl ? `${req.baseUrl}${req.path}` : req.path);
+      metricsService.recordHttpRequest(req.method, routePath, statusCode, durationMs);
     } catch {}
 
     const sanitizedUrl = sanitizeUrlForLogging(req.originalUrl || req.path);

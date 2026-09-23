@@ -8,6 +8,7 @@ import { RequirementStatus } from './requirementStateMachine';
 import { generateDispatchOperationId } from '../dispatch/dispatchOperation';
 import { validateOptionalCoordinatePair } from '../../utils/coordinateValidator';
 import { skillService } from '../skill/skill.service';
+import { metricsService } from '../../metrics/metrics.service';
 import { logger } from '../../utils/logger';
 
 export const jobService = {
@@ -155,6 +156,10 @@ export const jobService = {
         }
       }),
     );
+
+    try {
+      metricsService.recordJobCreated();
+    } catch {}
 
     return job;
   },
