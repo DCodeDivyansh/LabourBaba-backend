@@ -6,7 +6,7 @@ import {
   getCurrentCustomer,
 } from "./customerAuthController";
 import { validateBody } from "../../middlewares/validationMiddleware";
-import { authenticateJWT } from "../../middlewares/authMiddleware";
+import { authenticateJWT, requireRole, UserRole } from "../../middlewares/authMiddleware";
 import { CreateCustomerReqSchema, CustomerSchema, SignupCustomerReqSchema, LoginCustomerReqSchema } from "../../schemas";
 import { registry } from "../../config/swagger";
 import { z } from "zod";
@@ -155,13 +155,19 @@ registry.registerPath({
 import { authEndpointRateLimiter } from "../../middlewares/rateLimiter";
 
 // Express route mappings
-clientRoute.get("/", authenticateJWT, getClient);
-clientRoute.post("/add", authenticateJWT, validateBody(CreateCustomerReqSchema), postClient);
+// ADMIN-only: enumerate all customers (administrative customer management)
+clientRoute.get("/", authenticateJWT, requireRole(UserRole.ADMIN), getClient);
+// ADMIN-only: create a customer via back-office path (self-service signup uses /signup)
+clientRoute.post("/add", authenticateJWT, requireRole(UserRole.ADMIN), validateBody(CreateCustomerReqSchema), postClient);
+// Public: rate-limited self-registration and login
 clientRoute.post("/signup", authEndpointRateLimiter, validateBody(SignupCustomerReqSchema), signupCustomer);
 clientRoute.post("/login", authEndpointRateLimiter, validateBody(LoginCustomerReqSchema), loginCustomer);
+// CUSTOMER-only: self-service profile — defense-in-depth at route layer;
+// controller additionally validates req.user.role and uses req.user.id (not client-supplied)
 clientRoute.get(
   "/me",
   authenticateJWT,
+  requireRole(UserRole.CUSTOMER),
   getCurrentCustomer
 );
 

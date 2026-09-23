@@ -246,11 +246,28 @@ describe("API Protection and JWT Validation Tests", () => {
       expect(res.status).toBe(401);
     });
 
-    it("GET /api/clients should return 200 when authenticated", async () => {
-      (prisma.customer.findMany as jest.Mock).mockResolvedValue([]);
+    // SECURITY FIX (P6 Issue 1): CUSTOMER must not access admin-only customer listing
+    it("GET /api/clients should return 403 when authenticated as CUSTOMER", async () => {
       const res = await request(app)
         .get("/api/clients")
         .set("Authorization", `Bearer ${customerToken}`);
+      expect(res.status).toBe(403);
+    });
+
+    // SECURITY FIX (P6 Issue 1): WORKER must not access admin-only customer listing
+    it("GET /api/clients should return 403 when authenticated as WORKER", async () => {
+      const res = await request(app)
+        .get("/api/clients")
+        .set("Authorization", `Bearer ${workerToken}`);
+      expect(res.status).toBe(403);
+    });
+
+    // ADMIN must retain access to customer listing
+    it("GET /api/clients should return 200 when authenticated as ADMIN", async () => {
+      (prisma.customer.findMany as jest.Mock).mockResolvedValue([]);
+      const res = await request(app)
+        .get("/api/clients")
+        .set("Authorization", `Bearer ${adminToken}`);
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
     });
@@ -260,12 +277,31 @@ describe("API Protection and JWT Validation Tests", () => {
       expect(res.status).toBe(401);
     });
 
-    it("POST /api/clients/add should return 201 when authenticated", async () => {
-      const mockCustomer = { id: MOCK_CUSTOMER_ID, name: "Jane", phone: "+919876543215" };
-      (prisma.customer.create as jest.Mock).mockResolvedValue(mockCustomer);
+    // SECURITY FIX (P6 Issue 1): CUSTOMER must not access admin-only customer creation
+    it("POST /api/clients/add should return 403 when authenticated as CUSTOMER", async () => {
       const res = await request(app)
         .post("/api/clients/add")
         .set("Authorization", `Bearer ${customerToken}`)
+        .send({ name: "Jane", phone: "+919876543215" });
+      expect(res.status).toBe(403);
+    });
+
+    // SECURITY FIX (P6 Issue 1): WORKER must not access admin-only customer creation
+    it("POST /api/clients/add should return 403 when authenticated as WORKER", async () => {
+      const res = await request(app)
+        .post("/api/clients/add")
+        .set("Authorization", `Bearer ${workerToken}`)
+        .send({ name: "Jane", phone: "+919876543215" });
+      expect(res.status).toBe(403);
+    });
+
+    // ADMIN must retain access to back-office customer creation
+    it("POST /api/clients/add should return 201 when authenticated as ADMIN", async () => {
+      const mockCustomer = { id: MOCK_CUSTOMER_ID, name: "Jane", phone: "+919876543215", created_at: new Date() };
+      (prisma.customer.create as jest.Mock).mockResolvedValue(mockCustomer);
+      const res = await request(app)
+        .post("/api/clients/add")
+        .set("Authorization", `Bearer ${adminToken}`)
         .send({ name: "Jane", phone: "+919876543215" });
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
