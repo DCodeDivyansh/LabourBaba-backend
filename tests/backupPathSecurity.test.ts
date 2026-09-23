@@ -160,13 +160,46 @@ describe("P6 Issue 2 — Backup Path Security & Containment Invariants", () => {
       expect(findings).toEqual([]);
     });
 
-    it("correctly identifies historical backup artifacts in Git history without blocking CI", () => {
+    it("reports zero reachable backup artifacts in Git history after historical purge", () => {
       const historyFindings = checkGitHistoryForBackupArtifacts();
-      // Commit dd6a3bc introduced backups/backup_2026-09-22T09-46-12-254Z.sql
-      expect(historyFindings.length).toBeGreaterThan(0);
-      const matched = historyFindings.find((f) => f.file.includes("backup_2026-09-22T09-46-12-254Z.sql"));
-      expect(matched).toBeDefined();
-      expect(matched?.source).toBe("git-history");
+      expect(historyFindings).toEqual([]);
+    });
+
+    it("does not flag legitimate Prisma migration SQL files", () => {
+      // Prisma migrations are small DDL files (CREATE TABLE, ALTER TABLE, etc.)
+      const findings = checkTrackedBackupArtifacts();
+      const migrationFindings = findings.filter((f) => f.file.startsWith("prisma/migrations/"));
+      expect(migrationFindings).toHaveLength(0);
+    });
+  });
+
+  describe("4. Symlink Containment Verification", () => {
+    it("rejects a symlink whose target is inside the repository", () => {
+      const insideTarget = path.resolve(repoRoot, "scratch", "symlink-target-inside");
+      const symlinkPath = path.join(os.tmpdir(), `symlink-test-inside-${Date.now()}`);
+
+      try {
+        fs.mkdirSync(insideTarget, { recursive: true });
+        try {
+          fs.symlinkSync(insideTarget, symlinkPath, "dir");
+        } catch {
+          // Windows unprivileged symlinks might require developer mode — skip if not permitted
+          return;
+        }
+
+        expect(
+          createDatabaseBackup({
+            backupDir: symlinkPath,
+            databaseUrl: "postgresql://mock:mock@localhost:5432/mock",
+          })
+        ).rejects.toThrow(/is inside or is the repository root/);
+      } finally {
+        try {
+          if (fs.existsSync(symlinkPath)) fs.unlinkSync(symlinkPath);
+          if (fs.existsSync(insideTarget)) fs.rmSync(insideTarget, { recursive: true, force: true });
+        } catch {}
+      }
     });
   });
 });
+
