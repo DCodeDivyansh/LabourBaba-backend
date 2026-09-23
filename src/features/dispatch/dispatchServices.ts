@@ -144,6 +144,14 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       preDispatch.status === 'timeout' ||
       preDispatch.status === 'expired'
     ) {
+      if (
+        preDispatch.status === 'expired' &&
+        preReq &&
+        ((preReq.worker_count_filled ?? 0) >= preReq.worker_count_needed ||
+          preReq.status?.toUpperCase() === RequirementStatus.FILLED)
+      ) {
+        throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
+      }
       throw new DispatchAcceptanceError(
         `Dispatch is in terminal state: ${preDispatch.status}`,
         'DISPATCH_NOT_ACTIONABLE',
@@ -249,6 +257,13 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
             dispatchRow.status === 'timeout' ||
             dispatchRow.status === 'expired'
           ) {
+            if (
+              dispatchRow.status === 'expired' &&
+              ((req.worker_count_filled ?? 0) >= req.worker_count_needed ||
+                req.status?.toUpperCase() === RequirementStatus.FILLED)
+            ) {
+              throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
+            }
             throw new DispatchAcceptanceError(
               `Dispatch is in terminal state: ${dispatchRow.status}`,
               'DISPATCH_NOT_ACTIONABLE',

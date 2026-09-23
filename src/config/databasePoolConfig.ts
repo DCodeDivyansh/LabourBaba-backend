@@ -49,13 +49,16 @@ export function getDatabasePoolConfig(): DatabasePoolConfig {
 
   // Default connection bounds per process type:
   // API: 12 connections
-  // Worker (BullMQ): 5 connections
+  // Worker (BullMQ): 10 connections
   // Admin / Migration / Script: 2 connections
+  // All / Monolith (combined API + Workers): 15 connections
   let defaultPoolMax = 12;
   if (processType === "worker" || processType === "bullmq") {
-    defaultPoolMax = 5;
+    defaultPoolMax = 10;
   } else if (processType === "migration" || processType === "admin" || processType === "script") {
     defaultPoolMax = 2;
+  } else if (processType === "all" || processType === "monolith") {
+    defaultPoolMax = 15;
   }
 
   const envPoolMax = process.env.DB_POOL_MAX ? parseInt(process.env.DB_POOL_MAX, 10) : NaN;

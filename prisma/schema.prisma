@@ -81,6 +81,7 @@ model booking {
   @@index([job_id], map: "idx_booking_job")
   @@index([worker_id], map: "idx_booking_worker")
   @@index([status], map: "idx_booking_status")
+  @@index([worker_id, status], map: "idx_booking_worker_status")
 }
 
 /// Durable audit history for all Booking state machine transitions.

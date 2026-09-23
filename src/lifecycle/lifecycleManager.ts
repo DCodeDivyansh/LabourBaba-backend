@@ -85,13 +85,19 @@ export class LifecycleManager {
       }
     }
 
-    // 5. Start background hygiene maintenance
+    // 5. Start background hygiene maintenance (OTP + Location History retention)
     const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
     this.otpCleanupTimer = setInterval(async () => {
       try {
         await authService.cleanupExpiredOtpChallenges();
       } catch (err: any) {
         logger.error('[LIFECYCLE] Periodic OTP cleanup failed:', { error: err.message });
+      }
+      try {
+        const { locationRetentionService } = await import('../services/locationRetentionService');
+        await locationRetentionService.cleanupExpiredLocationHistory();
+      } catch (err: any) {
+        logger.error('[LIFECYCLE] Periodic location history cleanup failed:', { error: err.message });
       }
     }, CLEANUP_INTERVAL_MS);
     this.otpCleanupTimer.unref();
@@ -101,7 +107,10 @@ export class LifecycleManager {
     });
 
     // 6. Initialize background consumers & schedulers AFTER dependencies and reconciliation
-    if (process.env.NODE_ENV !== 'test') {
+    const processType = (process.env.PROCESS_TYPE || "all").toLowerCase();
+    const enableWorkers = process.env.ENABLE_WORKERS !== "false" && processType !== "api";
+
+    if (process.env.NODE_ENV !== 'test' && enableWorkers) {
       try {
         const { getNotificationWorker } = await import('../workers/notificationWorker');
         const { getDispatchWorker } = await import('../workers/dispatchWorker');
@@ -111,13 +120,15 @@ export class LifecycleManager {
         getTimeoutWorker();
         outboxWorker.start();
         paymentReconciliationWorker.start();
-        logger.info('[LIFECYCLE] Background workers and queues initialized successfully.');
+        logger.info('[LIFECYCLE] Background workers and queues initialized successfully.', { processType });
       } catch (workerErr: any) {
         logger.error('[LIFECYCLE] Failed to start background workers:', { error: workerErr.message });
         if (process.env.NODE_ENV === 'production') {
           throw workerErr;
         }
       }
+    } else if (process.env.NODE_ENV !== 'test' && !enableWorkers) {
+      logger.info('[LIFECYCLE] Background workers disabled for this instance.', { processType, enableWorkers });
     }
 
     // 7. Mark application state as READY
