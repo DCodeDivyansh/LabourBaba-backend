@@ -327,6 +327,63 @@ export class OutboxService {
 
     return result.count;
   }
+
+  /**
+   * Cleans up aged notification outbox records according to strict retention rules:
+   *
+   * Invariants (P6 Issue 5):
+   * 1. PENDING and PROCESSING records are NEVER deleted (only delivered or crash-reconciled).
+   * 2. Acknowledged notifications (acknowledged_at != null) are pruned only after `acknowledgedRetentionDays` (default 30 days).
+   * 3. Unacknowledged customer notifications (recipient_type = 'customer', acknowledged_at == null)
+   *    are NEVER deleted before an extended offline recovery window (`unacknowledgedRetentionDays`, default 90 days),
+   *    guaranteeing that offline customers have a guaranteed 90-day recovery window.
+   * 4. Permanently FAILED records are kept for audit for `failedRetentionDays` (default 30 days).
+   */
+  public async cleanupAgedEvents(options?: {
+    acknowledgedRetentionDays?: number;
+    unacknowledgedRetentionDays?: number;
+    failedRetentionDays?: number;
+  }): Promise<{ deletedCount: number }> {
+    const ackDays = options?.acknowledgedRetentionDays ?? 30;
+    const unackDays = options?.unacknowledgedRetentionDays ?? 90;
+    const failedDays = options?.failedRetentionDays ?? 30;
+
+    const ackCutoff = new Date(Date.now() - ackDays * 24 * 60 * 60 * 1000);
+    const unackCutoff = new Date(Date.now() - unackDays * 24 * 60 * 60 * 1000);
+    const failedCutoff = new Date(Date.now() - failedDays * 24 * 60 * 60 * 1000);
+
+    const result = await (prisma as any).notification_outbox.deleteMany({
+      where: {
+        OR: [
+          // 1. Acknowledged notifications older than retention window
+          {
+            status: "SENT",
+            acknowledged_at: { not: null, lte: ackCutoff },
+          },
+          // 2. Unacknowledged notifications older than guaranteed offline recovery window
+          {
+            status: "SENT",
+            acknowledged_at: null,
+            created_at: { lte: unackCutoff },
+          },
+          // 3. Permanently failed records older than audit window
+          {
+            status: "FAILED",
+            failed_at: { not: null, lte: failedCutoff },
+          },
+        ],
+      },
+    });
+
+    logger.info(`[OUTBOX_CLEANUP] Pruned ${result.count} aged outbox records`, {
+      deletedCount: result.count,
+      ackCutoff,
+      unackCutoff,
+      failedCutoff,
+    });
+
+    return { deletedCount: result.count };
+  }
 }
 
 export const outboxService = new OutboxService();

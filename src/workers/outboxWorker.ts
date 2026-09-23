@@ -1,13 +1,24 @@
 import { outboxService, OutboxRecord } from '../services/outboxService';
-import { sendFCMToWorker, sendFCMToTokens, isPermanentInvalidTokenError } from '../shared/fcm';
-import { io } from '../server';
+import { sendFCMToWorker, sendFCMToCustomer, sendFCMToRecipient, sendFCMToTokens, isPermanentInvalidTokenError } from '../shared/fcm';
+import { io as defaultIo } from '../server';
+import { getSocketServer } from '../socket/socketLifecycle';
 import { metricsService } from '../metrics/metrics.service';
 import { logger } from '../utils/logger';
+import { Server } from 'socket.io';
 
 export class OutboxWorker {
   private isRunning = false;
   private pollTimer: NodeJS.Timeout | null = null;
   private isProcessing = false;
+  private customIo?: Server | null;
+
+  constructor(customIo?: Server) {
+    this.customIo = customIo;
+  }
+
+  private getSocketIo(): Server | null {
+    return this.customIo || getSocketServer() || defaultIo || null;
+  }
 
   /**
    * Processes a single outbox record.
@@ -24,16 +35,25 @@ export class OutboxWorker {
 
     try {
       // 1. Socket.IO Real-time Delivery
-      if (io && typeof io.to === 'function') {
-        const roomName = `${recipient_type}:${recipient_id}`;
+      const roomName = `${recipient_type}:${recipient_id}`;
+      const socketIo = this.getSocketIo();
+      if (socketIo && typeof socketIo.to === 'function') {
         try {
           metricsService.recordNotificationAttempt('socket');
-          io.to(roomName).emit(`notification:${event_type}`, {
+          const roomSockets = (socketIo as any).sockets?.adapter?.rooms?.get(roomName);
+          const hasOnlineSockets = Boolean(roomSockets && roomSockets.size > 0);
+
+          socketIo.to(roomName).emit(`notification:${event_type}`, {
             ...payload,
             outboxId: id,
             correlationId: correlation_id,
           });
+
           metricsService.recordNotificationSuccess('socket');
+
+          if (!hasOnlineSockets) {
+            logger.info(`[OUTBOX_SOCKET] Recipient ${recipient_type} ${recipient_id} has no active socket listeners. Real-time emit dispatched to room; push & durable recovery authoritative.`, { outboxId: id });
+          }
         } catch (socketErr: any) {
           metricsService.recordNotificationFailure('socket', 'transient');
           logger.warn(`[OUTBOX_SOCKET_WARN] Failed socket delivery for outbox ${id}:`, { error: socketErr.message });
@@ -45,12 +65,12 @@ export class OutboxWorker {
       let hasTransientError = false;
       let lastErrorMessage = '';
 
-      if (recipient_type === 'worker') {
+      if (recipient_type === 'worker' || recipient_type === 'customer') {
         try {
           metricsService.recordNotificationAttempt('fcm');
         } catch {}
 
-        const results = await sendFCMToWorker(recipient_id, {
+        const results = await sendFCMToRecipient(recipient_type, recipient_id, {
           title: payload.title || 'LabourBaba Notification',
           body: payload.body || '',
           data: {
@@ -61,7 +81,7 @@ export class OutboxWorker {
         });
 
         if (results.length === 0) {
-          // Worker has no registered active push devices; socket delivery was completed.
+          // Recipient has no registered active push devices; socket delivery dispatched or recoverable via PostgreSQL.
           fcmSuccess = true;
           try {
             metricsService.recordNotificationSuccess('fcm');
@@ -86,7 +106,7 @@ export class OutboxWorker {
           }
         }
       } else {
-        // Non-worker recipients (e.g. customer socket notifications)
+        // Non-worker/customer recipients
         fcmSuccess = true;
       }
 

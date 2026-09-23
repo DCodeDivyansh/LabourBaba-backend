@@ -227,6 +227,7 @@ model customer {
   password     String         @db.VarChar(255)
   booking      booking[]
   conversation conversation[]
+  customer_device customer_device[]
   job          job[]
   review       review[]
 }
@@ -490,6 +491,25 @@ model refresh_session {
   @@map("refresh_session")
 }
 
+model customer_device {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id  String    @db.Uuid
+  device_id    String    @db.VarChar(255)
+  fcm_token    String
+  platform     String    @default("android") @db.VarChar(50)
+  ip_address   String?   @db.VarChar(50)
+  last_seen_at DateTime  @default(now()) @db.Timestamptz(6)
+  revoked_at   DateTime? @db.Timestamptz(6)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  customer     customer  @relation(fields: [customer_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_device_customer")
+
+  @@unique([customer_id, device_id], map: "uq_customer_device_customer_device")
+  @@index([customer_id, revoked_at], map: "idx_customer_device_active")
+  @@index([fcm_token], map: "idx_customer_device_fcm_token")
+  @@map("customer_device")
+}
+
 /// Durable transactional notification outbox (Issue #44)
 /// Guaranteed atomic persistence with business state transitions before asynchronous delivery to FCM / Socket.IO.
 model notification_outbox {
@@ -509,12 +529,17 @@ model notification_outbox {
   last_error      String?   @db.Text
   idempotency_key String?   @unique(map: "uniq_notification_outbox_idempotency_key") @db.VarChar(255)
   correlation_id  String?   @db.VarChar(255)
+  acknowledged_at DateTime? @db.Timestamptz(6)
+  acknowledged_by String?   @db.VarChar(100)
   created_at      DateTime  @default(now()) @db.Timestamptz(6)
   updated_at      DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
 
   @@index([status, available_at], map: "idx_outbox_status_available")
   @@index([aggregate_type, aggregate_id], map: "idx_outbox_aggregate")
   @@index([recipient_id], map: "idx_outbox_recipient")
+  @@index([recipient_type, recipient_id, status, created_at], map: "idx_outbox_recipient_status_created")
+  @@index([recipient_type, recipient_id, acknowledged_at], map: "idx_outbox_recipient_acknowledged")
   @@map("notification_outbox")
 }
+
 

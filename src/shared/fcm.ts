@@ -282,6 +282,44 @@ export async function sendFCMToWorker(
 }
 
 /**
+ * Send an FCM push notification to all active devices of a customer.
+ */
+export async function sendFCMToCustomer(
+  customerId: string,
+  payload: FCMPayload,
+): Promise<FCMDeliveryResult[]> {
+  // Dynamically import customerDeviceService to prevent circular dependency
+  const { customerDeviceService } = await import("../features/customer_device/customer_device.service");
+  const activeDevices = await customerDeviceService.getActiveDevices(customerId);
+
+  if (!activeDevices || activeDevices.length === 0) {
+    logger.info(`[FCM] Customer ${customerId} has no active push devices.`);
+    return [];
+  }
+
+  const tokens = activeDevices.map((d) => d.fcm_token).filter(Boolean);
+  return sendFCMToTokens(tokens, payload, async (invalidToken) => {
+    await customerDeviceService.revokeByToken(invalidToken);
+  });
+}
+
+/**
+ * Universal recipient push dispatcher.
+ */
+export async function sendFCMToRecipient(
+  recipientType: string,
+  recipientId: string,
+  payload: FCMPayload,
+): Promise<FCMDeliveryResult[]> {
+  if (recipientType === "worker") {
+    return sendFCMToWorker(recipientId, payload);
+  } else if (recipientType === "customer") {
+    return sendFCMToCustomer(recipientId, payload);
+  }
+  return [];
+}
+
+/**
  * Legacy single-token notification helper for backward compatibility.
  */
 export async function sendFCMNotification(

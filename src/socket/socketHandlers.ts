@@ -24,6 +24,7 @@ import { isValidIdentifier } from "../schemas";
 import { setSocketServer } from "./socketLifecycle";
 import { workerLocationService } from "../features/worker_location/worker_location.service";
 import { validateCoordinatePair } from "../utils/coordinateValidator";
+import { customerNotificationService } from "../features/customer_notification/customer_notification.service";
 import { logger } from "../utils/logger";
 
 /**
@@ -596,8 +597,74 @@ export function registerSocketHandlers(io: Server): void {
       }
     );
 
+    // ========================================================================
+    // 7. Customer Notification Sync & Real-time Acknowledgement (P6 Issue 5)
+    // ========================================================================
+    socket.on("notification:sync", async (callback?: (res: SocketAckResponse & { data?: any }) => void) => {
+      try {
+        if (user.role === UserRole.CUSTOMER) {
+          const notifications = await customerNotificationService.getUnreadNotifications(user.id);
+          callback?.({
+            success: true,
+            message: `Retrieved ${notifications.length} unread notification(s)`,
+            data: notifications,
+          });
+        } else {
+          callback?.({
+            success: true,
+            message: "Sync completed",
+            data: [],
+          });
+        }
+      } catch (err: any) {
+        callback?.({
+          success: false,
+          code: "SYNC_FAILED",
+          message: err.message || "Failed to sync notifications",
+        });
+      }
+    });
+
+    socket.on(
+      "notification:ack",
+      async (payload: { notificationId?: string }, callback?: (res: SocketAckResponse & { data?: any }) => void) => {
+        try {
+          const notificationId = payload?.notificationId;
+          if (!notificationId) {
+            callback?.({
+              success: false,
+              code: "BAD_REQUEST",
+              message: "notificationId is required",
+            });
+            return;
+          }
+
+          if (user.role === UserRole.CUSTOMER) {
+            const result = await customerNotificationService.acknowledgeNotification(user.id, notificationId);
+            callback?.({
+              success: true,
+              message: "Notification acknowledged",
+              data: result,
+            });
+          } else {
+            callback?.({
+              success: true,
+              message: "Acknowledged",
+            });
+          }
+        } catch (err: any) {
+          callback?.({
+            success: false,
+            code: err.statusCode === 404 ? "NOT_FOUND" : "ACK_FAILED",
+            message: err.message || "Failed to acknowledge notification",
+          });
+        }
+      }
+    );
+
     socket.on("disconnect", () => {
       logger.info(`[SOCKET] Disconnected: ${socket.id} (user: ${user.id})`, { socketId: socket.id, userId: user.id });
     });
   });
 }
+

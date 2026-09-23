@@ -153,6 +153,15 @@ registry.registerPath({
 });
 
 import { authEndpointRateLimiter } from "../../middlewares/rateLimiter";
+import {
+  registerCustomerDevice,
+  listCustomerDevices,
+  revokeCustomerDevice,
+  listCustomerNotifications,
+  getUnreadCustomerNotifications,
+  acknowledgeCustomerNotification,
+  acknowledgeAllCustomerNotifications,
+} from "../customer_notification/customer_notification.controller";
 
 // Express route mappings
 // ADMIN-only: enumerate all customers (administrative customer management)
@@ -171,4 +180,17 @@ clientRoute.get(
   getCurrentCustomer
 );
 
+// Customer Device Management (P6 Issue 5)
+clientRoute.post("/me/devices", authenticateJWT, requireRole(UserRole.CUSTOMER), registerCustomerDevice);
+clientRoute.get("/me/devices", authenticateJWT, requireRole(UserRole.CUSTOMER), listCustomerDevices);
+clientRoute.delete("/me/devices/:deviceId", authenticateJWT, requireRole(UserRole.CUSTOMER), revokeCustomerDevice);
+
+// Customer Notification History & Recovery (P6 Issue 5)
+clientRoute.get("/notifications", authenticateJWT, requireRole(UserRole.CUSTOMER), listCustomerNotifications);
+clientRoute.get("/notifications/unread", authenticateJWT, requireRole(UserRole.CUSTOMER), getUnreadCustomerNotifications);
+clientRoute.post("/notifications/:id/acknowledge", authenticateJWT, requireRole(UserRole.CUSTOMER), acknowledgeCustomerNotification);
+clientRoute.post("/notifications/:id/ack", authenticateJWT, requireRole(UserRole.CUSTOMER), acknowledgeCustomerNotification);
+clientRoute.post("/notifications/ack-all", authenticateJWT, requireRole(UserRole.CUSTOMER), acknowledgeAllCustomerNotifications);
+
 export default clientRoute;
+

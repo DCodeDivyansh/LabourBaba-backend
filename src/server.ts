@@ -159,6 +159,7 @@ app.get("/metrics", async (_req: Request, res: Response) => {
 
 app.use("/health", healthRoutes);
 app.use("/api/clients", clientRoute);
+app.use("/api/customers", clientRoute);
 app.use("/api/workers", workerRoutes);
 app.use("/api/skill", skillRoute);
 app.use("/api/worker_location", workerLocationRoute);
