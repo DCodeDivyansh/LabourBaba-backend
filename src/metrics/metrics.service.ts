@@ -50,6 +50,9 @@ export class MetricsService {
   public readonly dispatchLatencyMs: Histogram<string>;
   public readonly dispatchCandidateCount: Histogram<string>;
   public readonly dispatchAcceptLatencyMs: Histogram<string>;
+  public readonly dispatchReconciliationTotal: Counter<string>;
+  public readonly dispatchReconciliationRepairsTotal: Counter<string>;
+  public readonly dispatchEnqueueFailuresTotal: Counter<string>;
 
   // Location Metrics
   public readonly locationUpdatesTotal: Counter<string>;
@@ -256,6 +259,27 @@ export class MetricsService {
       name: "dispatch_latency_ms",
       help: "Dispatch matching and notification latency in milliseconds",
       buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000],
+      registers: [this.registry],
+    });
+
+    this.dispatchReconciliationTotal = new Counter({
+      name: "dispatch_reconciliation_total",
+      help: "Total number of dispatch reconciliation execution runs",
+      labelNames: ["status"],
+      registers: [this.registry],
+    });
+
+    this.dispatchReconciliationRepairsTotal = new Counter({
+      name: "dispatch_reconciliation_repairs_total",
+      help: "Total number of orphaned dispatch operations repaired by reconciliation",
+      labelNames: ["repair_type"],
+      registers: [this.registry],
+    });
+
+    this.dispatchEnqueueFailuresTotal = new Counter({
+      name: "dispatch_enqueue_failures_total",
+      help: "Total number of BullMQ dispatch queue enqueue failures",
+      labelNames: ["queue_name"],
       registers: [this.registry],
     });
 
@@ -611,6 +635,18 @@ export class MetricsService {
   recordDispatchAccept(latencyMs: number): void {
     this.dispatchAcceptTotal.inc();
     this.dispatchAcceptLatencyMs.observe(latencyMs);
+  }
+
+  recordReconciliationRun(status: "success" | "error" = "success"): void {
+    this.dispatchReconciliationTotal.inc({ status });
+  }
+
+  recordReconciliationRepair(repairType: "wave_scheduled" | "timeout_restored" | "expired_closed"): void {
+    this.dispatchReconciliationRepairsTotal.inc({ repair_type: repairType });
+  }
+
+  recordDispatchEnqueueFailure(queueName: string): void {
+    this.dispatchEnqueueFailuresTotal.inc({ queue_name: queueName });
   }
 
   recordBookingCreated(): void {

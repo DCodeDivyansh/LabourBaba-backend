@@ -9,6 +9,7 @@ import { generateDispatchOperationId } from '../dispatch/dispatchOperation';
 import { validateOptionalCoordinatePair } from '../../utils/coordinateValidator';
 import { skillService } from '../skill/skill.service';
 import { metricsService } from '../../metrics/metrics.service';
+import { failureInjection } from '../../utils/failureInjection';
 import { logger } from '../../utils/logger';
 
 export const jobService = {
@@ -137,6 +138,7 @@ export const jobService = {
     await Promise.all(
       (createdRequirements || []).map(async (req) => {
         try {
+          failureInjection.triggerIfActive('AFTER_DB_COMMIT_BEFORE_QUEUE_ENQUEUE');
           const operationId = generateDispatchOperationId({ requirementId: req.id, waveNumber: 1 });
           await dispatchQueue.add(
             'dispatch-wave',
@@ -151,8 +153,14 @@ export const jobService = {
               jobId: `dispatch:${req.id}:wave-1`,
             },
           );
-        } catch (err) {
-          logger.error(`[jobService] Failed to enqueue BullMQ dispatch job for requirement ${req.id}:`, { error: (err as any)?.message });
+        } catch (err: any) {
+          logger.error(`[jobService] Failed to enqueue BullMQ dispatch job for requirement ${req.id}:`, { error: err?.message });
+          try {
+            metricsService.recordDispatchEnqueueFailure('dispatch');
+          } catch {}
+          if (failureInjection.isHookActive('AFTER_DB_COMMIT_BEFORE_QUEUE_ENQUEUE')) {
+            throw err;
+          }
         }
       }),
     );

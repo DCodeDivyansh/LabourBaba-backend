@@ -32,6 +32,7 @@ export class LifecycleManager {
   private httpServer: HttpServer | null = null;
   private io: SocketIoServer | null = null;
   private otpCleanupTimer: NodeJS.Timeout | null = null;
+  private dispatchReconciliationTimer: NodeJS.Timeout | null = null;
 
   public getState(): LifecycleState {
     return this.state;
@@ -121,6 +122,17 @@ export class LifecycleManager {
         outboxWorker.start();
         paymentReconciliationWorker.start();
         logger.info('[LIFECYCLE] Background workers and queues initialized successfully.', { processType });
+
+        // Start periodic dispatch reconciliation (every 30 seconds) to heal dual-write crash windows at runtime
+        const RECONCILIATION_INTERVAL_MS = 30_000;
+        this.dispatchReconciliationTimer = setInterval(async () => {
+          try {
+            await reconcileDispatchState();
+          } catch (err: any) {
+            logger.error('[LIFECYCLE] Periodic dispatch reconciliation error:', { error: err.message });
+          }
+        }, RECONCILIATION_INTERVAL_MS);
+        this.dispatchReconciliationTimer.unref();
       } catch (workerErr: any) {
         logger.error('[LIFECYCLE] Failed to start background workers:', { error: workerErr.message });
         if (process.env.NODE_ENV === 'production') {
@@ -164,6 +176,10 @@ export class LifecycleManager {
       if (this.otpCleanupTimer) {
         clearInterval(this.otpCleanupTimer);
         this.otpCleanupTimer = null;
+      }
+      if (this.dispatchReconciliationTimer) {
+        clearInterval(this.dispatchReconciliationTimer);
+        this.dispatchReconciliationTimer = null;
       }
       await outboxWorker.stop();
       paymentReconciliationWorker.stop();

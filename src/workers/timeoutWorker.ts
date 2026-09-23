@@ -6,6 +6,8 @@ import { RequirementStatus } from '../features/jobs/requirementStateMachine';
 import { io } from '../server';
 import { generateDispatchOperationId } from '../features/dispatch/dispatchOperation';
 import { planDispatchWave } from '../features/dispatch/wavePlanner';
+import { failureInjection } from '../utils/failureInjection';
+import { metricsService } from '../metrics/metrics.service';
 import { logger } from '../utils/logger';
 
 export interface TimeoutJobData {
@@ -128,20 +130,29 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
     { requirementId, nextWave, nextOperationId, nextOffset }
   );
 
-  await dispatchQueue.add(
-    'dispatch-wave',
-    {
-      operationId: nextOperationId,
-      requirementId,
-      jobId,
-      waveNumber: nextWave,
-      offset: nextOffset,
-    },
-    {
-      // Deterministic jobId ensures idempotent enqueuing across retries and restarts
-      jobId: `dispatch:${requirementId}:wave-${nextWave}`,
-    },
-  );
+  try {
+    failureInjection.triggerIfActive('AFTER_DB_COMMIT_BEFORE_QUEUE_ENQUEUE', { requirementId, waveNumber: nextWave });
+    await dispatchQueue.add(
+      'dispatch-wave',
+      {
+        operationId: nextOperationId,
+        requirementId,
+        jobId,
+        waveNumber: nextWave,
+        offset: nextOffset,
+      },
+      {
+        // Deterministic jobId ensures idempotent enqueuing across retries and restarts
+        jobId: `dispatch:${requirementId}:wave-${nextWave}`,
+      },
+    );
+  } catch (err: any) {
+    try {
+      metricsService.recordDispatchEnqueueFailure('dispatch');
+    } catch {}
+    logger.error(`[timeoutWorker] Failed to enqueue wave ${nextWave} for requirement ${requirementId}:`, { error: err.message });
+    throw err;
+  }
 }
 
 let timeoutWorker: Worker<TimeoutJobData> | null = null;

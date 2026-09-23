@@ -17,6 +17,7 @@ import {
 import { planDispatchWave } from '../features/dispatch/wavePlanner';
 import { dispatchWaveConfig } from '../config/dispatchWaveConfig';
 import { metricsService } from '../metrics/metrics.service';
+import { failureInjection } from '../utils/failureInjection';
 import { logger } from '../utils/logger';
 
 /** @deprecated Import dispatchWaveConfig.timeoutMs or planDispatchWave instead. */
@@ -363,6 +364,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
   // 5. DURABLE TIMEOUT: Queue wave timeout in BullMQ with deterministic jobId
   // Replaces volatile in-memory setTimeout; survives worker and API restarts
   try {
+    failureInjection.triggerIfActive('AFTER_DB_COMMIT_BEFORE_TIMEOUT_ENQUEUE', { requirementId, waveNumber });
     await timeoutQueue.add(
       'wave-timeout',
       {
@@ -384,6 +386,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
   } catch (err: any) {
     try {
       metricsService.recordDispatchFailure('queue_error');
+      metricsService.recordDispatchEnqueueFailure('timeout');
     } catch {}
     logger.error(`[dispatchWorker] Failed to enqueue durable timeout for requirement ${requirementId}:`, { error: err?.message });
     // Queue error will be retried by BullMQ
@@ -409,7 +412,7 @@ export async function processDispatchJob(data: DispatchJobData): Promise<Dispatc
           skillType: req.skill_type,
           ratePerDay: req.rate_per_day,
           location: req.job.location ?? null,
-          customerName: req.job.customer.name,
+          customerName: req.job.customer?.name || 'Customer',
         },
         {
           jobId: `notify:${requirementId}:wave-${waveNumber}`,
