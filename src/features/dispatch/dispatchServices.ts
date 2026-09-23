@@ -80,211 +80,295 @@ export class DispatchAcceptanceError extends Error {
 // ── Accept ───────────────────────────────────────────────────────────────────
 
 export const acceptDispatch = async (requirementId: string, workerId: string) => {
-  // A requirement row is the capacity ledger.  Its lock serializes every
-  // capacity-consuming acceptance for this requirement across all API/worker
-  // processes; the counter update below is the reservation, not a preflight.
-  // The booking is deliberately created only after that reservation, in this
-  // same transaction, so a create failure rolls the reservation back.
-  const otp = generateOTP();
-  const otp_hash = await hashOTP(otp);
-  const otp_expires_at = new Date(Date.now() + bookingConfig.bookingOtpTtlSeconds * 1000);
+  // 1. Fast-path non-locking pre-flight checks in parallel outside transaction to immediately reject
+  // obviously ineligible/filled requests without consuming connection pool capacity or waiting on locks.
+  const [preReq, preDispatch] = await Promise.all([
+    prisma.job_requirement.findUnique({
+      where: { id: requirementId },
+      select: {
+        id: true,
+        job_id: true,
+        status: true,
+        worker_count_filled: true,
+        worker_count_needed: true,
+        skill_type: true,
+        job: {
+          select: {
+            id: true,
+            status: true,
+            customer_id: true,
+          },
+        },
+      },
+    }),
+    prisma.job_dispatch.findFirst({
+      where: { requirement_id: requirementId, worker_id: workerId },
+      select: { id: true, status: true, expires_at: true },
+    }),
+  ]);
+
+  // Fast pre-flight rejections (only if records were fetched; otherwise let transaction authoritatively evaluate)
+  if (preReq) {
+    if (
+      preReq.status?.toUpperCase() === RequirementStatus.CANCELLED ||
+      preReq.job?.status?.toUpperCase() === 'CANCELLED' ||
+      preReq.job?.status?.toUpperCase() === 'COMPLETED'
+    ) {
+      throw new DispatchAcceptanceError(
+        'Requirement or job is no longer active',
+        'REQUIREMENT_CANCELLED',
+        409,
+      );
+    }
+
+    if (
+      preReq.status?.toUpperCase() === RequirementStatus.FILLED ||
+      (preReq.worker_count_filled ?? 0) >= preReq.worker_count_needed
+    ) {
+      throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
+    }
+  }
+
+  if (preDispatch) {
+    if (preDispatch.status === 'accepted') {
+      throw new DispatchAcceptanceError(
+        'This dispatch has already been accepted',
+        'DISPATCH_ALREADY_ACCEPTED',
+        409,
+      );
+    }
+
+    if (
+      preDispatch.status === 'declined' ||
+      preDispatch.status === 'timeout' ||
+      preDispatch.status === 'expired'
+    ) {
+      throw new DispatchAcceptanceError(
+        `Dispatch is in terminal state: ${preDispatch.status}`,
+        'DISPATCH_NOT_ACTIONABLE',
+        409,
+      );
+    }
+
+    const nowPre = new Date();
+    if (preDispatch.expires_at && preDispatch.expires_at <= nowPre) {
+      throw new DispatchAcceptanceError('Dispatch has expired', 'DISPATCH_EXPIRED', 410);
+    }
+  }
 
   let result: any;
   try {
     result = await prisma.$transaction(
       async (tx) => {
-        // PostgreSQL FOR UPDATE is required here: an application-only read of the
-        // filled counter permits two concurrent callers to observe the final slot.
+        // PostgreSQL FOR UPDATE serializes capacity reservations on the requirement row
         await tx.$queryRaw<{ id: string }[]>`
           SELECT id FROM job_requirement
           WHERE id = ${requirementId}::uuid FOR UPDATE
         `;
 
-      const req = await tx.job_requirement.findUnique({
-        where: { id: requirementId },
-        include: { job: true },
-      });
-
-      if (!req) {
-        throw new DispatchAcceptanceError('Requirement not found', 'REQUIREMENT_NOT_FOUND', 404);
-      }
-      const isAlreadyFull =
-        req.status?.toUpperCase() === RequirementStatus.FILLED ||
-        (req.worker_count_filled ?? 0) >= req.worker_count_needed;
-      if (isAlreadyFull) {
-        throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
-      }
-
-      // Guard: ensure worker does not already have a confirmed booking for this requirement
-      const existingBooking = await tx.booking.findFirst({
-        where: {
-          requirement_id: requirementId,
-          worker_id: workerId,
-        },
-      });
-      if (existingBooking) {
-        throw new DispatchAcceptanceError(
-          'Worker already has an active booking for this requirement',
-          'BOOKING_ALREADY_EXISTS',
-          409,
-        );
-      }
-
-      // Atomic conditional transition: must be pending, non-expired, matching exact requirement and worker
-      const now = new Date();
-      const updateResult = await tx.job_dispatch.updateMany({
-        where: {
-          requirement_id: requirementId,
-          worker_id: workerId,
-          status: 'pending',
-          expires_at: { gt: now },
-        },
-        data: {
-          status: 'accepted',
-          responded_at: now,
-        },
-      });
-
-      if (updateResult.count === 0) {
-        const dispatchRow = await tx.job_dispatch.findFirst({
-          where: { requirement_id: requirementId, worker_id: workerId },
+        const req = await tx.job_requirement.findUnique({
+          where: { id: requirementId },
+          include: { job: true },
         });
 
-        if (!dispatchRow) {
+        if (!req) {
+          throw new DispatchAcceptanceError('Requirement not found', 'REQUIREMENT_NOT_FOUND', 404);
+        }
+        if (
+          req.status?.toUpperCase() === RequirementStatus.CANCELLED ||
+          req.job?.status?.toUpperCase() === 'CANCELLED' ||
+          req.job?.status?.toUpperCase() === 'COMPLETED'
+        ) {
           throw new DispatchAcceptanceError(
-            'No valid dispatch found for this worker on this requirement',
-            'NO_VALID_DISPATCH',
-            404,
+            'Requirement or job is no longer active',
+            'REQUIREMENT_CANCELLED',
+            409,
           );
         }
+        const isAlreadyFull =
+          req.status?.toUpperCase() === RequirementStatus.FILLED ||
+          (req.worker_count_filled ?? 0) >= req.worker_count_needed;
+        if (isAlreadyFull) {
+          throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
+        }
 
-        if (dispatchRow.status === 'accepted') {
+        // Guard: ensure worker does not already have a confirmed booking for this requirement
+        const existingBooking = await tx.booking.findFirst({
+          where: {
+            requirement_id: requirementId,
+            worker_id: workerId,
+          },
+        });
+        if (existingBooking) {
           throw new DispatchAcceptanceError(
-            'This dispatch has already been accepted',
-            'DISPATCH_ALREADY_ACCEPTED',
+            'Worker already has an active booking for this requirement',
+            'BOOKING_ALREADY_EXISTS',
             409,
           );
         }
 
-        if (dispatchRow.status === 'declined' || dispatchRow.status === 'timeout' || dispatchRow.status === 'expired') {
-          throw new DispatchAcceptanceError(
-            `Dispatch is in terminal state: ${dispatchRow.status}`,
-            'DISPATCH_NOT_ACTIONABLE',
-            409,
-          );
-        }
-
-        if (dispatchRow.expires_at && dispatchRow.expires_at <= now) {
-          throw new DispatchAcceptanceError(
-            'Dispatch has expired',
-            'DISPATCH_EXPIRED',
-            410,
-          );
-        }
-
-        throw new DispatchAcceptanceError(
-          'Dispatch cannot be accepted in its current state',
-          'DISPATCH_NOT_ACCEPTABLE',
-          409,
-        );
-      }
-
-      // Capacity invariant: worker_count_filled strictly increments
-      const newFilled = (req.worker_count_filled ?? 0) + 1;
-      const nowFilled = newFilled >= req.worker_count_needed;
-
-      await tx.job_requirement.update({
-        where: { id: requirementId },
-        data: {
-          worker_count_filled: newFilled,
-          status: nowFilled ? 'FILLED' : 'PARTIALLY_FILLED',
-        },
-      });
-
-      // 4. Create the booking record with hashed OTP and set job state
-      const booking = await tx.booking.create({
-        data: {
-          job_id: req.job_id,
-          requirement_id: requirementId,
-          worker_id: workerId,
-          customer_id: req.job.customer_id,
-          status: 'CONFIRMED',
-          otp_hash,
-          otp_expires_at,
-          otp_attempts: 0,
-        },
-      });
-
-      // Mandatory Transactional Outbox (Issue 12): Record booking_confirmed event atomically
-      if (typeof (tx as any).notification_outbox?.create === 'function') {
-        await (tx as any).notification_outbox.create({
+        // Atomic conditional transition: must be pending, non-expired, matching exact requirement and worker
+        const now = new Date();
+        const updateResult = await tx.job_dispatch.updateMany({
+          where: {
+            requirement_id: requirementId,
+            worker_id: workerId,
+            status: 'pending',
+            expires_at: { gt: now },
+          },
           data: {
-            event_type: 'booking_confirmed',
-            aggregate_type: 'booking',
-            aggregate_id: booking.id,
-            recipient_type: 'customer',
-            recipient_id: req.job.customer_id,
-            payload: {
-              bookingId: booking.id,
-              jobId: req.job_id,
-              workerId,
-              skillType: req.skill_type,
-              title: 'Worker Confirmed',
-              body: 'A worker has accepted and confirmed your booking.',
+            status: 'accepted',
+            responded_at: now,
+          },
+        });
+
+        if (updateResult.count === 0) {
+          const dispatchRow = await tx.job_dispatch.findFirst({
+            where: { requirement_id: requirementId, worker_id: workerId },
+          });
+
+          if (!dispatchRow) {
+            throw new DispatchAcceptanceError(
+              'No valid dispatch found for this worker on this requirement',
+              'NO_VALID_DISPATCH',
+              404,
+            );
+          }
+
+          if (dispatchRow.status === 'accepted') {
+            throw new DispatchAcceptanceError(
+              'This dispatch has already been accepted',
+              'DISPATCH_ALREADY_ACCEPTED',
+              409,
+            );
+          }
+
+          if (
+            dispatchRow.status === 'declined' ||
+            dispatchRow.status === 'timeout' ||
+            dispatchRow.status === 'expired'
+          ) {
+            throw new DispatchAcceptanceError(
+              `Dispatch is in terminal state: ${dispatchRow.status}`,
+              'DISPATCH_NOT_ACTIONABLE',
+              409,
+            );
+          }
+
+          if (dispatchRow.expires_at && dispatchRow.expires_at <= now) {
+            throw new DispatchAcceptanceError(
+              'Dispatch has expired',
+              'DISPATCH_EXPIRED',
+              410,
+            );
+          }
+
+          throw new DispatchAcceptanceError(
+            'Dispatch cannot be accepted in its current state',
+            'DISPATCH_NOT_ACCEPTABLE',
+            409,
+          );
+        }
+
+        // Capacity invariant: worker_count_filled strictly increments
+        const newFilled = (req.worker_count_filled ?? 0) + 1;
+        const nowFilled = newFilled >= req.worker_count_needed;
+
+        await tx.job_requirement.update({
+          where: { id: requirementId },
+          data: {
+            worker_count_filled: newFilled,
+            status: nowFilled ? 'FILLED' : 'PARTIALLY_FILLED',
+          },
+        });
+
+        // Compute OTP and bcrypt hash ONLY for the winning transaction that reserved the slot
+        const otp = generateOTP();
+        const otp_hash = await hashOTP(otp);
+        const otp_expires_at = new Date(Date.now() + bookingConfig.bookingOtpTtlSeconds * 1000);
+
+        // Create the booking record with hashed OTP and set job state
+        const booking = await tx.booking.create({
+          data: {
+            job_id: req.job_id,
+            requirement_id: requirementId,
+            worker_id: workerId,
+            customer_id: req.job.customer_id,
+            status: 'CONFIRMED',
+            otp_hash,
+            otp_expires_at,
+            otp_attempts: 0,
+          },
+        });
+
+        // Mandatory Transactional Outbox (Issue 12): Record booking_confirmed event atomically
+        if (typeof (tx as any).notification_outbox?.create === 'function') {
+          await (tx as any).notification_outbox.create({
+            data: {
+              event_type: 'booking_confirmed',
+              aggregate_type: 'booking',
+              aggregate_id: booking.id,
+              recipient_type: 'customer',
+              recipient_id: req.job.customer_id,
+              payload: {
+                bookingId: booking.id,
+                jobId: req.job_id,
+                workerId,
+                skillType: req.skill_type,
+                title: 'Worker Confirmed',
+                body: 'A worker has accepted and confirmed your booking.',
+              },
+              idempotency_key: `booking_confirmed:${booking.id}:customer:${req.job.customer_id}`,
+              status: 'PENDING',
             },
-            idempotency_key: `booking_confirmed:${booking.id}:customer:${req.job.customer_id}`,
-            status: 'PENDING',
-          },
-        });
+          });
+        }
+
+        let expiredWorkerIds: string[] = [];
+        let jobFullyBooked = false;
+
+        // 5. If this requirement is now full:
+        if (nowFilled) {
+          const pendingDispatches = await tx.job_dispatch.findMany({
+            where: {
+              requirement_id: requirementId,
+              status: 'pending',
+            },
+            select: { worker_id: true },
+          });
+          expiredWorkerIds = pendingDispatches.map((d) => d.worker_id);
+
+          // Expire all remaining pending dispatches
+          await tx.job_dispatch.updateMany({
+            where: {
+              requirement_id: requirementId,
+              status: 'pending',
+            },
+            data: { status: 'expired', responded_at: new Date() },
+          });
+
+          // Check if ALL requirements for this job are now filled → mark job fully_booked
+          jobFullyBooked = await checkJobComplete(req.job_id, tx);
+        }
+
+        return {
+          booking,
+          otp,
+          nowFilled,
+          newFilled,
+          needed: req.worker_count_needed,
+          jobId: req.job_id,
+          customerId: req.job.customer_id,
+          skillType: req.skill_type,
+          expiredWorkerIds,
+          jobFullyBooked,
+        };
+      },
+      {
+        maxWait: 15_000,
+        timeout: 30_000,
       }
-
-      let expiredWorkerIds: string[] = [];
-      let jobFullyBooked = false;
-
-      // 5. If this requirement is now full:
-      if (nowFilled) {
-        const pendingDispatches = await tx.job_dispatch.findMany({
-          where: {
-            requirement_id: requirementId,
-            status: 'pending',
-          },
-          select: { worker_id: true },
-        });
-        expiredWorkerIds = pendingDispatches.map((d) => d.worker_id);
-
-        // Expire all remaining pending dispatches
-        await tx.job_dispatch.updateMany({
-          where: {
-            requirement_id: requirementId,
-            status: 'pending',
-          },
-          data: { status: 'expired', responded_at: new Date() },
-        });
-
-        // Check if ALL requirements for this job are now filled → mark job fully_booked
-        jobFullyBooked = await checkJobComplete(req.job_id, tx);
-      }
-
-      return {
-        booking,
-        otp,
-        nowFilled,
-        newFilled,
-        needed: req.worker_count_needed,
-        jobId: req.job_id,
-        customerId: req.job.customer_id,
-        skillType: req.skill_type,
-        expiredWorkerIds,
-        jobFullyBooked,
-      };
-    }, {
-      // The lock queue can legitimately contain many mobile retries. These are
-      // database waits, not business failures; retain a bounded but realistic
-      // budget so Prisma does not turn a capacity race into a transaction-timeout
-      // 500 before the caller can receive SLOTS_FULL.
-      maxWait: 15_000,
-      timeout: 30_000,
-    });
+    );
   } catch (err: any) {
     if (err instanceof DispatchAcceptanceError) {
       throw err;
@@ -304,6 +388,14 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
         );
       }
     }
+    // Handle PostgreSQL capacity check constraint violation (chk_job_requirement_worker_count_capacity)
+    if (
+      err.code === '23514' ||
+      err.message?.includes('chk_job_requirement_worker_count_capacity') ||
+      err.message?.includes('23514')
+    ) {
+      throw new DispatchAcceptanceError('Requirement slots are already full', 'SLOTS_FULL', 409);
+    }
     // If transaction failed due to conflict/lock timeout (P2034, P2028, DriverAdapterError, deadlock, lock timeout), check if requirement was filled by the winner
     if (
       err.code === 'P2034' ||
@@ -317,9 +409,21 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
       err.message?.includes('could not obtain lock') ||
       err.message?.includes('canceling statement')
     ) {
-      const latestReq = await prisma.job_requirement.findUnique({
-        where: { id: requirementId },
-      });
+      const [latestReq, existingBooking] = await Promise.all([
+        prisma.job_requirement.findUnique({
+          where: { id: requirementId },
+        }),
+        prisma.booking.findFirst({
+          where: { requirement_id: requirementId, worker_id: workerId },
+        }),
+      ]);
+      if (existingBooking) {
+        throw new DispatchAcceptanceError(
+          'Worker already has an active booking for this requirement',
+          'BOOKING_ALREADY_EXISTS',
+          409,
+        );
+      }
       if (
         latestReq &&
         (latestReq.status?.toUpperCase() === RequirementStatus.FILLED ||

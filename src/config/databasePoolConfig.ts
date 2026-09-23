@@ -63,7 +63,7 @@ export function getDatabasePoolConfig(): DatabasePoolConfig {
 
   const connectionTimeoutMillis = process.env.DB_CONNECTION_TIMEOUT_MS
     ? parseInt(process.env.DB_CONNECTION_TIMEOUT_MS, 10)
-    : 5000;
+    : 15000;
 
   const idleTimeoutMillis = process.env.DB_IDLE_TIMEOUT_MS
     ? parseInt(process.env.DB_IDLE_TIMEOUT_MS, 10)

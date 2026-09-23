@@ -23,6 +23,8 @@ function handleDispatchControllerError(error: any, req: Request, res: Response):
      error.code === 'DISPATCH_ALREADY_ACCEPTED' ? 409 :
      error.code === 'SLOTS_FULL' ? 409 :
      error.code === 'BOOKING_ALREADY_EXISTS' ? 409 :
+     error.code === 'REQUIREMENT_CANCELLED' ? 409 :
+     error.code === 'REQUIREMENT_NOT_ACTIVE' ? 409 :
      error.message === 'SLOTS_FULL' ? 409 :
      error.message === 'REQUIREMENT_NOT_FOUND' ? 404 :
      error.message === 'NO_VALID_DISPATCH' ? 404 :

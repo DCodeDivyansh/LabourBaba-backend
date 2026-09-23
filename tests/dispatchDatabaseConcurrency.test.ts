@@ -8,9 +8,10 @@ describe('Issue #21: Real PostgreSQL Dispatch Database Concurrency & Constraints
 
   beforeAll(async () => {
     // Create minimal test fixtures in live PostgreSQL
+    const randPhone = `+9199${Math.floor(10000000 + Math.random() * 90000000)}`;
     const customer = await prisma.customer.create({
       data: {
-        phone: '+919999900021',
+        phone: randPhone,
         name: 'Dispatch Invariant Customer',
         password: 'hashedpassword',
       },
@@ -46,9 +47,10 @@ describe('Issue #21: Real PostgreSQL Dispatch Database Concurrency & Constraints
       });
     }
 
+    const randWorkerPhone = `+9188${Math.floor(10000000 + Math.random() * 90000000)}`;
     const worker = await prisma.worker.create({
       data: {
-        phone: '+918888800021',
+        phone: randWorkerPhone,
         name: 'Dispatch Invariant Worker',
         password: 'hashedpassword',
         skill_type: 'Electrician',
