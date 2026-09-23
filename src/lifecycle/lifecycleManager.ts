@@ -16,6 +16,7 @@ import { closeAllWorkers } from '../workers/workerLifecycle';
 import { assertJwtConfig, assertProductionAuthConfig } from '../config/authConfig';
 import { assertProductionPaymentConfig } from '../config/paymentConfig';
 import { assertProductionStorageConfig } from '../config/storageConfig';
+import { assertOutboxConfig } from '../config/outboxConfig';
 import { assertFcmConfig } from '../shared/fcm';
 import { reconcileDispatchState } from '../features/dispatch/dispatchReconciliationService';
 import { outboxService } from '../services/outboxService';
@@ -61,6 +62,7 @@ export class LifecycleManager {
     assertProductionStorageConfig();
     assertRedisConfig();
     assertFcmConfig();
+    assertOutboxConfig();
     logger.info('[LIFECYCLE] Configuration successfully validated.');
 
     // 2. Initialize and verify PostgreSQL connectivity

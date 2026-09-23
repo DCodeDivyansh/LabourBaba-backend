@@ -53,6 +53,7 @@ export class MetricsService {
   public readonly dispatchReconciliationTotal: Counter<string>;
   public readonly dispatchReconciliationRepairsTotal: Counter<string>;
   public readonly dispatchEnqueueFailuresTotal: Counter<string>;
+  public readonly outboxShutdownTotal: Counter<string>;
 
   // Location Metrics
   public readonly locationUpdatesTotal: Counter<string>;
@@ -280,6 +281,13 @@ export class MetricsService {
       name: "dispatch_enqueue_failures_total",
       help: "Total number of BullMQ dispatch queue enqueue failures",
       labelNames: ["queue_name"],
+      registers: [this.registry],
+    });
+
+    this.outboxShutdownTotal = new Counter({
+      name: "outbox_shutdown_total",
+      help: "Total number of outbox worker shutdown outcomes",
+      labelNames: ["status"],
       registers: [this.registry],
     });
 
@@ -511,6 +519,7 @@ export class MetricsService {
       if (name === "redis_errors_total") return this.redisErrorsTotal.inc(sanitizedLabels, value);
       if (name === "database_errors_total") return this.databaseErrorsTotal.inc(sanitizedLabels, value);
       if (name === "http_errors_total") return this.httpErrorsTotal.inc(sanitizedLabels, value);
+      if (name === "outbox_shutdown_total") return this.outboxShutdownTotal.inc(sanitizedLabels, value);
 
       // Create or reuse dynamic counter
       let counter = this.dynamicCounters.get(name);
@@ -647,6 +656,10 @@ export class MetricsService {
 
   recordDispatchEnqueueFailure(queueName: string): void {
     this.dispatchEnqueueFailuresTotal.inc({ queue_name: queueName });
+  }
+
+  recordOutboxShutdown(status: "immediate" | "drained" | "timed_out"): void {
+    this.outboxShutdownTotal.inc({ status });
   }
 
   recordBookingCreated(): void {
