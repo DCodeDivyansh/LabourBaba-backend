@@ -23,6 +23,7 @@ import { outboxService } from '../services/outboxService';
 import { outboxWorker } from '../workers/outboxWorker';
 import { paymentReconciliationWorker } from '../workers/paymentReconciliationWorker';
 import { authService } from '../features/auth/auth.services';
+import { setupSocketRedisAdapter, closeSocketRedisAdapter } from '../socket/socketRedisAdapter';
 import { logger } from '../utils/logger';
 
 export type LifecycleState = 'INITIALIZING' | 'READY' | 'SHUTTING_DOWN' | 'TERMINATED';
@@ -75,6 +76,11 @@ export class LifecycleManager {
       throw new Error(`[LIFECYCLE] Redis ping failed with response: ${pong}`);
     }
     logger.info('[LIFECYCLE] Redis connectivity confirmed.');
+
+    // 3b. Initialize Socket.IO Redis Adapter for horizontal scaling (Issue #11)
+    if (this.io) {
+      await setupSocketRedisAdapter(this.io);
+    }
 
     // 4. Authoritative startup reconciliation: reconstruct orphaned dispatch wave states & recover stale outbox
     try {
@@ -212,6 +218,8 @@ export class LifecycleManager {
           });
         } catch (err: any) {
           logger.warn('[LIFECYCLE] Error closing Socket.IO:', { error: err.message });
+        } finally {
+          await closeSocketRedisAdapter();
         }
       }
 

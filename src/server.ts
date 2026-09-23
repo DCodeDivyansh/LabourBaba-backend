@@ -110,37 +110,12 @@ app.use(
   })
 );
 
+import { createSocketServer } from "./socket/createSocketServer";
+
 /**
  * Socket.IO
  */
-const io = new Server(httpServer, {
-  cors: {
-    origin(origin, callback) {
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(new Error(`Origin ${origin} not allowed by CORS`));
-    },
-    credentials: true,
-    methods: ["GET", "POST"],
-  },
-});
-
-io.engine.on("connection_error", (err) => {
-  logger.warn("[SOCKET_ENGINE_ERROR]", { code: err.code, message: err.message, context: err.context });
-});
-
-import { socketAuthMiddleware } from "./socket/socketAuth";
-import { registerSocketHandlers } from "./socket/socketHandlers";
-
-// Authenticate handshake using JWT access token & database principal resolution
-io.use(socketAuthMiddleware);
-
-// Register authoritative, role-guarded socket event handlers
-registerSocketHandlers(io);
+const io = createSocketServer(httpServer, { allowedOrigins });
 
 // Register servers with lifecycle manager
 if (lifecycleManager && typeof lifecycleManager.registerServers === 'function') {
