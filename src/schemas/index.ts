@@ -51,6 +51,8 @@ export const VerificationStatusSchema = z.enum(["PENDING", "VERIFIED", "REJECTED
   example: "PENDING",
 });
 
+export const WorkerDocumentStatusSchema = VerificationStatusSchema;
+
 export const DocumentTypeSchema = z.enum(["AADHAAR", "PAN", "SELFIE", "VOTER_ID", "DRIVING_LICENSE", "PASSPORT"]).openapi({
   description: "Type of worker verification document",
   example: "AADHAAR",
@@ -363,7 +365,7 @@ export const WorkerDocumentSchema = z.object({
   worker_id: z.string().uuid(),
   document_type: z.string().nullable().optional(),
   file_url: z.string().nullable().optional(),
-  status: z.string().nullable().optional(),
+  status: WorkerDocumentStatusSchema.nullable().optional(),
 }).openapi("WorkerDocument");
 
 export const WorkerDeviceSchema = z.object({

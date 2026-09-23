@@ -94,7 +94,7 @@ describe("Issue 51 - Comprehensive Authorization Matrix & ABAC Security", () => 
     await prisma.worker_document.upsert({
       where: { id: DOCUMENT_A_ID },
       update: { worker_id: WORKER_A_ID },
-      create: { id: DOCUMENT_A_ID, worker_id: WORKER_A_ID, document_type: "AADHAAR", status: "pending", file_url: "docs/aadhaar_a.pdf" },
+      create: { id: DOCUMENT_A_ID, worker_id: WORKER_A_ID, document_type: "AADHAAR", status: "PENDING", file_url: "docs/aadhaar_a.pdf" },
     });
 
     // Seed Jobs & Requirements

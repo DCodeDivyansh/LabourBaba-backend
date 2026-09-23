@@ -95,3 +95,7 @@ export enum VerificationStatus {
   VERIFIED = "VERIFIED",
   REJECTED = "REJECTED"
 }
+
+export const WorkerDocumentStatus = VerificationStatus;
+export type WorkerDocumentStatus = VerificationStatus;
+

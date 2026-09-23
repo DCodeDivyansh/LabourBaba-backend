@@ -69,6 +69,11 @@ export function errorHandler(
         errorCode = 'INVALID_RELATION';
         clientMessage = 'Referenced entity does not exist.';
         break;
+      case 'P2004':
+        statusCode = 400;
+        errorCode = 'CONSTRAINT_VIOLATION';
+        clientMessage = 'A database constraint was violated.';
+        break;
       default:
         statusCode = 500;
         errorCode = 'DATABASE_ERROR';
