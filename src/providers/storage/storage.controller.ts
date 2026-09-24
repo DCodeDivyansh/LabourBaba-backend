@@ -3,6 +3,41 @@ import { storageService } from "./storage.service";
 import { storageConfig } from "../../config/storageConfig";
 import { logger } from "../../utils/logger";
 
+/**
+ * Validates binary data header against declared MIME format.
+ * Prevents malicious executable/script uploads spoofing Content-Type headers.
+ */
+export function validateDocumentMagicBytes(data: Buffer, contentType: string): boolean {
+  if (!data || data.length < 4) return false;
+
+  if (contentType === "application/pdf") {
+    // PDF file header: %PDF- (0x25, 0x50, 0x44, 0x46, 0x2D)
+    return data.subarray(0, 5).toString("ascii") === "%PDF-";
+  }
+
+  if (contentType === "image/jpeg") {
+    // JPEG SOI marker: FF D8 FF
+    return data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
+  }
+
+  if (contentType === "image/png") {
+    // PNG file header: 89 50 4E 47 0D 0A 1A 0A
+    if (data.length < 8) return false;
+    return (
+      data[0] === 0x89 &&
+      data[1] === 0x50 &&
+      data[2] === 0x4e &&
+      data[3] === 0x47 &&
+      data[4] === 0x0d &&
+      data[5] === 0x0a &&
+      data[6] === 0x1a &&
+      data[7] === 0x0a
+    );
+  }
+
+  return false;
+}
+
 export const storageController = {
   /**
    * GET /api/storage/download/*
@@ -22,7 +57,17 @@ export const storageController = {
         return;
       }
 
-      const key = storageService.normalizeObjectKey(rawKey);
+      let key: string;
+      try {
+        key = storageService.normalizeObjectKey(rawKey);
+      } catch {
+        res.status(403).json({
+          success: false,
+          code: "STORAGE_KEY_INVALID",
+          message: "Invalid storage object key or path traversal detected.",
+        });
+        return;
+      }
 
       // Verify HMAC-SHA256 signature and expiration
       const isValid = storageService.verifySignedUrl(key, exp, sig, "GET");
@@ -68,7 +113,9 @@ export const storageController = {
 
       res.status(200).send(obj.data);
     } catch (err: any) {
-      logger.error("[STORAGE_DOWNLOAD_ERROR]", { error: err.message });
+      logger.error("[STORAGE_DOWNLOAD_ERROR]", {
+        error: err.message ? err.message.replace(/sig=[^&\s]+/gi, "sig=[REDACTED]") : "unknown",
+      });
       res.status(500).json({
         success: false,
         code: "STORAGE_DOWNLOAD_FAILED",
@@ -115,7 +162,17 @@ export const storageController = {
         return;
       }
 
-      const key = storageService.normalizeObjectKey(rawKey);
+      let key: string;
+      try {
+        key = storageService.normalizeObjectKey(rawKey);
+      } catch {
+        res.status(403).json({
+          success: false,
+          code: "STORAGE_KEY_INVALID",
+          message: "Invalid storage object key or path traversal detected.",
+        });
+        return;
+      }
 
       const isValid = storageService.verifySignedUrl(key, exp, sig, "PUT", contentType);
       if (!isValid) {
@@ -155,6 +212,16 @@ export const storageController = {
         return;
       }
 
+      // Magic bytes file content verification
+      if (!validateDocumentMagicBytes(data, contentType)) {
+        res.status(415).json({
+          success: false,
+          code: "STORAGE_MIME_MISMATCH",
+          message: `File contents do not match declared MIME type '${contentType}'. Spoofed or unsupported file format.`,
+        });
+        return;
+      }
+
       await storageService.putObject(key, data, contentType);
 
       res.status(200).json({
@@ -167,7 +234,9 @@ export const storageController = {
         },
       });
     } catch (err: any) {
-      logger.error("[STORAGE_UPLOAD_ERROR]", { error: err.message });
+      logger.error("[STORAGE_UPLOAD_ERROR]", {
+        error: err.message ? err.message.replace(/sig=[^&\s]+/gi, "sig=[REDACTED]") : "unknown",
+      });
       res.status(500).json({
         success: false,
         code: "STORAGE_UPLOAD_FAILED",

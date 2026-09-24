@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import path from "path";
 import { storageConfig } from "../../config/storageConfig";
 import {
   SignedUrlResult,
@@ -8,6 +9,7 @@ import {
 } from "./storage.types";
 import { LocalStorageDriver } from "./localStorageDriver";
 import { SupabaseStorageDriver } from "./supabaseStorageDriver";
+import { metricsService } from "../../metrics/metrics.service";
 
 export class StorageService implements StorageProvider {
   private readonly bucketName: string;
@@ -47,22 +49,29 @@ export class StorageService implements StorageProvider {
   }
 
   /**
-   * Verifies if a given object key belongs to the specified worker.
+   * Verifies if a given object key belongs strictly to the specified worker.
+   * Path normalization and directory traversal defenses are strictly enforced.
    */
   public isWorkerDocumentKey(workerId: string, key: string): boolean {
     if (!workerId || !key) return false;
-    const normalizedKey = this.normalizeObjectKey(key);
-    return normalizedKey.startsWith(`workers/${workerId}/documents/`);
+    try {
+      const normalizedKey = this.normalizeObjectKey(key);
+      return normalizedKey.startsWith(`workers/${workerId}/documents/`);
+    } catch {
+      return false; // Traversal attempt rejected
+    }
   }
 
   /**
-   * Normalizes a file URL or key into an object key.
+   * Normalizes a file URL or key into a sanitized object key.
+   * Rejects path traversal attempts (../, null bytes, backslashes).
    */
   public normalizeObjectKey(urlOrKey: string): string {
     if (!urlOrKey) return "";
+    let raw = urlOrKey;
     try {
-      if (urlOrKey.startsWith("http://") || urlOrKey.startsWith("https://")) {
-        const parsed = new URL(urlOrKey);
+      if (raw.startsWith("http://") || raw.startsWith("https://")) {
+        const parsed = new URL(raw);
         let pathname = parsed.pathname.replace(/^\/+/, "");
         if (pathname.startsWith("download/")) {
           pathname = pathname.substring("download/".length);
@@ -73,12 +82,35 @@ export class StorageService implements StorageProvider {
         } else if (pathname.startsWith("api/storage/upload/")) {
           pathname = pathname.substring("api/storage/upload/".length);
         }
-        return decodeURIComponent(pathname);
+        raw = decodeURIComponent(pathname);
       }
     } catch {
       // Not a valid URL, treat as raw key
     }
-    return urlOrKey.replace(/^\/+/, "");
+
+    // Strip null bytes
+    raw = raw.replace(/\0/g, "");
+    // Normalize Windows backslashes to forward slashes
+    raw = raw.replace(/\\/g, "/");
+    // Strip leading slashes
+    raw = raw.replace(/^\/+/, "");
+
+    // Path traversal protection: resolve path segments safely
+    const normalized = path.posix.normalize(raw);
+
+    // If path attempts to traverse above root or contains ..
+    if (
+      raw.includes("/..") ||
+      raw.includes("../") ||
+      raw === ".." ||
+      normalized === ".." ||
+      normalized.startsWith("../") ||
+      normalized.includes("/../")
+    ) {
+      throw new Error("Directory traversal attempt detected in storage key");
+    }
+
+    return normalized;
   }
 
   /**
@@ -100,6 +132,8 @@ export class StorageService implements StorageProvider {
       .digest("hex");
 
     const url = `${this.storageBaseUrl}/download/${encodeURIComponent(normalizedKey)}?exp=${exp}&sig=${signature}`;
+
+    metricsService.recordSignedUrlGeneration("download");
 
     return {
       url,
@@ -128,6 +162,8 @@ export class StorageService implements StorageProvider {
 
     const uploadUrl = `${this.storageBaseUrl}/upload/${encodeURIComponent(normalizedKey)}?exp=${exp}&sig=${signature}`;
 
+    metricsService.recordSignedUrlGeneration("upload");
+
     return {
       uploadUrl,
       objectKey: normalizedKey,
@@ -153,7 +189,13 @@ export class StorageService implements StorageProvider {
       return false; // Expired
     }
 
-    const normalizedKey = this.normalizeObjectKey(key);
+    let normalizedKey: string;
+    try {
+      normalizedKey = this.normalizeObjectKey(key);
+    } catch {
+      return false; // Traversal or malformed key
+    }
+
     const payload =
       method === "PUT" && contentType
         ? `PUT:${this.bucketName}:${normalizedKey}:${contentType}:${expNum}`
@@ -178,6 +220,13 @@ export class StorageService implements StorageProvider {
     }
   }
 
+  public async verifyConnectivity(): Promise<{ healthy: boolean; details?: any }> {
+    if (this.driver.verifyConnectivity) {
+      return await this.driver.verifyConnectivity();
+    }
+    return { healthy: true, details: { provider: "local" } };
+  }
+
   public async putObject(key: string, data: Buffer, contentType: string): Promise<void> {
     const normalizedKey = this.normalizeObjectKey(key);
     await this.driver.putObject(normalizedKey, data, contentType);
@@ -194,7 +243,12 @@ export class StorageService implements StorageProvider {
   }
 
   public async objectExists(key: string): Promise<boolean> {
-    const normalizedKey = this.normalizeObjectKey(key);
+    let normalizedKey: string;
+    try {
+      normalizedKey = this.normalizeObjectKey(key);
+    } catch {
+      return false;
+    }
     if (!normalizedKey) return false;
     return await this.driver.objectExists(normalizedKey);
   }

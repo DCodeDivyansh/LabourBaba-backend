@@ -18,6 +18,9 @@ import { storageConfig } from "../../config/storageConfig";
 import { workerPolicy, assertPolicy, AuthorizationError, AuthenticatedUser } from "../../policies";
 import { skillService } from "../skill/skill.service";
 import { logger } from "../../utils/logger";
+import { metricsService } from "../../metrics/metrics.service";
+import { auditService } from "../audit/audit.service";
+import { AuditAction } from "../audit/audit.types";
 
 export const workerService = {
   async register(payload: CreateWorkerReq) {
@@ -255,12 +258,63 @@ export const workerService = {
       throw new AuthorizationError("Document not found", 404, "DOCUMENT_NOT_FOUND");
     }
 
-    assertPolicy(workerPolicy.canReadDocument(actor, doc));
+    const decision = workerPolicy.canReadDocument(actor, doc);
+    if (!decision.allowed) {
+      metricsService.recordUnauthorizedDocumentAccess(decision.code || "DOCUMENT_ACCESS_DENIED");
+      assertPolicy(decision);
+    }
 
     const key = doc.file_url || storageService.generateDocumentKey(doc.worker_id, "pdf");
     const signed = await storageService.getSignedDownloadUrl(key);
 
     return toWorkerDocumentAccessDTO(doc, signed.url, signed.expiresIn);
+  },
+
+  async deleteDocument(actor: AuthenticatedUser, documentId: string) {
+    const doc = await prisma.worker_document.findUnique({
+      where: { id: documentId },
+    });
+
+    if (!doc) {
+      throw new AuthorizationError("Document not found", 404, "DOCUMENT_NOT_FOUND");
+    }
+
+    const decision = workerPolicy.canDeleteDocument(actor, doc);
+    if (!decision.allowed) {
+      metricsService.recordUnauthorizedDocumentAccess("DELETE_FORBIDDEN");
+      assertPolicy(decision);
+    }
+
+    if (doc.file_url) {
+      try {
+        const key = storageService.normalizeObjectKey(doc.file_url);
+        await storageService.deleteObject(key);
+      } catch (err: any) {
+        logger.warn("[WORKER_DOCUMENT] Physical storage file deletion failed or already missing", {
+          documentId,
+          error: err.message,
+        });
+      }
+    }
+
+    await prisma.worker_document.delete({
+      where: { id: documentId },
+    });
+
+    await auditService.recordEvent(prisma, {
+      actorId: actor.id,
+      actorRole: String(actor.role).toLowerCase() as any,
+      action: AuditAction.DOCUMENT_DELETED,
+      targetType: "document",
+      targetId: documentId,
+      reason: "Worker or Admin deleted document",
+      metadata: {
+        workerId: doc.worker_id,
+        documentType: doc.document_type,
+      },
+    });
+
+    return { success: true, message: "Document deleted successfully" };
   },
 
   async getDocuments(workerId: string) {

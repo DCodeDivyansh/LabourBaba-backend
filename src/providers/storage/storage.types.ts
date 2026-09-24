@@ -24,6 +24,7 @@ export interface StorageDriver {
   deleteObject(key: string): Promise<void>;
   objectExists(key: string): Promise<boolean>;
   getMetadata(key: string): Promise<StorageObjectMetadata | null>;
+  verifyConnectivity?(): Promise<{ healthy: boolean; details?: any }>;
 }
 
 export interface StorageProvider {
@@ -47,4 +48,5 @@ export interface StorageProvider {
   normalizeObjectKey(urlOrKey: string): string;
   generateDocumentKey(workerId: string, ext?: string): string;
   isWorkerDocumentKey(workerId: string, key: string): boolean;
+  verifyConnectivity?(): Promise<{ healthy: boolean; details?: any }>;
 }

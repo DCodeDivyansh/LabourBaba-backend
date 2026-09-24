@@ -96,6 +96,20 @@ export class MetricsService {
   // Backup Metric
   public readonly backupLastSuccessfulTimestampSeconds: Gauge<string>;
 
+  // Storage Metrics (P7 Issue 04)
+  public readonly storageUploadAttemptTotal: Counter<string>;
+  public readonly storageUploadSuccessTotal: Counter<string>;
+  public readonly storageUploadFailureTotal: Counter<string>;
+  public readonly storageDownloadAttemptTotal: Counter<string>;
+  public readonly storageDownloadSuccessTotal: Counter<string>;
+  public readonly storageDownloadFailureTotal: Counter<string>;
+  public readonly storageDeleteAttemptTotal: Counter<string>;
+  public readonly storageDeleteSuccessTotal: Counter<string>;
+  public readonly storageDeleteFailureTotal: Counter<string>;
+  public readonly signedUrlGenerationTotal: Counter<string>;
+  public readonly unauthorizedDocumentAccessTotal: Counter<string>;
+  public readonly storageProviderLatencySeconds: Histogram<string>;
+
   constructor() {
     this.registry = new Registry();
 
@@ -519,6 +533,81 @@ export class MetricsService {
       initialBackupTime = 0;
     }
     this.backupLastSuccessfulTimestampSeconds.set(initialBackupTime);
+
+    // Storage Metrics (P7 Issue 04)
+    this.storageUploadAttemptTotal = new Counter({
+      name: "storage_upload_attempt_total",
+      help: "Total document upload attempts to object storage",
+      labelNames: ["provider"],
+      registers: [this.registry],
+    });
+    this.storageUploadSuccessTotal = new Counter({
+      name: "storage_upload_success_total",
+      help: "Total document uploads successfully persisted in object storage",
+      labelNames: ["provider"],
+      registers: [this.registry],
+    });
+    this.storageUploadFailureTotal = new Counter({
+      name: "storage_upload_failure_total",
+      help: "Total document upload failures in object storage",
+      labelNames: ["provider", "reason"],
+      registers: [this.registry],
+    });
+    this.storageDownloadAttemptTotal = new Counter({
+      name: "storage_download_attempt_total",
+      help: "Total document download attempts from object storage",
+      labelNames: ["provider"],
+      registers: [this.registry],
+    });
+    this.storageDownloadSuccessTotal = new Counter({
+      name: "storage_download_success_total",
+      help: "Total document downloads successfully retrieved from object storage",
+      labelNames: ["provider"],
+      registers: [this.registry],
+    });
+    this.storageDownloadFailureTotal = new Counter({
+      name: "storage_download_failure_total",
+      help: "Total document download failures from object storage",
+      labelNames: ["provider", "reason"],
+      registers: [this.registry],
+    });
+    this.storageDeleteAttemptTotal = new Counter({
+      name: "storage_delete_attempt_total",
+      help: "Total document deletion attempts from object storage",
+      labelNames: ["provider"],
+      registers: [this.registry],
+    });
+    this.storageDeleteSuccessTotal = new Counter({
+      name: "storage_delete_success_total",
+      help: "Total document deletions successfully executed in object storage",
+      labelNames: ["provider"],
+      registers: [this.registry],
+    });
+    this.storageDeleteFailureTotal = new Counter({
+      name: "storage_delete_failure_total",
+      help: "Total document deletion failures in object storage",
+      labelNames: ["provider", "reason"],
+      registers: [this.registry],
+    });
+    this.signedUrlGenerationTotal = new Counter({
+      name: "signed_url_generation_total",
+      help: "Total short-lived HMAC signed document URLs generated",
+      labelNames: ["type"],
+      registers: [this.registry],
+    });
+    this.unauthorizedDocumentAccessTotal = new Counter({
+      name: "unauthorized_document_access_total",
+      help: "Total unauthorized access attempts to private worker documents",
+      labelNames: ["reason"],
+      registers: [this.registry],
+    });
+    this.storageProviderLatencySeconds = new Histogram({
+      name: "storage_provider_latency_seconds",
+      help: "Object storage provider operation latency in seconds",
+      labelNames: ["provider", "operation"],
+      buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+      registers: [this.registry],
+    });
   }
 
   // --- Dynamic Compatibility Helpers ---
@@ -972,6 +1061,56 @@ export class MetricsService {
 
   isAutoCollectEnabled(): boolean {
     return this.autoCollect;
+  }
+
+  // --- Storage Observability Helpers (P7 Issue 04) ---
+
+  recordStorageUploadAttempt(provider = "supabase"): void {
+    this.storageUploadAttemptTotal.inc({ provider });
+  }
+
+  recordStorageUploadSuccess(provider = "supabase"): void {
+    this.storageUploadSuccessTotal.inc({ provider });
+  }
+
+  recordStorageUploadFailure(provider = "supabase", reason = "unknown"): void {
+    this.storageUploadFailureTotal.inc({ provider, reason });
+  }
+
+  recordStorageDownloadAttempt(provider = "supabase"): void {
+    this.storageDownloadAttemptTotal.inc({ provider });
+  }
+
+  recordStorageDownloadSuccess(provider = "supabase"): void {
+    this.storageDownloadSuccessTotal.inc({ provider });
+  }
+
+  recordStorageDownloadFailure(provider = "supabase", reason = "unknown"): void {
+    this.storageDownloadFailureTotal.inc({ provider, reason });
+  }
+
+  recordStorageDeleteAttempt(provider = "supabase"): void {
+    this.storageDeleteAttemptTotal.inc({ provider });
+  }
+
+  recordStorageDeleteSuccess(provider = "supabase"): void {
+    this.storageDeleteSuccessTotal.inc({ provider });
+  }
+
+  recordStorageDeleteFailure(provider = "supabase", reason = "unknown"): void {
+    this.storageDeleteFailureTotal.inc({ provider, reason });
+  }
+
+  recordSignedUrlGeneration(type: "download" | "upload"): void {
+    this.signedUrlGenerationTotal.inc({ type });
+  }
+
+  recordUnauthorizedDocumentAccess(reason = "forbidden"): void {
+    this.unauthorizedDocumentAccessTotal.inc({ reason });
+  }
+
+  recordStorageLatency(provider: string, operation: string, durationSeconds: number): void {
+    this.storageProviderLatencySeconds.observe({ provider, operation }, durationSeconds);
   }
 
   /**
