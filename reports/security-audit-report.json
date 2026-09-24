@@ -1,18 +1,18 @@
 {
-  "timestamp": "2026-09-24T09:27:51.331Z",
+  "timestamp": "2026-09-24T10:24:21.779Z",
   "status": "PASS",
   "secretFindings": [],
   "backupArtifactFindings": [],
   "dependencyAudit": {
     "scanned": true,
-    "totalVulnerabilities": 21,
+    "totalVulnerabilities": 20,
     "critical": 0,
-    "high": 8,
+    "high": 7,
     "moderate": 13,
     "low": 0,
     "info": 0,
     "unapprovedBlockingVulnerabilities": 0,
-    "approvedExceptionsCount": 16
+    "approvedExceptionsCount": 15
   },
   "dockerfileAudit": {
     "hasNonRootUser": true,

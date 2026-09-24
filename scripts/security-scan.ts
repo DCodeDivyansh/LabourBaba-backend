@@ -195,14 +195,6 @@ export const DOCUMENTED_SECURITY_EXCEPTIONS: SecurityException[] = [
     approvedBy: "Security-Release-Lead",
     expiresAt: "2026-12-31",
   },
-  {
-    advisoryId: "GHSA-2m8v-j782-fhvr",
-    package: "socket.io-parser",
-    severity: "high",
-    justification: "Evaluated and guarded via binary payload size limits on Socket.IO server initialization.",
-    approvedBy: "Security-Release-Lead",
-    expiresAt: "2026-12-31",
-  },
 ];
 
 export interface ScanFinding {
@@ -438,6 +430,41 @@ export function parseAuditOutput(
   }
 }
 
+/**
+ * P7 Issue 02: Explicit release gate verifying that socket.io-parser
+ * is strictly >= 4.2.7 across the entire package-lock.json dependency graph.
+ */
+export function verifySocketIoParserSecurity(): { passed: boolean; error?: string } {
+  try {
+    const lockfilePath = resolve(ROOT_DIR, "package-lock.json");
+    if (!existsSync(lockfilePath)) return { passed: true };
+
+    const lock = JSON.parse(readFileSync(lockfilePath, "utf-8"));
+    if (!lock.packages) return { passed: true };
+
+    for (const [pkgPath, meta] of Object.entries<any>(lock.packages)) {
+      if (pkgPath.includes("socket.io-parser")) {
+        const version = meta.version;
+        if (!version) continue;
+        const [major, minor, patch] = version.split(".").map(Number);
+        const isVulnerable =
+          major < 4 ||
+          (major === 4 && minor < 2) ||
+          (major === 4 && minor === 2 && patch < 7);
+        if (isVulnerable) {
+          return {
+            passed: false,
+            error: `Vulnerable socket.io-parser@${version} detected at ${pkgPath}. Requires >= 4.2.7 (GHSA-2m8v-j782-fhvr).`,
+          };
+        }
+      }
+    }
+    return { passed: true };
+  } catch (err: any) {
+    return { passed: false, error: err?.message };
+  }
+}
+
 export function scanDockerfileHardening(): DockerfileAuditSummary {
   const dockerfilePath = resolve(ROOT_DIR, "Dockerfile");
   if (!existsSync(dockerfilePath)) {
@@ -631,6 +658,16 @@ export function runSecurityAudit(): { pass: boolean; report: SecurityAuditReport
     errors.push(
       `Unapproved blocking dependency vulnerabilities detected: ${dependencyAudit.unapprovedBlockingVulnerabilities} unapproved critical/high issues.`
     );
+  }
+
+  // P7 Issue 02: Check socket.io-parser version invariant
+  console.log("[SECURITY_SCAN] Checking socket.io-parser dependency security (P7 Issue 02)...");
+  const parserCheck = verifySocketIoParserSecurity();
+  if (!parserCheck.passed) {
+    console.error(`[SECURITY_SCAN] FAILED: ${parserCheck.error}`);
+    errors.push(`VULNERABLE_SOCKET_IO_PARSER: ${parserCheck.error}`);
+  } else {
+    console.log("[SECURITY_SCAN] SUCCESS: socket.io-parser is verified >= 4.2.7 (unvulnerable).");
   }
 
   // P6 Issue 2: Check for tracked backup artifacts (git ls-files + content heuristics)

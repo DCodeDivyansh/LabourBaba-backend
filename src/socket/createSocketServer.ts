@@ -33,6 +33,7 @@ export function createSocketServer(
 
   const io = new SocketIOServer(httpServer, {
     transports: (options?.transports as any) || ["websocket", "polling"],
+    maxHttpBufferSize: 1e6, // 1MB packet buffer ceiling to prevent memory exhaustion
     cors: {
       origin(origin, callback) {
         if (!origin) return callback(null, true);
