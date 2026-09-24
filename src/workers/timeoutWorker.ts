@@ -1,7 +1,7 @@
 import { Worker, Job } from 'bullmq';
 import prisma from '../config/prisma';
 import { redisConnectionOptions, dispatchQueue } from '../config/bullmq';
-import { registerWorker } from './workerLifecycle';
+import { registerWorker, unregisterWorker } from './workerLifecycle';
 import { RequirementStatus } from '../features/jobs/requirementStateMachine';
 import { getSocketServer } from '../socket/socketLifecycle';
 import { generateDispatchOperationId } from '../features/dispatch/dispatchOperation';
@@ -168,10 +168,16 @@ export function getTimeoutWorker(): Worker<TimeoutJobData> {
       {
         connection: redisConnectionOptions,
         concurrency: 20,
+        stalledInterval: 10_000,
+        maxStalledCount: 1,
       },
     );
 
     registerWorker(timeoutWorker);
+
+    timeoutWorker.on('closed', () => {
+      timeoutWorker = null;
+    });
 
     timeoutWorker.on('failed', (job, err) => {
       logger.error(`[timeoutWorker] Job ${job?.id} failed:`, { jobId: job?.id, error: err.message });
@@ -198,12 +204,18 @@ export function getTimeoutWorker(): Worker<TimeoutJobData> {
 
 // Worker is started explicitly via lifecycleManager.startup()
 
-const shutdown = async () => {
+export async function closeTimeoutWorker(): Promise<void> {
   if (timeoutWorker) {
-    logger.info('[timeoutWorker] Shutting down gracefully...');
+    logger.info('[timeoutWorker] Closing timeout worker...');
+    unregisterWorker(timeoutWorker);
     await timeoutWorker.close();
+    timeoutWorker = null;
     logger.info('[timeoutWorker] Closed.');
   }
+}
+
+const shutdown = async () => {
+  await closeTimeoutWorker();
 };
 
 process.on('SIGTERM', shutdown);

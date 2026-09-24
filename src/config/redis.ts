@@ -112,7 +112,7 @@ export function getRedisConnectionOptions(): RedisOptions {
     enableOfflineQueue: false,
     connectTimeout: 10000,
     retryStrategy: (times: number) => {
-      if (process.env.NODE_ENV === 'test') return null;
+      if (process.env.NODE_ENV === 'test' && process.env.ENABLE_REDIS_TEST_RETRY !== 'true') return null;
       return Math.min(times * 100, 3000);
     },
   };

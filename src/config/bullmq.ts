@@ -43,15 +43,36 @@ export const defaultJobOptions = {
   removeOnFail: { count: 5000 },
 };
 
-export const dispatchQueue = new Queue(DISPATCH_QUEUE_NAME, {
-  connection: redisConnectionOptions as ConnectionOptions,
-  defaultJobOptions,
-});
+function sanitizeJobOptions<T>(opts?: T): T {
+  if (!opts) return opts as T;
+  const anyOpts = opts as any;
+  if (anyOpts.jobId && typeof anyOpts.jobId === 'string' && anyOpts.jobId.includes(':')) {
+    return { ...anyOpts, jobId: anyOpts.jobId.replace(/:/g, '__') };
+  }
+  return opts;
+}
 
-export const timeoutQueue = new Queue(TIMEOUT_QUEUE_NAME, {
-  connection: redisConnectionOptions as ConnectionOptions,
-  defaultJobOptions,
-});
+function wrapQueue<T extends Queue>(queue: T): T {
+  const originalAdd = queue.add.bind(queue);
+  queue.add = ((name: any, data: any, opts: any) => {
+    return originalAdd(name, data, sanitizeJobOptions(opts));
+  }) as any;
+  return queue;
+}
+
+export const dispatchQueue = wrapQueue(
+  new Queue(DISPATCH_QUEUE_NAME, {
+    connection: redisConnectionOptions as ConnectionOptions,
+    defaultJobOptions,
+  }),
+);
+
+export const timeoutQueue = wrapQueue(
+  new Queue(TIMEOUT_QUEUE_NAME, {
+    connection: redisConnectionOptions as ConnectionOptions,
+    defaultJobOptions,
+  }),
+);
 
 /**
  * Dedicated queue for durable notification delivery (FCM + Socket.IO).
@@ -59,14 +80,30 @@ export const timeoutQueue = new Queue(TIMEOUT_QUEUE_NAME, {
  * ensuring the invariant: PostgreSQL COMMIT → notification enqueue → delivery.
  * Failures in delivery are retried by BullMQ and never roll back persisted state.
  */
-export const notificationQueue = new Queue(NOTIFICATION_QUEUE_NAME, {
-  connection: redisConnectionOptions as ConnectionOptions,
-  defaultJobOptions: {
-    ...defaultJobOptions,
-    attempts: 5, // More retries for notification delivery
-    backoff: {
-      type: 'exponential' as const,
-      delay: 2000,
+export const notificationQueue = wrapQueue(
+  new Queue(NOTIFICATION_QUEUE_NAME, {
+    connection: redisConnectionOptions as ConnectionOptions,
+    defaultJobOptions: {
+      ...defaultJobOptions,
+      attempts: 5, // More retries for notification delivery
+      backoff: {
+        type: 'exponential' as const,
+        delay: 2000,
+      },
     },
-  },
-});
+  }),
+);
+
+/**
+ * Creates an isolated BullMQ queue instance with standard configuration.
+ */
+export function createBullMQQueue(name: string, options?: any): Queue {
+  return wrapQueue(
+    new Queue(name, {
+      connection: redisConnectionOptions as ConnectionOptions,
+      defaultJobOptions,
+      ...options,
+    }),
+  );
+}
+

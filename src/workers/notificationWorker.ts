@@ -23,7 +23,7 @@ import { Worker, Job } from 'bullmq';
 import { redisConnectionOptions, NOTIFICATION_QUEUE_NAME } from '../config/bullmq';
 import { sendFCMToWorker } from '../shared/fcm';
 import { getSocketServer } from '../socket/socketLifecycle';
-import { registerWorker } from './workerLifecycle';
+import { registerWorker, unregisterWorker } from './workerLifecycle';
 import { metricsService } from '../metrics/metrics.service';
 import { logger } from '../utils/logger';
 
@@ -155,10 +155,16 @@ export function getNotificationWorker(): Worker<DispatchNotifyJobData> {
       {
         connection: redisConnectionOptions,
         concurrency: 20,
+        stalledInterval: 10_000,
+        maxStalledCount: 1,
       },
     );
 
     registerWorker(notificationWorkerInstance);
+
+    notificationWorkerInstance.on('closed', () => {
+      notificationWorkerInstance = null;
+    });
 
     notificationWorkerInstance.on('failed', (job, err) => {
       logger.error(
@@ -193,12 +199,18 @@ export function getNotificationWorker(): Worker<DispatchNotifyJobData> {
 
 // ── Graceful shutdown ────────────────────────────────────────────────────────
 
-const shutdown = async () => {
+export async function closeNotificationWorker(): Promise<void> {
   if (notificationWorkerInstance) {
-    logger.info('[notificationWorker] Shutting down gracefully...');
+    logger.info('[notificationWorker] Closing notification worker...');
+    unregisterWorker(notificationWorkerInstance);
     await notificationWorkerInstance.close();
+    notificationWorkerInstance = null;
     logger.info('[notificationWorker] Closed.');
   }
+}
+
+const shutdown = async () => {
+  await closeNotificationWorker();
 };
 
 process.on('SIGTERM', shutdown);

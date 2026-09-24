@@ -244,9 +244,9 @@ describe('Issue #26: Candidate Pagination and Exhaustion Model', () => {
 
       // 5 workers total: 2 already in job_dispatch, 3 remaining
       const remaining3Workers: EligibleWorkerCandidate[] = [
-        { id: 'w-3', name: 'W3', device_token: 't3', worker_score: 4.9, dist_m: 800 },
-        { id: 'w-4', name: 'W4', device_token: 't4', worker_score: 4.8, dist_m: 900 },
-        { id: 'w-5', name: 'W5', device_token: 't5', worker_score: 4.7, dist_m: 1000 },
+        { id: 'w-3', name: 'W3', worker_score: 4.9, dist_m: 800 },
+        { id: 'w-4', name: 'W4', worker_score: 4.8, dist_m: 900 },
+        { id: 'w-5', name: 'W5', worker_score: 4.7, dist_m: 1000 },
       ];
 
       (prisma as any).$queryRaw = jest.fn().mockResolvedValue(remaining3Workers);
@@ -296,7 +296,6 @@ describe('Issue #26: Candidate Pagination and Exhaustion Model', () => {
       const candidate: EligibleWorkerCandidate = {
         id: '99999999-9999-4999-8999-999999999999',
         name: 'Deterministic Worker',
-        device_token: 'tok-1',
         worker_score: 4.75,
         dist_m: 1250.5,
       };
@@ -322,9 +321,9 @@ describe('Issue #26: Candidate Pagination and Exhaustion Model', () => {
     it('MUST preserve deterministic sort order across candidates with identical distance and score using worker id tie-breaker', async () => {
       // 3 workers with identical distance (500m) and identical score (5.0)
       const equalCandidates: EligibleWorkerCandidate[] = [
-        { id: '11111111-0000-0000-0000-000000000001', name: 'A', device_token: null, worker_score: 5.0, dist_m: 500 },
-        { id: '11111111-0000-0000-0000-000000000002', name: 'B', device_token: null, worker_score: 5.0, dist_m: 500 },
-        { id: '11111111-0000-0000-0000-000000000003', name: 'C', device_token: null, worker_score: 5.0, dist_m: 500 },
+        { id: '11111111-0000-0000-0000-000000000001', name: 'A', worker_score: 5.0, dist_m: 500 },
+        { id: '11111111-0000-0000-0000-000000000002', name: 'B', worker_score: 5.0, dist_m: 500 },
+        { id: '11111111-0000-0000-0000-000000000003', name: 'C', worker_score: 5.0, dist_m: 500 },
       ];
 
       const origQueryRaw = prisma.$queryRaw;

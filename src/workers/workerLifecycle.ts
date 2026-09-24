@@ -10,6 +10,14 @@ export function registerWorker(worker: Worker): void {
   registeredWorkers.add(worker);
 }
 
+export function unregisterWorker(worker: Worker): void {
+  registeredWorkers.delete(worker);
+}
+
+export function getRegisteredWorkersCount(): number {
+  return registeredWorkers.size;
+}
+
 export async function closeAllWorkers(): Promise<void> {
   logger.info(`[WORKER_LIFECYCLE] Closing ${registeredWorkers.size} registered BullMQ workers...`);
   const promises: Promise<void>[] = [];
@@ -30,3 +38,4 @@ export async function closeAllWorkers(): Promise<void> {
   registeredWorkers.clear();
   logger.info('[WORKER_LIFECYCLE] All registered workers closed.');
 }
+
