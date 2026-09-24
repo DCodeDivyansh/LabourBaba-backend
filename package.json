@@ -19,7 +19,8 @@
     "migrate:status": "prisma migrate status",
     "migrate:resolve": "prisma migrate resolve",
     "db:generate": "prisma generate",
-    "test:docker-boot": "tsx scripts/verify-production-docker-boot.ts"
+    "test:docker-boot": "tsx scripts/verify-production-docker-boot.ts",
+    "test:dr": "tsx scripts/verify-disaster-recovery.ts"
   },
   "keywords": [],
   "author": "",

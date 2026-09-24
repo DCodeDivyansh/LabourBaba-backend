@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import dotenv from "dotenv";
 import { Client } from "pg";
 
@@ -19,6 +19,7 @@ export interface BackupResult {
 export async function createDatabaseBackup(options?: {
   backupDir?: string;
   databaseUrl?: string;
+  dockerContainer?: string;
 }): Promise<BackupResult> {
   const startTime = Date.now();
   const dbUrl = options?.databaseUrl || process.env.DATABASE_URL;
@@ -110,23 +111,95 @@ export async function createDatabaseBackup(options?: {
   const backupFilePath = path.join(backupDir, backupFileName);
   const checksumFilePath = `${backupFilePath}.sha256`;
 
-  // Check if pg_dump is available locally in system path
-  let pgDumpAvailable = false;
-  try {
-    execSync("pg_dump --version", { stdio: "ignore" });
-    pgDumpAvailable = true;
-  } catch {
-    pgDumpAvailable = false;
+  // ── Database Dump Execution Strategy ──────────────────────────────────────────
+  // 1. If options.dockerContainer is specified, run pg_dump directly inside container
+  // 2. If native system pg_dump is available, run native pg_dump
+  // 3. If on Windows and WSL pg_dump is available, run pg_dump via WSL
+  // 4. Fallback: Programmatic export using pg client with full DDL and data
+
+  let dumpSuccess = false;
+
+  if (options?.dockerContainer) {
+    try {
+      const parsed = new URL(dbUrl);
+      const dbUser = parsed.username || "postgres";
+      const dbName = parsed.pathname.replace(/^\//, "").split("?")[0] || "postgres";
+      const dumpRes = spawnSync("docker", [
+        "exec",
+        options.dockerContainer,
+        "pg_dump",
+        "-U",
+        dbUser,
+        "-d",
+        dbName,
+        "--clean",
+        "--if-exists",
+        "--no-owner",
+        "--no-privileges",
+        "--inserts",
+      ], { encoding: "utf-8", maxBuffer: 50 * 1024 * 1024, shell: true });
+
+      if (dumpRes.status === 0 && dumpRes.stdout && dumpRes.stdout.trim().length > 0) {
+        fs.writeFileSync(backupFilePath, dumpRes.stdout, "utf-8");
+        dumpSuccess = true;
+      }
+    } catch {}
   }
 
-  if (pgDumpAvailable) {
-    // Execute native pg_dump
-    execSync(`pg_dump "${dbUrl}" --clean --if-exists --no-owner --no-privileges -f "${backupFilePath}"`, {
-      stdio: "inherit",
-    });
-  } else {
+  if (!dumpSuccess) {
+    let pgDumpAvailable = false;
+    try {
+      execSync("pg_dump --version", { stdio: "ignore" });
+      pgDumpAvailable = true;
+    } catch {
+      pgDumpAvailable = false;
+    }
+
+    let wslPgDumpAvailable = false;
+    if (!pgDumpAvailable && process.platform === "win32") {
+      try {
+        execSync("wsl -u root -d Ubuntu -- pg_dump --version", { stdio: "ignore" });
+        wslPgDumpAvailable = true;
+      } catch {
+        wslPgDumpAvailable = false;
+      }
+    }
+
+    if (pgDumpAvailable) {
+      execSync(`pg_dump "${dbUrl}" --clean --if-exists --no-owner --no-privileges --inserts -f "${backupFilePath}"`, {
+        stdio: "inherit",
+      });
+      dumpSuccess = true;
+    } else if (wslPgDumpAvailable) {
+      const wslRes = spawnSync("wsl", [
+        "-u",
+        "root",
+        "-d",
+        "Ubuntu",
+        "--",
+        "pg_dump",
+        dbUrl,
+        "--clean",
+        "--if-exists",
+        "--no-owner",
+        "--no-privileges",
+        "--inserts",
+      ], { encoding: "utf-8", maxBuffer: 50 * 1024 * 1024, shell: true });
+
+      if (wslRes.status === 0 && wslRes.stdout && wslRes.stdout.trim().length > 0) {
+        fs.writeFileSync(backupFilePath, wslRes.stdout, "utf-8");
+        dumpSuccess = true;
+      }
+    }
+  }
+
+  if (!dumpSuccess) {
     // Fallback: Programmatic export using pg client
-    const client = new Client({ connectionString: dbUrl, ssl: { rejectUnauthorized: false } });
+    const useSsl = dbUrl.includes("sslmode=require") || dbUrl.includes("supabase.co") || dbUrl.includes("amazonaws.com");
+    const client = new Client({
+      connectionString: dbUrl,
+      ssl: useSsl ? { rejectUnauthorized: false } : undefined,
+    });
     await client.connect();
 
     try {

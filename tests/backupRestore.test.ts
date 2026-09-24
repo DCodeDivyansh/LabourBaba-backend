@@ -33,20 +33,17 @@ describe("Issue 50 - Database Backup & Disaster Recovery Verification", () => {
     });
   });
 
-  describe("Disaster Recovery & Integrity Verification", () => {
-    it("verifies PostGIS extension and critical tables upon restore verification", async () => {
+  describe("Disaster Recovery & Safety Boundaries", () => {
+    it("refuses to restore into primary DATABASE_URL or production-like targets (fail-closed safety boundary)", async () => {
       const backup = await createDatabaseBackup({ backupDir: testBackupDir });
 
-      const restore = await restoreAndVerifyDatabase({
-        backupPath: backup.backupPath,
-        targetDatabaseUrl: process.env.DATABASE_URL!,
-      });
-
-      expect(restore.verifiedTablesCount).toBeGreaterThan(0);
-      expect(restore.postgisVersion).toBeDefined();
-      expect(restore.totalRecoveryDurationMs).toBeGreaterThan(0);
-      // Prove RTO target is met (< 15 minutes / 900,000ms)
-      expect(restore.totalRecoveryDurationMs).toBeLessThan(900000);
+      // Attempting to restore into DATABASE_URL must be rejected immediately
+      await expect(
+        restoreAndVerifyDatabase({
+          backupPath: backup.backupPath,
+          targetDatabaseUrl: process.env.DATABASE_URL || "postgresql://postgres:pw@aws-1.pooler.supabase.com:6543/postgres",
+        })
+      ).rejects.toThrow("[RESTORE_SECURITY_VIOLATION]");
     });
 
     it("fails and throws error when backup file is corrupted or checksum does not match", async () => {
@@ -55,13 +52,32 @@ describe("Issue 50 - Database Backup & Disaster Recovery Verification", () => {
       // Corrupt the backup content
       fs.appendFileSync(backup.backupPath, "\n-- Corrupted Data Payload");
 
+      // Even with an isolated disposable URL, checksum validation must fail closed BEFORE touching the database
+      const safeDisposableUrl = "postgresql://postgres:pw@localhost:5433/labourbaba_dr_disposable_test";
+
       await expect(
         restoreAndVerifyDatabase({
           backupPath: backup.backupPath,
-          targetDatabaseUrl: process.env.DATABASE_URL!,
+          targetDatabaseUrl: safeDisposableUrl,
           expectedChecksum: backup.checksum,
         })
       ).rejects.toThrow("Checksum mismatch");
     });
+
+    if (process.env.DR_TEST_DATABASE_URL) {
+      it("verifies PostGIS extension and critical tables when restored into isolated DR target", async () => {
+        const backup = await createDatabaseBackup({ backupDir: testBackupDir });
+
+        const restore = await restoreAndVerifyDatabase({
+          backupPath: backup.backupPath,
+          targetDatabaseUrl: process.env.DR_TEST_DATABASE_URL!,
+        });
+
+        expect(restore.verifiedTablesCount).toBeGreaterThan(0);
+        expect(restore.postgisVersion).toBeDefined();
+        expect(restore.totalRecoveryDurationMs).toBeGreaterThan(0);
+        expect(restore.totalRecoveryDurationMs).toBeLessThan(900000);
+      });
+    }
   });
 });

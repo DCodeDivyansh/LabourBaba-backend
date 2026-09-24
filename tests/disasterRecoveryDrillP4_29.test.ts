@@ -62,33 +62,48 @@ describe("P4 Issue 29: Disaster Recovery & Isolated Restore Drill", () => {
       // Deliberately corrupt backup content
       fs.appendFileSync(backup.backupPath, "\n-- MALICIOUS_CORRUPTED_PAYLOAD\n");
 
+      const safeDisposableUrl = "postgresql://postgres:pw@localhost:5433/labourbaba_dr_disposable_test";
+
       await expect(
         restoreAndVerifyDatabase({
           backupPath: backup.backupPath,
-          targetDatabaseUrl: process.env.DATABASE_URL!,
+          targetDatabaseUrl: safeDisposableUrl,
           expectedChecksum: backup.checksum,
         })
       ).rejects.toThrow("Checksum mismatch");
     });
   });
 
-  describe("3. Isolated Restore Drill & RTO Measurement", () => {
-    it("executes restore drill, verifying PostGIS version, schema tables, and RTO < 15 minutes", async () => {
+  describe("3. Production Safety Boundary & Isolated Restore Verification", () => {
+    it("fails closed and rejects attempts to restore into primary DATABASE_URL or cloud targets", async () => {
       const backup = await createDatabaseBackup({ backupDir: testBackupDir });
 
-      const restore = await restoreAndVerifyDatabase({
-        backupPath: backup.backupPath,
-        targetDatabaseUrl: process.env.DATABASE_URL!,
-      });
-
-      expect(restore.verifiedTablesCount).toBeGreaterThan(10);
-      expect(restore.postgisVersion).toBeDefined();
-      expect(restore.postgisVersion).not.toBe("unknown");
-
-      // Verify RTO invariant (< 15 minutes / 900,000 ms)
-      expect(restore.totalRecoveryDurationMs).toBeLessThan(900000);
-      expect(restore.restoreDurationMs).toBeGreaterThan(0);
-      expect(restore.verificationDurationMs).toBeGreaterThan(0);
+      await expect(
+        restoreAndVerifyDatabase({
+          backupPath: backup.backupPath,
+          targetDatabaseUrl: process.env.DATABASE_URL || "postgresql://postgres:pw@aws-1.pooler.supabase.com:6543/postgres",
+        })
+      ).rejects.toThrow("[RESTORE_SECURITY_VIOLATION]");
     });
+
+    if (process.env.DR_TEST_DATABASE_URL) {
+      it("executes restore drill against isolated target, verifying PostGIS version, schema tables, and RTO < 15 minutes", async () => {
+        const backup = await createDatabaseBackup({ backupDir: testBackupDir });
+
+        const restore = await restoreAndVerifyDatabase({
+          backupPath: backup.backupPath,
+          targetDatabaseUrl: process.env.DR_TEST_DATABASE_URL!,
+        });
+
+        expect(restore.verifiedTablesCount).toBeGreaterThan(10);
+        expect(restore.postgisVersion).toBeDefined();
+        expect(restore.postgisVersion).not.toBe("unknown");
+
+        // Verify RTO invariant (< 15 minutes / 900,000 ms)
+        expect(restore.totalRecoveryDurationMs).toBeLessThan(900000);
+        expect(restore.restoreDurationMs).toBeGreaterThan(0);
+        expect(restore.verificationDurationMs).toBeGreaterThan(0);
+      });
+    }
   });
 });

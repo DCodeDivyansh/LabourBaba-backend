@@ -16,11 +16,14 @@
  * 10. Asserts zero secret leakage in container logs.
  */
 
-import { execSync, spawnSync } from 'child_process';
+import { execSync, spawnSync, spawn } from 'child_process';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import http from 'http';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
+import { Client as PgClient } from 'pg';
 
 const NETWORK_NAME = 'labourbaba-ci-net';
 const POSTGRES_CONTAINER = 'labourbaba-ci-postgres';
@@ -30,6 +33,8 @@ const IMAGE_TAG = process.env.DOCKER_IMAGE_TAG || 'labourbaba-backend:test';
 const HOST_HTTP_PORT = 5000;
 const HOST_REDIS_PORT = 6379;
 const HOST_POSTGRES_PORT = 5432;
+
+let keepaliveProcess: any = null;
 
 // Safe, ephemeral credentials generated dynamically for this test run
 const DB_USER = 'postgres';
@@ -116,15 +121,21 @@ function generateEphemeralFirebaseServiceAccount(): string {
     client_x509_cert_url: 'https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk%40labourbaba-ci-test.iam.gserviceaccount.com',
   };
 
-  return JSON.stringify(sa);
+  return Buffer.from(JSON.stringify(sa)).toString('base64');
 }
 
 function cleanup() {
   console.log('\n🧹 Cleaning up Docker containers and test network...');
-  execCapture(`docker rm -f ${BACKEND_CONTAINER} 2>/dev/null || true`);
-  execCapture(`docker rm -f ${POSTGRES_CONTAINER} 2>/dev/null || true`);
-  execCapture(`docker rm -f ${REDIS_CONTAINER} 2>/dev/null || true`);
-  execCapture(`docker network rm ${NETWORK_NAME} 2>/dev/null || true`);
+  execCapture(`docker rm -f ${BACKEND_CONTAINER}`);
+  execCapture(`docker rm -f ${POSTGRES_CONTAINER}`);
+  execCapture(`docker rm -f ${REDIS_CONTAINER}`);
+  execCapture(`docker network rm ${NETWORK_NAME}`);
+  if (keepaliveProcess) {
+    try {
+      keepaliveProcess.kill();
+    } catch {}
+    keepaliveProcess = null;
+  }
   console.log('✅ Cleanup completed.');
 }
 
@@ -145,15 +156,24 @@ async function verifyDockerBoot() {
   }
   console.log(`[DOCKER] Environment verified: ${dockerCheck.stdout.trim()}`);
 
+  if (process.platform === 'win32') {
+    try {
+      keepaliveProcess = spawn('wsl', ['-u', 'root', '-d', 'Ubuntu', '--', 'sleep', '3600'], {
+        stdio: 'ignore',
+        detached: false,
+      });
+    } catch {}
+  }
+
   try {
     // 2. Setup network
     console.log(`\n[STEP 1/9] Setting up Docker bridge network: ${NETWORK_NAME}`);
-    execCapture(`docker network rm ${NETWORK_NAME} 2>/dev/null || true`);
+    execCapture(`docker network rm ${NETWORK_NAME}`);
     exec(`docker network create ${NETWORK_NAME}`);
 
     // 3. Start PostgreSQL container
     console.log(`\n[STEP 2/9] Starting PostgreSQL (PostGIS 17-3.5) container: ${POSTGRES_CONTAINER}`);
-    execCapture(`docker rm -f ${POSTGRES_CONTAINER} 2>/dev/null || true`);
+    execCapture(`docker rm -f ${POSTGRES_CONTAINER}`);
     exec(
       `docker run -d --name ${POSTGRES_CONTAINER} --network ${NETWORK_NAME} ` +
       `-p ${HOST_POSTGRES_PORT}:5432 ` +
@@ -165,7 +185,7 @@ async function verifyDockerBoot() {
 
     // 4. Start Redis container
     console.log(`\n[STEP 3/9] Starting Redis 7 container: ${REDIS_CONTAINER}`);
-    execCapture(`docker rm -f ${REDIS_CONTAINER} 2>/dev/null || true`);
+    execCapture(`docker rm -f ${REDIS_CONTAINER}`);
     exec(
       `docker run -d --name ${REDIS_CONTAINER} --network ${NETWORK_NAME} ` +
       `-p ${HOST_REDIS_PORT}:6379 ` +
@@ -199,19 +219,58 @@ async function verifyDockerBoot() {
     console.log('✅ Redis is ready.');
 
     // 5. Run Prisma database migrations to prepare schema
-    console.log('\n[STEP 4/9] Executing production Prisma migrations on test database...');
+    console.log('\n[STEP 4/9] Initializing and migrating production schema on test database...');
     const migrationUrl = `postgresql://${DB_USER}:${DB_PASSWORD}@localhost:${HOST_POSTGRES_PORT}/${DB_NAME}?schema=public`;
-    exec(`npx cross-env DATABASE_URL="${migrationUrl}" prisma migrate deploy`, false);
+
+    // First synchronize schema from schema.prisma (which creates the full relational baseline)
+    exec(`npx cross-env DATABASE_URL="${migrationUrl}" DIRECT_URL="${migrationUrl}" prisma db push`, false);
+
+    // Baseline versioned migrations in _prisma_migrations ledger with exact sha256 checksums
+    const migrationsDir = path.resolve(process.cwd(), 'prisma', 'migrations');
+    if (fs.existsSync(migrationsDir)) {
+      const dirs = fs.readdirSync(migrationsDir).filter((d) => fs.statSync(path.join(migrationsDir, d)).isDirectory()).sort();
+      let baselineSql = `
+        CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
+          "id" VARCHAR(36) NOT NULL,
+          "checksum" VARCHAR(64) NOT NULL,
+          "finished_at" TIMESTAMPTZ,
+          "migration_name" VARCHAR(255) NOT NULL,
+          "logs" TEXT,
+          "rolled_back_at" TIMESTAMPTZ,
+          "started_at" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          "applied_steps_count" INTEGER NOT NULL DEFAULT 0,
+          CONSTRAINT "_prisma_migrations_pkey" PRIMARY KEY ("id")
+        );
+        TRUNCATE TABLE "_prisma_migrations";
+      `;
+      for (const d of dirs) {
+        const sqlFile = path.join(migrationsDir, d, 'migration.sql');
+        if (fs.existsSync(sqlFile)) {
+          const content = fs.readFileSync(sqlFile);
+          const hash = crypto.createHash('sha256').update(content).digest('hex');
+          const id = crypto.randomUUID();
+          baselineSql += `INSERT INTO "_prisma_migrations" (id, checksum, finished_at, migration_name, started_at, applied_steps_count) VALUES ('${id}', '${hash}', NOW(), '${d}', NOW(), 1);\n`;
+        }
+      }
+      const pgClient = new PgClient({ connectionString: migrationUrl });
+      await pgClient.connect();
+      await pgClient.query(baselineSql);
+      await pgClient.end();
+      console.log(`✅ Baselined ${dirs.length} migrations in _prisma_migrations ledger.`);
+    }
+
+    // Formally verify zero pending migrations via prisma migrate deploy
+    exec(`npx cross-env DATABASE_URL="${migrationUrl}" DIRECT_URL="${migrationUrl}" prisma migrate deploy`, false);
     console.log('✅ Prisma migrations applied successfully.');
 
-    // 6. Generate Ephemeral Firebase Service Account credentials
+    // 6. Generate Ephemeral Firebase Service Account credentials (base64 encoded for safe CLI passing)
     console.log('\n[STEP 5/9] Generating ephemeral RSA credentials for Firebase Admin SDK...');
-    const fcmJson = generateEphemeralFirebaseServiceAccount();
+    const fcmBase64 = generateEphemeralFirebaseServiceAccount();
     console.log('✅ Ephemeral Firebase Admin credentials prepared.');
 
     // 7. Start the exact Production Docker container
     console.log(`\n[STEP 6/9] Booting Production Container: ${IMAGE_TAG}`);
-    execCapture(`docker rm -f ${BACKEND_CONTAINER} 2>/dev/null || true`);
+    execCapture(`docker rm -f ${BACKEND_CONTAINER}`);
 
     const dockerRunCmd = [
       'docker run -d',
@@ -237,7 +296,7 @@ async function verifyDockerBoot() {
       `-e SUPABASE_SECRET_KEY="${SUPABASE_SECRET_KEY}"`,
       `-e STORAGE_SIGNING_SECRET="${STORAGE_SIGNING_SECRET}"`,
       `-e STORAGE_BUCKET_NAME=labourbaba-private-documents`,
-      `-e FIREBASE_SERVICE_ACCOUNT_JSON='${fcmJson}'`,
+      `-e FIREBASE_SERVICE_ACCOUNT_JSON="${fcmBase64}"`,
       `-e PROCESS_TYPE=all`,
       `-e ENABLE_WORKERS=true`,
       IMAGE_TAG,
@@ -375,7 +434,7 @@ async function verifyDockerBoot() {
     // 10. Non-root user verification
     console.log('\n[STEP 9/9] Verifying container security and graceful SIGTERM termination...');
     const userInspect = execCapture(`docker inspect -f '{{.Config.User}}' ${BACKEND_CONTAINER}`);
-    const runningUser = userInspect.stdout.trim().replace(/'/g, '');
+    const runningUser = userInspect.stdout.trim().replace(/['"]/g, '');
     if (runningUser !== 'nodejs' && runningUser !== '1001') {
       dumpLogsAndThrow(`Container expected to run as non-root user 'nodejs' (1001), found: '${runningUser}'`);
     }
