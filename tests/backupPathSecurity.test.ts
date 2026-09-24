@@ -20,11 +20,14 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { execSync } from "child_process";
 import { createDatabaseBackup } from "../scripts/backup-db";
 import {
   checkTrackedBackupArtifacts,
   checkGitHistoryForBackupArtifacts,
+  scanDirectoryForSecrets,
 } from "../scripts/security-scan";
+import { verifyExposedRecordsRevoked } from "../scripts/revoke-exposed-sessions";
 
 describe("P6 Issue 2 — Backup Path Security & Containment Invariants", () => {
   const originalEnvBackupDir = process.env.BACKUP_DEST_DIR;
@@ -206,6 +209,90 @@ describe("P6 Issue 2 — Backup Path Security & Containment Invariants", () => {
           if (fs.existsSync(insideTarget)) fs.rmSync(insideTarget, { recursive: true, force: true });
         } catch {}
       }
+    });
+  });
+
+  describe("5. P7 Issue 01 — Forensic Verification & Zero-Exposure Release Gates", () => {
+    it("TEST 1 — Historical backup path is absent from reachable Git history", () => {
+      const gitLogOutput = execSync(
+        'git log --all --full-history -- "backups/backup_2026-09-22T09-46-12-254Z.sql"',
+        { cwd: repoRoot, encoding: "utf-8" }
+      ).trim();
+      expect(gitLogOutput).toBe("");
+    });
+
+    it("TEST 2 — Zero backup artifacts in Git history across all refs", () => {
+      const historyFindings = checkGitHistoryForBackupArtifacts();
+      expect(historyFindings).toEqual([]);
+    });
+
+    it("TEST 3 — Git object database contains no historical backup blobs", () => {
+      const gitObjectsOutput = execSync(
+        "git rev-list --objects --all",
+        { cwd: repoRoot, encoding: "utf-8", maxBuffer: 20 * 1024 * 1024 }
+      );
+      expect(gitObjectsOutput).not.toContain("backups/backup_2026-09-22T09-46-12-254Z.sql");
+      expect(gitObjectsOutput).not.toContain("backups/backup_2026-09-22T09-46-12-254Z.sql.sha256");
+    });
+
+    it("TEST 4 — Alternative backup artifact patterns are detected by security scanner", () => {
+      const forbiddenSamples = [
+        "backups/test.sql",
+        "backup/db.sql",
+        "dumps/export.sql",
+        "db.dump",
+        "snapshot.backup",
+        "database.bak",
+        "prod.pgdump",
+        "dump.sql.gz",
+        "dump.sql.tar",
+        "dump.sql.sha256",
+        "backup_2026-09-24.sql",
+      ];
+
+      const forbiddenRegexes = [
+        /^backups\//i,
+        /^backup\//i,
+        /^dumps\//i,
+        /\.dump$/i,
+        /\.backup$/i,
+        /\.bak$/i,
+        /\.pgdump$/i,
+        /\.sql\.gz$/i,
+        /\.sql\.tar$/i,
+        /\.sql\.sha256$/i,
+        /backup.*\.sql$/i,
+      ];
+
+      for (const sample of forbiddenSamples) {
+        const matchesAny = forbiddenRegexes.some((re) => re.test(sample));
+        expect(matchesAny).toBe(true);
+      }
+    });
+
+    it("TEST 5 — Secret scanner detects synthetic high-risk credential fixtures", () => {
+      const syntheticKeyFixture = "-----BEGIN " + "RSA PRIVATE KEY-----\n" + "MIIEowIBAAKCAQEA0mock\n" + "-----END " + "RSA PRIVATE KEY-----";
+      const tmpScanDir = path.join(os.tmpdir(), `secret-scan-test-${Date.now()}`);
+      try {
+        fs.mkdirSync(tmpScanDir, { recursive: true });
+        fs.writeFileSync(path.join(tmpScanDir, "leaked.ts"), `const key = "${syntheticKeyFixture}";`);
+        const findings = scanDirectoryForSecrets(tmpScanDir);
+        expect(findings.length).toBeGreaterThan(0);
+        expect(findings[0].patternName).toBe("Hardcoded Private Key Block");
+      } finally {
+        if (fs.existsSync(tmpScanDir)) {
+          fs.rmSync(tmpScanDir, { recursive: true, force: true });
+        }
+      }
+    });
+
+    it("TEST 6 — Active database exposure window verified clean", async () => {
+      const verification = await verifyExposedRecordsRevoked();
+      expect(verification.passed).toBe(true);
+      expect(verification.remainingActiveSessions).toBe(0);
+      expect(verification.remainingActiveWorkerDevices).toBe(0);
+      expect(verification.remainingActiveCustomerDevices).toBe(0);
+      expect(verification.remainingDeviceTokens).toBe(0);
     });
   });
 });

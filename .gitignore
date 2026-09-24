@@ -4,15 +4,22 @@ node_modules
 labourbaba-58a41-firebase-adminsdk-fbsvc-e72264934a.json
 dist/
 
-# --- Database Backup Artifacts (P6 Issue 2) ---
-# NEVER commit database dumps to the repository.
-# Backups must be written to BACKUP_DEST_DIR (external storage) only.
+# --- Database Backup Artifacts (P6 Issue 2 / P7 Issue 01) ---
+# NEVER commit database dumps or database export artifacts to the repository.
+# Backups must be written to BACKUP_DEST_DIR (external storage / secure S3/GCS bucket) only.
 # See SECURITY.md for the approved backup workflow.
 backups/
+backup/
+dumps/
 *.dump
 *.backup
 *.bak
+*.pgdump
+*.sql.gz
+*.sql.tar
+*.sql.sha256
+backup_*.sql
 latest_backup_metadata.json
 # NOTE: prisma/migrations/**/*.sql is intentionally NOT excluded here.
-# Prisma migration files are legitimate source artifacts.
-# The backups/ directory rule covers the actual risk.
+# Prisma migration files are legitimate schema source artifacts and MUST remain tracked.
+# The backups/ directory rule and backup_*.sql patterns cover the actual risk.

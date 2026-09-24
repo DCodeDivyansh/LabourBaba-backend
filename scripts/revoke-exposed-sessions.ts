@@ -41,15 +41,19 @@ export const EXPOSURE_CUTOFF = new Date("2026-09-22T10:46:12.528Z");
 export interface RevocationAuditCounts {
   activeRefreshSessions: number;
   unrevokedWorkerDevices: number;
+  unrevokedCustomerDevices: number;
   workersWithDeviceToken: number;
   workersWithPassword: number;
+  customersWithPassword: number;
 }
 
 export interface RevocationExecutionResult {
   sessionsRevoked: number;
-  devicesRevoked: number;
+  workerDevicesRevoked: number;
+  customerDevicesRevoked: number;
   workerDeviceTokensCleared: number;
   workerPasswordsInvalidated: number;
+  customerPasswordsInvalidated: number;
 }
 
 /**
@@ -59,8 +63,10 @@ export async function auditExposedRecords(): Promise<RevocationAuditCounts> {
   const [
     activeRefreshSessions,
     unrevokedWorkerDevices,
+    unrevokedCustomerDevices,
     workersWithDeviceToken,
     workersWithPassword,
+    customersWithPassword,
   ] = await Promise.all([
     prisma.refresh_session.count({
       where: {
@@ -69,6 +75,12 @@ export async function auditExposedRecords(): Promise<RevocationAuditCounts> {
       },
     }),
     prisma.worker_device.count({
+      where: {
+        created_at: { lte: EXPOSURE_CUTOFF },
+        revoked_at: null,
+      },
+    }),
+    prisma.customer_device.count({
       where: {
         created_at: { lte: EXPOSURE_CUTOFF },
         revoked_at: null,
@@ -84,13 +96,20 @@ export async function auditExposedRecords(): Promise<RevocationAuditCounts> {
         password: { not: { startsWith: "INVALIDATED_EXPOSURE_" } },
       },
     }),
+    prisma.customer.count({
+      where: {
+        password: { not: { startsWith: "INVALIDATED_EXPOSURE_" } },
+      },
+    }),
   ]);
 
   return {
     activeRefreshSessions,
     unrevokedWorkerDevices,
+    unrevokedCustomerDevices,
     workersWithDeviceToken,
     workersWithPassword,
+    customersWithPassword,
   };
 }
 
@@ -117,6 +136,23 @@ export async function revokeExposedRefreshSessions(): Promise<number> {
  */
 export async function revokeExposedWorkerDeviceTokens(): Promise<number> {
   const result = await prisma.worker_device.updateMany({
+    where: {
+      created_at: { lte: EXPOSURE_CUTOFF },
+      revoked_at: null,
+    },
+    data: {
+      revoked_at: new Date(),
+      updated_at: new Date(),
+    },
+  });
+  return result.count;
+}
+
+/**
+ * Revokes all customer_device FCM tokens created before the exposure cutoff.
+ */
+export async function revokeExposedCustomerDeviceTokens(): Promise<number> {
+  const result = await prisma.customer_device.updateMany({
     where: {
       created_at: { lte: EXPOSURE_CUTOFF },
       revoked_at: null,
@@ -162,17 +198,36 @@ export async function invalidateExposedWorkerPasswords(): Promise<number> {
 }
 
 /**
+ * Invalidates bcrypt password hashes for affected customers by setting
+ * an unmatchable sentinel prefix, forcing authentication via phone OTP.
+ */
+export async function invalidateExposedCustomerPasswords(): Promise<number> {
+  const sentinel = `INVALIDATED_EXPOSURE_${crypto.randomUUID()}`;
+  const result = await prisma.customer.updateMany({
+    where: {
+      password: { not: { startsWith: "INVALIDATED_EXPOSURE_" } },
+    },
+    data: {
+      password: sentinel,
+    },
+  });
+  return result.count;
+}
+
+/**
  * Verifies that zero active sessions or active tokens remain in the exposure window.
  */
 export async function verifyExposedRecordsRevoked(): Promise<{
   passed: boolean;
   remainingActiveSessions: number;
-  remainingActiveDevices: number;
+  remainingActiveWorkerDevices: number;
+  remainingActiveCustomerDevices: number;
   remainingDeviceTokens: number;
 }> {
   const [
     remainingActiveSessions,
-    remainingActiveDevices,
+    remainingActiveWorkerDevices,
+    remainingActiveCustomerDevices,
     remainingDeviceTokens,
   ] = await Promise.all([
     prisma.refresh_session.count({
@@ -187,6 +242,12 @@ export async function verifyExposedRecordsRevoked(): Promise<{
         revoked_at: null,
       },
     }),
+    prisma.customer_device.count({
+      where: {
+        created_at: { lte: EXPOSURE_CUTOFF },
+        revoked_at: null,
+      },
+    }),
     prisma.worker.count({
       where: {
         device_token: { not: null },
@@ -196,13 +257,15 @@ export async function verifyExposedRecordsRevoked(): Promise<{
 
   const passed =
     remainingActiveSessions === 0 &&
-    remainingActiveDevices === 0 &&
+    remainingActiveWorkerDevices === 0 &&
+    remainingActiveCustomerDevices === 0 &&
     remainingDeviceTokens === 0;
 
   return {
     passed,
     remainingActiveSessions,
-    remainingActiveDevices,
+    remainingActiveWorkerDevices,
+    remainingActiveCustomerDevices,
     remainingDeviceTokens,
   };
 }
@@ -218,7 +281,7 @@ async function main() {
     process.exit(1);
   }
 
-  logger.warn("[INCIDENT_RESPONSE] === P6 Issue 2 Credential & Session Incident Response ===");
+  logger.warn("[INCIDENT_RESPONSE] === P6 Issue 2 / P7 Issue 01 Credential & Session Incident Response ===");
   logger.warn(`[INCIDENT_RESPONSE] Exposure cutoff: ${EXPOSURE_CUTOFF.toISOString()}`);
   logger.warn(`[INCIDENT_RESPONSE] Mode: ${isVerifyOnly ? "VERIFY_ONLY" : isDryRun ? "DRY_RUN" : "EXECUTE"}`);
 
@@ -227,8 +290,10 @@ async function main() {
     logger.warn(`[INCIDENT_RESPONSE] Audit of records in exposure window:`);
     logger.warn(`  - Active/Rotated Refresh Sessions: ${counts.activeRefreshSessions}`);
     logger.warn(`  - Active Worker Device FCM Records: ${counts.unrevokedWorkerDevices}`);
+    logger.warn(`  - Active Customer Device FCM Records: ${counts.unrevokedCustomerDevices}`);
     logger.warn(`  - Workers with Denormalized device_token: ${counts.workersWithDeviceToken}`);
     logger.warn(`  - Workers with Active Passwords: ${counts.workersWithPassword}`);
+    logger.warn(`  - Customers with Active Passwords: ${counts.customersWithPassword}`);
 
     if (isVerifyOnly) {
       const verification = await verifyExposedRecordsRevoked();
@@ -248,20 +313,25 @@ async function main() {
 
     // Execute actual revocations
     const sessionsRevoked = await revokeExposedRefreshSessions();
-    const devicesRevoked = await revokeExposedWorkerDeviceTokens();
+    const workerDevicesRevoked = await revokeExposedWorkerDeviceTokens();
+    const customerDevicesRevoked = await revokeExposedCustomerDeviceTokens();
     const workerDeviceTokensCleared = await clearExposedWorkerDeviceTokenFields();
     let workerPasswordsInvalidated = 0;
+    let customerPasswordsInvalidated = 0;
 
     if (shouldInvalidatePasswords) {
       workerPasswordsInvalidated = await invalidateExposedWorkerPasswords();
+      customerPasswordsInvalidated = await invalidateExposedCustomerPasswords();
     }
 
     logger.warn("[INCIDENT_RESPONSE] === Revocation Execution Completed ===");
     logger.warn(`  - Sessions revoked: ${sessionsRevoked} (reason: ${REVOKE_REASON.SECURITY_INCIDENT})`);
-    logger.warn(`  - Worker device FCM records revoked: ${devicesRevoked}`);
+    logger.warn(`  - Worker device FCM records revoked: ${workerDevicesRevoked}`);
+    logger.warn(`  - Customer device FCM records revoked: ${customerDevicesRevoked}`);
     logger.warn(`  - Worker device_token fields cleared: ${workerDeviceTokensCleared}`);
     if (shouldInvalidatePasswords) {
       logger.warn(`  - Worker bcrypt passwords invalidated: ${workerPasswordsInvalidated}`);
+      logger.warn(`  - Customer bcrypt passwords invalidated: ${customerPasswordsInvalidated}`);
     }
 
     // Run verification after revocation

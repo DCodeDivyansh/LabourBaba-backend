@@ -475,10 +475,17 @@ export function checkTrackedBackupArtifacts(): BackupArtifactFinding[] {
   // Patterns that are unconditionally forbidden (by path/name) regardless of content:
   const forbiddenPathPatterns = [
     /^backups\//i,          // backups/ directory
+    /^backup\//i,           // backup/ directory
+    /^dumps\//i,            // dumps/ directory
     /\.dump$/i,            // *.dump
     /\.backup$/i,          // *.backup
     /\.bak$/i,             // *.bak
+    /\.pgdump$/i,          // *.pgdump
+    /\.sql\.gz$/i,         // *.sql.gz
+    /\.sql\.tar$/i,        // *.sql.tar
+    /\.sql\.sha256$/i,     // *.sql.sha256
     /^backup_.*\.sql$/i,   // backup_TIMESTAMP.sql anywhere at root
+    /backup.*\.sql$/i,     // any backup SQL file
   ];
 
   // SQL-specific heuristic: dump markers that distinguish a database export
@@ -552,10 +559,16 @@ export function checkGitHistoryForBackupArtifacts(): BackupArtifactFinding[] {
 
   const historyForbiddenPatterns = [
     /^backups\//i,
+    /^backup\//i,
+    /^dumps\//i,
     /\.dump$/i,
     /\.backup$/i,
     /\.bak$/i,
-    /backup_.*\.sql$/i,
+    /\.pgdump$/i,
+    /\.sql\.gz$/i,
+    /\.sql\.tar$/i,
+    /\.sql\.sha256$/i,
+    /backup.*\.sql$/i,
   ];
 
   try {
@@ -637,17 +650,13 @@ export function runSecurityAudit(): { pass: boolean; report: SecurityAuditReport
   }
 
   if (historyBackupFindings.length > 0) {
-    // History findings are WARNING-level (history cleanup requires manual git filter-repo).
-    // They do NOT fail the CI build automatically because the remote history purge
-    // requires a coordinated force-push with collaborators.
-    // They ARE recorded in the report and logged as warnings.
-    console.warn(`[SECURITY_SCAN] WARNING: ${historyBackupFindings.length} backup artifact(s) found in Git history (manual purge required):`);
+    console.error(`[SECURITY_SCAN] FAILED: ${historyBackupFindings.length} backup artifact(s) found in Git history:`);
     for (const f of historyBackupFindings) {
-      console.warn(`  - [HISTORY] ${f.file} @ ${f.ref}: ${f.reason}`);
+      console.error(`  - [HISTORY] ${f.file} @ ${f.ref}: ${f.reason}`);
+      errors.push(`GIT_HISTORY_BACKUP_ARTIFACT: ${f.file} @ ${f.ref} — ${f.reason}`);
     }
-    // Record but do not add to errors (would block CI before remote history is purged)
   } else {
-    console.log("[SECURITY_SCAN] Git history: No backup artifact paths detected.");
+    console.log("[SECURITY_SCAN] SUCCESS: Git history contains zero backup artifacts across all refs.");
   }
 
   console.log("[SECURITY_SCAN] Validating Dockerfile container hardening...");

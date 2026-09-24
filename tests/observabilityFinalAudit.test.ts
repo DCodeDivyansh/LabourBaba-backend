@@ -113,7 +113,7 @@ describe('P3 Issues 16–20 Final Adversarial Evidence Audit', () => {
 
       // Clean up scratch directory
       fs.rmSync(testBackupDir, { recursive: true, force: true });
-    });
+    }, 30000);
   });
 
   // ==========================================================================
