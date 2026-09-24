@@ -22,7 +22,7 @@
 import { Worker, Job } from 'bullmq';
 import { redisConnectionOptions, NOTIFICATION_QUEUE_NAME } from '../config/bullmq';
 import { sendFCMToWorker } from '../shared/fcm';
-import { io } from '../server';
+import { getSocketServer } from '../socket/socketLifecycle';
 import { registerWorker } from './workerLifecycle';
 import { metricsService } from '../metrics/metrics.service';
 import { logger } from '../utils/logger';
@@ -109,6 +109,7 @@ export async function processNotificationJob(data: DispatchNotifyJobData): Promi
 
       // ── Socket.IO real-time event ────────────────────────────────────────
       try {
+        const io = getSocketServer();
         if (io && typeof io.to === 'function') {
           metricsService.recordNotificationAttempt('socket');
           const room = io.to(`worker:${w.id}`);

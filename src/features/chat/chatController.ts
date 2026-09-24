@@ -4,7 +4,7 @@ import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
 import { toChatMessageDTO } from "../../shared/prismaSelects";
 import { AuthorizationError } from "../../policies";
 import { getBookingChatRoom } from "../../socket/roomHelpers";
-import { io } from "../../server";
+import { getSocketServer } from "../../socket/socketLifecycle";
 
 function handleChatError(res: Response, error: any, defaultMessage: string): void {
   if (error instanceof AuthorizationError || error.statusCode) {
@@ -63,6 +63,7 @@ export const sendMessage = async (req: Request, res: Response): Promise<void> =>
 
     // Broadcast to real-time socket room if socket server is active
     try {
+      const io = getSocketServer();
       if (io && typeof io.to === "function") {
         io.to(getBookingChatRoom(bookingId)).emit("chat:message", dto);
       }

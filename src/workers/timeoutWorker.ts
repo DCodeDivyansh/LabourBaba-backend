@@ -3,7 +3,7 @@ import prisma from '../config/prisma';
 import { redisConnectionOptions, dispatchQueue } from '../config/bullmq';
 import { registerWorker } from './workerLifecycle';
 import { RequirementStatus } from '../features/jobs/requirementStateMachine';
-import { io } from '../server';
+import { getSocketServer } from '../socket/socketLifecycle';
 import { generateDispatchOperationId } from '../features/dispatch/dispatchOperation';
 import { planDispatchWave } from '../features/dispatch/wavePlanner';
 import { failureInjection } from '../utils/failureInjection';
@@ -106,6 +106,7 @@ export async function processTimeoutJob(data: TimeoutJobData): Promise<void> {
       data: { status: RequirementStatus.NO_WORKERS_AVAILABLE },
     });
 
+    const io = getSocketServer();
     if (req.job?.customer_id && io && typeof io.to === 'function') {
       try {
         io.to(`customer:${req.job.customer_id}`).emit('job:no_workers', {

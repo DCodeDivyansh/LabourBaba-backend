@@ -1,6 +1,5 @@
 import { outboxService, OutboxRecord } from '../services/outboxService';
 import { sendFCMToRecipient, isPermanentInvalidTokenError } from '../shared/fcm';
-import { io as defaultIo } from '../server';
 import { getSocketServer } from '../socket/socketLifecycle';
 import { metricsService } from '../metrics/metrics.service';
 import { outboxConfig } from '../config/outboxConfig';
@@ -38,7 +37,7 @@ export class OutboxWorker {
   }
 
   private getSocketIo(): Server | null {
-    return this.customIo || getSocketServer() || defaultIo || null;
+    return this.customIo || getSocketServer() || null;
   }
 
   /**

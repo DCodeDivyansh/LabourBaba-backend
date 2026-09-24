@@ -20,7 +20,8 @@
     "migrate:resolve": "prisma migrate resolve",
     "db:generate": "prisma generate",
     "test:docker-boot": "tsx scripts/verify-production-docker-boot.ts",
-    "test:dr": "tsx scripts/verify-disaster-recovery.ts"
+    "test:dr": "tsx scripts/verify-disaster-recovery.ts",
+    "test:capacity": "tsx scripts/verify-production-capacity.ts"
   },
   "keywords": [],
   "author": "",
@@ -57,6 +58,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/autocannon": "^7.12.7",
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/jest": "^30.0.0",
@@ -64,6 +66,7 @@
     "@types/morgan": "^1.9.10",
     "@types/supertest": "^7.2.0",
     "@types/swagger-ui-express": "^4.1.8",
+    "autocannon": "^8.0.0",
     "cross-env": "^10.1.0",
     "jest": "^30.4.2",
     "nodemon": "^3.1.14",
