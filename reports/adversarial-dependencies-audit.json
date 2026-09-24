@@ -1,0 +1,606 @@
+[
+  {
+    "package": "@google-cloud/storage",
+    "severity": "moderate",
+    "transitiveVia": "retry-request",
+    "isDirect": false,
+    "effects": [
+      "firebase-admin"
+    ],
+    "fixAvailable": true
+  },
+  {
+    "package": "@google-cloud/storage",
+    "severity": "moderate",
+    "transitiveVia": "teeny-request",
+    "isDirect": false,
+    "effects": [
+      "firebase-admin"
+    ],
+    "fixAvailable": true
+  },
+  {
+    "package": "@hono/node-server",
+    "severity": "moderate",
+    "title": "@hono/node-server: Middleware bypass via repeated slashes in serveStatic",
+    "url": "https://github.com/advisories/GHSA-92pp-h63x-v22m",
+    "range": "<1.19.13",
+    "isDirect": false,
+    "effects": [
+      "@prisma/dev"
+    ],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "@hono/node-server",
+    "severity": "moderate",
+    "title": "Node.js Adapter for Hono: Path traversal in `serve-static` on Windows via encoded backslash (`%5C`)",
+    "url": "https://github.com/advisories/GHSA-frvp-7c67-39w9",
+    "range": "<1.19.15",
+    "isDirect": false,
+    "effects": [
+      "@prisma/dev"
+    ],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "@prisma/config",
+    "severity": "high",
+    "transitiveVia": "deepmerge-ts",
+    "isDirect": false,
+    "effects": [
+      "prisma"
+    ],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "@prisma/dev",
+    "severity": "moderate",
+    "transitiveVia": "@hono/node-server",
+    "isDirect": false,
+    "effects": [
+      "prisma"
+    ],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "@prisma/dev",
+    "severity": "moderate",
+    "transitiveVia": "valibot",
+    "isDirect": false,
+    "effects": [
+      "prisma"
+    ],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "baseline-browser-mapping",
+    "severity": "moderate",
+    "title": "baseline-browser-mapping process termination on invalid input causes denial of service",
+    "url": "https://github.com/advisories/GHSA-w5vr-8v7q-w6rv",
+    "range": ">=2.0.0 <2.11.0",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "brace-expansion",
+    "severity": "high",
+    "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+    "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp",
+    "range": ">=2.0.0 <2.1.2",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "brace-expansion",
+    "severity": "high",
+    "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+    "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp",
+    "range": "<1.1.16",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "brace-expansion",
+    "severity": "high",
+    "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+    "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp",
+    "range": ">=3.0.0 <5.0.7",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "brace-expansion",
+    "severity": "high",
+    "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+    "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+    "range": "<1.1.17",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "brace-expansion",
+    "severity": "high",
+    "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+    "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+    "range": ">=2.0.0 <2.1.3",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "brace-expansion",
+    "severity": "high",
+    "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+    "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+    "range": ">=4.0.0 <5.0.8",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "brace-expansion",
+    "severity": "high",
+    "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+    "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+    "range": ">=4.0.0 <5.0.9",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "brace-expansion",
+    "severity": "high",
+    "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+    "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+    "range": ">=2.0.0 <2.1.4",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "brace-expansion",
+    "severity": "high",
+    "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+    "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+    "range": "<1.1.18",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "browserslist",
+    "severity": "high",
+    "title": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",
+    "url": "https://github.com/advisories/GHSA-c83g-rgw3-j3cx",
+    "range": "<=4.28.6",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "browserslist",
+    "severity": "high",
+    "title": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)",
+    "url": "https://github.com/advisories/GHSA-73wf-gq98-2v4g",
+    "range": "<=4.28.6",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "deepmerge-ts",
+    "severity": "high",
+    "title": "DeepmergeTS has stack exhaustion when merging recursive object graphs",
+    "url": "https://github.com/advisories/GHSA-ggr8-5vv4-36mx",
+    "range": "<8.0.0",
+    "isDirect": false,
+    "effects": [
+      "@prisma/config"
+    ],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "fast-uri",
+    "severity": "high",
+    "title": "fast-uri vulnerable to host confusion via literal backslash authority delimiter",
+    "url": "https://github.com/advisories/GHSA-v2hh-gcrm-f6hx",
+    "range": ">=3.0.0 <=3.1.3",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "fast-uri",
+    "severity": "high",
+    "title": "fast-uri vulnerable to host confusion via backslash authority introducer",
+    "url": "https://github.com/advisories/GHSA-7p8r-x3mc-p8w7",
+    "range": ">=3.0.0 <3.1.5",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "fast-uri",
+    "severity": "high",
+    "title": "fast-uri vulnerable to server-side request forgery via malformed IPv6 normalization",
+    "url": "https://github.com/advisories/GHSA-f65p-4m7j-42xc",
+    "range": ">=3.0.0 <3.1.6",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "fast-uri",
+    "severity": "high",
+    "title": "fast-uri vulnerable to server-side request forgery via repeated hostname percent-decoding",
+    "url": "https://github.com/advisories/GHSA-fph4-wmhf-6fwf",
+    "range": ">=3.1.2 <3.1.6",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "fast-uri",
+    "severity": "high",
+    "title": "fast-uri vulnerable to host confusion via percent-encoded scheme normalization",
+    "url": "https://github.com/advisories/GHSA-jqff-g426-hqxp",
+    "range": ">=3.0.0 <3.1.6",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "fast-uri",
+    "severity": "high",
+    "title": "fast-uri vulnerable to host confusion via failed IDN canonicalization",
+    "url": "https://github.com/advisories/GHSA-4c8g-83qw-93j6",
+    "range": ">=3.0.0 <3.1.3",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "fast-xml-parser",
+    "severity": "high",
+    "title": "fast-xml-parser: Repeated DOCTYPE declarations reset entity expansion limits",
+    "url": "https://github.com/advisories/GHSA-8r6m-32jq-jx6q",
+    "range": ">=5.9.3 <5.10.1",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "firebase-admin",
+    "severity": "moderate",
+    "transitiveVia": "@google-cloud/storage",
+    "isDirect": true,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "gaxios",
+    "severity": "moderate",
+    "transitiveVia": "uuid",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "hono",
+    "severity": "moderate",
+    "title": "Hono: API Gateway v1 adapter can drop a distinct repeated request header value during de-duplication",
+    "url": "https://github.com/advisories/GHSA-xgm2-5f3f-mvvc",
+    "range": ">=4.3.3 <4.12.27",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "hono",
+    "severity": "moderate",
+    "title": "hono/jsx does not isolate context per request, leading to cross-request data disclosure",
+    "url": "https://github.com/advisories/GHSA-hvrm-45r6-mjfj",
+    "range": ">=4.11.8 <4.12.27",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "hono",
+    "severity": "moderate",
+    "title": "Hono: Server-Side XSS via JSX Escaping Bypass in cx() Utility",
+    "url": "https://github.com/advisories/GHSA-w62v-xxxg-mg59",
+    "range": ">=4.0.0 <4.12.27",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "hono",
+    "severity": "moderate",
+    "title": "Hono: ReDoS in CORS middleware via Access-Control-Request-Headers",
+    "url": "https://github.com/advisories/GHSA-8j4g-w8fx-2239",
+    "range": "<4.12.34",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "hono",
+    "severity": "moderate",
+    "title": "Hono: `memo()` retains SSR output across requests, leading to cross-user data disclosure",
+    "url": "https://github.com/advisories/GHSA-f23p-vx2j-j53r",
+    "range": ">=3.8.0 <4.12.34",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "hono",
+    "severity": "low",
+    "title": "Hono: Proxy Helper does not remove response headers listed in the `Connection` header",
+    "url": "https://github.com/advisories/GHSA-79qm-7rj5-m7r9",
+    "range": ">=4.7.0 <4.12.34",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "hono",
+    "severity": "moderate",
+    "title": "Hono: Algorithmic Complexity DoS in Language Middleware",
+    "url": "https://github.com/advisories/GHSA-54fx-42gc-7vw4",
+    "range": ">=4.12.0 <4.12.34",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "hono",
+    "severity": "moderate",
+    "title": "Hono: Incomplete fix for CVE-2026-39408: `toSSG()` still writes files outside the output directory",
+    "url": "https://github.com/advisories/GHSA-gqvv-2mrq-wpjv",
+    "range": "<4.13.5",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "hono",
+    "severity": "moderate",
+    "title": "Hono: Unbounded dot-notation nesting in `parseBody()` can cause memory exhaustion",
+    "url": "https://github.com/advisories/GHSA-g6gw-c38x-mqfc",
+    "range": "<4.13.5",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "hono",
+    "severity": "moderate",
+    "title": "Hono: Query parser reads parameters after the URL fragment, causing cache-key and proxy interpretation differentials",
+    "url": "https://github.com/advisories/GHSA-crvj-82cr-hjcx",
+    "range": "<4.13.5",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "js-yaml",
+    "severity": "high",
+    "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported",
+    "url": "https://github.com/advisories/GHSA-5p4m-2wfm-xmqj",
+    "range": ">=3.0.0 <3.15.1",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "js-yaml",
+    "severity": "high",
+    "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources",
+    "url": "https://github.com/advisories/GHSA-2883-xcg3-v3hh",
+    "range": ">=3.0.0 <3.15.2",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "morgan",
+    "severity": "moderate",
+    "title": "morgan vulnerable to Log Forging via unescaped Unicode line separators",
+    "url": "https://github.com/advisories/GHSA-jxfw-x594-9x9m",
+    "range": "<1.12.0",
+    "isDirect": true,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "mysql2",
+    "severity": "high",
+    "title": "MySQL2: Auth Plugin Downgrade to mysql_clear_password Leaks Plaintext Credentials",
+    "url": "https://github.com/advisories/GHSA-3f6p-5ww8-9rcr",
+    "range": "<3.22.0",
+    "isDirect": false,
+    "effects": [
+      "prisma"
+    ],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "mysql2",
+    "severity": "moderate",
+    "title": "MySQL2: Unbounded zlib inflate in compressed MySQL protocol handler allows decompression-bomb DoS",
+    "url": "https://github.com/advisories/GHSA-rgwj-5xj2-c3m3",
+    "range": "<=3.23.0",
+    "isDirect": false,
+    "effects": [
+      "prisma"
+    ],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "prisma",
+    "severity": "high",
+    "transitiveVia": "@prisma/config",
+    "isDirect": true,
+    "effects": [],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "prisma",
+    "severity": "high",
+    "transitiveVia": "@prisma/dev",
+    "isDirect": true,
+    "effects": [],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "prisma",
+    "severity": "high",
+    "transitiveVia": "mysql2",
+    "isDirect": true,
+    "effects": [],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  },
+  {
+    "package": "protobufjs",
+    "severity": "moderate",
+    "title": "protobufjs: Denial of Service via infinite loop in .proto option parsing",
+    "url": "https://github.com/advisories/GHSA-j3f2-48v5-ccww",
+    "range": ">=7.5.0 <=7.6.4",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "qs",
+    "severity": "moderate",
+    "title": "qs array-limit bypass via bracket-key comma parsing",
+    "url": "https://github.com/advisories/GHSA-x5fp-wj9c-mxmx",
+    "range": ">=6.14.2 <=6.15.3",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "qs",
+    "severity": "moderate",
+    "title": "qs: Denial of Service via Attacker Controlled isBuffer",
+    "url": "https://github.com/advisories/GHSA-4mjr-xmp4-gh2g",
+    "range": ">=2.2.5 <6.16.0",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "retry-request",
+    "severity": "moderate",
+    "transitiveVia": "teeny-request",
+    "isDirect": false,
+    "effects": [
+      "@google-cloud/storage"
+    ],
+    "fixAvailable": true
+  },
+  {
+    "package": "socket.io-parser",
+    "severity": "high",
+    "title": "Socket.IO: Zero-attachment Memory Exhaustion",
+    "url": "https://github.com/advisories/GHSA-2m8v-j782-fhvr",
+    "range": ">=4.0.0 <4.2.7",
+    "isDirect": false,
+    "effects": [],
+    "fixAvailable": true
+  },
+  {
+    "package": "teeny-request",
+    "severity": "moderate",
+    "transitiveVia": "uuid",
+    "isDirect": false,
+    "effects": [
+      "@google-cloud/storage",
+      "retry-request"
+    ],
+    "fixAvailable": true
+  },
+  {
+    "package": "uuid",
+    "severity": "moderate",
+    "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+    "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq",
+    "range": "<11.1.1",
+    "isDirect": false,
+    "effects": [
+      "gaxios",
+      "teeny-request"
+    ],
+    "fixAvailable": true
+  },
+  {
+    "package": "valibot",
+    "severity": "moderate",
+    "title": "Valibot: record() issue paths can make flatten() throw for inherited Object property names",
+    "url": "https://github.com/advisories/GHSA-5qjj-4xww-7phc",
+    "range": "<=1.4.1",
+    "isDirect": false,
+    "effects": [
+      "@prisma/dev"
+    ],
+    "fixAvailable": {
+      "name": "prisma",
+      "version": "6.19.3",
+      "isSemVerMajor": true
+    }
+  }
+]
