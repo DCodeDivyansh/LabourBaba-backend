@@ -70,8 +70,7 @@ export async function processNotificationJob(data: DispatchNotifyJobData): Promi
     workers.map(async (w) => {
       // ── FCM push notification ────────────────────────────────────────────
       try {
-        metricsService.recordNotificationAttempt('fcm');
-        await sendFCMToWorker(w.id, {
+        const results = await sendFCMToWorker(w.id, {
           title: 'New Job',
           body: skillType ?? 'New Job',
           data: {
@@ -86,9 +85,20 @@ export async function processNotificationJob(data: DispatchNotifyJobData): Promi
             expiresAt,
           },
         });
-        metricsService.recordNotificationSuccess('fcm');
+
+        if (results && results.length > 0) {
+          const anySuccess = results.some((r) => r.success);
+          if (anySuccess) {
+            logger.info(`[notificationWorker] FCM push delivered to worker=${w.id}`);
+          } else {
+            const hasTransient = results.some((r) => !r.isInvalidToken);
+            logger.warn(
+              `[notificationWorker] FCM push failed for worker=${w.id} (requirement=${requirementId} wave=${waveNumber})`,
+              { hasTransient, resultsCount: results.length }
+            );
+          }
+        }
       } catch (err: any) {
-        metricsService.recordNotificationFailure('fcm', 'transient');
         // Log but do NOT rethrow: FCM failure must not roll back persisted state
         // or prevent other workers from receiving their notifications.
         logger.error(

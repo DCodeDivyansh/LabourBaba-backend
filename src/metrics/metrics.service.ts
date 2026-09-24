@@ -65,6 +65,12 @@ export class MetricsService {
   public readonly notificationAttemptsTotal: Counter<string>;
   public readonly notificationSuccessTotal: Counter<string>;
   public readonly notificationFailureTotal: Counter<string>;
+  public readonly notificationFcmAttemptsTotal: Counter<string>;
+  public readonly notificationFcmSuccessTotal: Counter<string>;
+  public readonly notificationFcmFailureTotal: Counter<string>;
+  public readonly notificationFcmInvalidTokenTotal: Counter<string>;
+  public readonly notificationFcmRetryTotal: Counter<string>;
+  public readonly notificationFcmLatencySeconds: Histogram<string>;
 
   // OTP & Security Metrics
   public readonly otpChallengesCreatedTotal: Counter<string>;
@@ -351,6 +357,44 @@ export class MetricsService {
       name: "notification_failure_total",
       help: "Total failed notification deliveries",
       labelNames: ["channel", "error_type"],
+      registers: [this.registry],
+    });
+
+    this.notificationFcmAttemptsTotal = new Counter({
+      name: "notification_fcm_attempts_total",
+      help: "Total FCM notification attempts",
+      registers: [this.registry],
+    });
+
+    this.notificationFcmSuccessTotal = new Counter({
+      name: "notification_fcm_success_total",
+      help: "Total successful FCM deliveries",
+      registers: [this.registry],
+    });
+
+    this.notificationFcmFailureTotal = new Counter({
+      name: "notification_fcm_failure_total",
+      help: "Total failed FCM deliveries",
+      labelNames: ["reason"],
+      registers: [this.registry],
+    });
+
+    this.notificationFcmInvalidTokenTotal = new Counter({
+      name: "notification_fcm_invalid_token_total",
+      help: "Total invalid or unregistered FCM tokens detected",
+      registers: [this.registry],
+    });
+
+    this.notificationFcmRetryTotal = new Counter({
+      name: "notification_fcm_retry_total",
+      help: "Total FCM notification retries scheduled",
+      registers: [this.registry],
+    });
+
+    this.notificationFcmLatencySeconds = new Histogram({
+      name: "notification_fcm_latency_seconds",
+      help: "FCM delivery latency in seconds",
+      buckets: [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
       registers: [this.registry],
     });
 
@@ -676,14 +720,56 @@ export class MetricsService {
 
   recordNotificationAttempt(channel: "fcm" | "socket" = "fcm"): void {
     this.notificationAttemptsTotal.inc({ channel });
+    if (channel === "fcm") {
+      this.notificationFcmAttemptsTotal.inc();
+    }
   }
 
   recordNotificationSuccess(channel: "fcm" | "socket" = "fcm"): void {
     this.notificationSuccessTotal.inc({ channel });
+    if (channel === "fcm") {
+      this.notificationFcmSuccessTotal.inc();
+    }
   }
 
   recordNotificationFailure(channel: "fcm" | "socket" = "fcm", errorType: "transient" | "permanent" = "transient"): void {
     this.notificationFailureTotal.inc({ channel, error_type: errorType });
+    if (channel === "fcm") {
+      this.notificationFcmFailureTotal.inc({ reason: errorType });
+    }
+  }
+
+  recordFcmAttempt(): void {
+    this.notificationAttemptsTotal.inc({ channel: "fcm" });
+    this.notificationFcmAttemptsTotal.inc();
+  }
+
+  recordFcmSuccess(durationMs?: number): void {
+    this.notificationSuccessTotal.inc({ channel: "fcm" });
+    this.notificationFcmSuccessTotal.inc();
+    if (typeof durationMs === "number" && durationMs >= 0) {
+      this.notificationFcmLatencySeconds.observe(durationMs / 1000);
+    }
+  }
+
+  recordFcmFailure(reason: string = "unknown"): void {
+    const validReasons = ["invalid_token", "unregistered_device", "invalid_argument", "auth_failure", "transient", "rate_limited", "uninitialized", "unknown"];
+    const normalized = validReasons.includes(reason.toLowerCase()) ? reason.toLowerCase() : "unknown";
+    const errorType = (normalized === "transient" || normalized === "rate_limited") ? "transient" : "permanent";
+    this.notificationFailureTotal.inc({ channel: "fcm", error_type: errorType });
+    this.notificationFcmFailureTotal.inc({ reason: normalized });
+  }
+
+  recordFcmInvalidToken(): void {
+    this.notificationFcmInvalidTokenTotal.inc();
+  }
+
+  recordFcmRetry(): void {
+    this.notificationFcmRetryTotal.inc();
+  }
+
+  recordFcmLatency(seconds: number): void {
+    this.notificationFcmLatencySeconds.observe(seconds);
   }
 
   recordLocationUpdate(): void {

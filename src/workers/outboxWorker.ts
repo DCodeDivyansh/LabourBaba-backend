@@ -114,10 +114,6 @@ export class OutboxWorker {
       let lastErrorMessage = '';
 
       if (recipient_type === 'worker' || recipient_type === 'customer') {
-        try {
-          metricsService.recordNotificationAttempt('fcm');
-        } catch {}
-
         const results = await sendFCMToRecipient(recipient_type, recipient_id, {
           title: payload.title || 'LabourBaba Notification',
           body: payload.body || '',
@@ -131,9 +127,6 @@ export class OutboxWorker {
         if (results.length === 0) {
           // Recipient has no registered active push devices; socket delivery dispatched or recoverable via PostgreSQL.
           fcmSuccess = true;
-          try {
-            metricsService.recordNotificationSuccess('fcm');
-          } catch {}
         } else {
           for (const res of results) {
             if (res.success) {
@@ -143,25 +136,23 @@ export class OutboxWorker {
               lastErrorMessage = res.error?.message || 'FCM delivery failed';
             }
           }
-          if (fcmSuccess) {
-            try {
-              metricsService.recordNotificationSuccess('fcm');
-            } catch {}
-          } else {
-            try {
-              metricsService.recordNotificationFailure('fcm', hasTransientError ? 'transient' : 'permanent');
-            } catch {}
-          }
         }
       } else {
         // Non-worker/customer recipients
         fcmSuccess = true;
       }
 
-      if (fcmSuccess || !hasTransientError) {
+      if (fcmSuccess) {
         await outboxService.markEventSuccess(id, record.updated_at);
-      } else {
+      } else if (hasTransientError) {
+        try {
+          metricsService.recordFcmRetry();
+        } catch {}
         await outboxService.markEventFailure(id, lastErrorMessage || 'Transient push delivery failure', false, record.updated_at);
+      } else {
+        // All recipient device tokens were permanently invalid/unregistered.
+        // Mark terminal failure so worker does not retry indefinitely.
+        await outboxService.markEventFailure(id, lastErrorMessage || 'Permanent push delivery failure: all device tokens invalid or unregistered', true, record.updated_at);
       }
     } catch (err: any) {
       const isPermanent = isPermanentInvalidTokenError(err);

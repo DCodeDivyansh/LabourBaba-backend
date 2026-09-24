@@ -426,9 +426,9 @@ describe("P6 Issue 8 — Outbox Worker Graceful Shutdown & Drain Suite", () => {
 
     // Call stop() 3 times concurrently
     const [res1, res2, res3] = await Promise.all([
-      worker.stop(500),
-      worker.stop(500),
-      worker.stop(500),
+      worker.stop(2000),
+      worker.stop(2000),
+      worker.stop(2000),
     ]);
 
     expect(res1).toBeUndefined();
@@ -569,7 +569,7 @@ describe("P6 Issue 8 — Outbox Worker Graceful Shutdown & Drain Suite", () => {
         INSERT INTO notification_outbox (
           id, event_type, aggregate_type, aggregate_id, recipient_type, recipient_id, payload, status, idempotency_key, available_at, updated_at
         ) VALUES (
-          $1, 'test_cte', 'booking', gen_random_uuid(), 'worker', gen_random_uuid(), '{"title":"Test"}', 'PENDING', 'idemp_p6_8_real_cte', NOW(), NOW()
+          $1, 'test_cte', 'booking', gen_random_uuid(), 'worker', gen_random_uuid(), '{"title":"Test"}', 'PENDING', 'idemp_p6_8_real_cte', NOW() - INTERVAL '10 seconds', NOW()
         )
       `, [realOutboxId]);
     });

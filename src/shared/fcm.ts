@@ -1,11 +1,59 @@
-import { initializeApp, getApps, cert, App } from "firebase-admin/app";
+import { initializeApp, getApps, cert, deleteApp, App } from "firebase-admin/app";
 import { getMessaging, Message } from "firebase-admin/messaging";
 import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
+import crypto from "crypto";
 import { logger } from "../utils/logger";
+import { metricsService } from "../metrics/metrics.service";
 
 let isFirebaseInitialized = false;
 let app: App | undefined;
+
+/**
+ * Safely computes a deterministic, privacy-preserving fingerprint (10 hex characters)
+ * of an FCM registration token for structured logs and telemetry.
+ * Strictly prevents raw secret registration token exposure.
+ */
+export function fingerprintToken(token: string): string {
+  if (!token || typeof token !== "string") return "empty_token";
+  return crypto.createHash("sha256").update(token).digest("hex").slice(0, 10);
+}
+
+export interface FCMPayload {
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+}
+
+export type FCMErrorCategory =
+  | "INVALID_REGISTRATION_TOKEN"
+  | "UNREGISTERED_DEVICE"
+  | "INVALID_ARGUMENT"
+  | "AUTHENTICATION_ERROR"
+  | "SERVER_UNAVAILABLE"
+  | "INTERNAL_ERROR"
+  | "TRANSIENT_FAILURE"
+  | "RATE_LIMITED"
+  | "UNKNOWN";
+
+export interface ClassifiedFCMError {
+  category: FCMErrorCategory;
+  isInvalidToken: boolean;
+  isPermanent: boolean;
+  shouldRetry: boolean;
+  message: string;
+}
+
+export interface FCMDeliveryResult {
+  token: string;
+  tokenFingerprint?: string;
+  success: boolean;
+  messageId?: string;
+  error?: any;
+  isInvalidToken?: boolean;
+  errorCategory?: FCMErrorCategory;
+  latencyMs?: number;
+}
 
 export interface IFCMProvider {
   sendToTokens(
@@ -28,10 +76,104 @@ export function setMockFcmProvider(provider: IFCMProvider | null): void {
   mockFcmProvider = provider;
 }
 
+/**
+ * Resets Firebase Admin SDK and test mocks cleanly.
+ */
 export function resetFirebaseApp(): void {
   app = undefined;
   isFirebaseInitialized = false;
   mockFcmProvider = null;
+  try {
+    const existingApps = getApps();
+    for (const a of existingApps) {
+      deleteApp(a).catch(() => {});
+    }
+  } catch {}
+}
+
+/**
+ * Resolves Firebase service account credentials from multiple standard configuration approaches:
+ * 1. FIREBASE_SERVICE_ACCOUNT_PATH or local JSON files (e.g. root service account)
+ * 2. FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_KEY (raw JSON or base64 JSON)
+ * 3. Separated credentials: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
+ * 4. GOOGLE_APPLICATION_CREDENTIALS (Application Default Credentials)
+ */
+function resolveFirebaseCredentials(): { type: "service_account"; creds: any } | { type: "adc" } | null {
+  // 1. Check custom path or standard root service account files
+  const candidatePaths = [
+    process.env.FIREBASE_SERVICE_ACCOUNT_PATH,
+    resolve(process.cwd(), "labourbaba-58a41-firebase-adminsdk-fbsvc-e72264934a.json"),
+    resolve(process.cwd(), "firebase-service-account.json"),
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidatePaths) {
+    if (existsSync(candidate)) {
+      try {
+        const fileContent = readFileSync(candidate, "utf-8");
+        const parsed = JSON.parse(fileContent);
+        logger.info(`[FCM] Found Firebase Service Account file.`);
+        return { type: "service_account", creds: parsed };
+      } catch (err: any) {
+        logger.error("[FCM] Failed to parse local service account JSON file:", { error: err.message });
+        if (process.env.NODE_ENV === "production") {
+          throw new Error(`[FCM_CONFIG_ERROR] Failed to parse local service account JSON file: ${err.message}`);
+        }
+      }
+    }
+  }
+
+  // 2. Check JSON string in environment (raw or base64)
+  const rawJsonVar = process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (rawJsonVar && rawJsonVar.trim().length > 0) {
+    try {
+      let jsonString = rawJsonVar.trim();
+      // Handle base64 encoded JSON
+      if (!jsonString.startsWith("{") && !jsonString.startsWith("[")) {
+        try {
+          const decoded = Buffer.from(jsonString, "base64").toString("utf-8");
+          if (decoded.startsWith("{")) {
+            jsonString = decoded;
+          }
+        } catch {}
+      }
+      const parsed = JSON.parse(jsonString);
+      return { type: "service_account", creds: parsed };
+    } catch (err: any) {
+      logger.error("[FCM] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON env variable:", { error: err.message });
+      if (process.env.NODE_ENV === "production") {
+        throw new Error(`[FCM_CONFIG_ERROR] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON env variable: ${err.message}`);
+      }
+    }
+  }
+
+  // 3. Check securely separated credentials
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+  if (projectId && clientEmail && privateKey) {
+    // Correctly normalize literal "\n" escapes from CI/CD secrets
+    const normalizedKey = privateKey.replace(/\\n/g, "\n");
+    return {
+      type: "service_account",
+      creds: {
+        projectId,
+        clientEmail,
+        privateKey: normalizedKey,
+      },
+    };
+  }
+
+  // 4. Check Google Application Default Credentials
+  if (
+    process.env.GOOGLE_APPLICATION_CREDENTIALS &&
+    process.env.GOOGLE_APPLICATION_CREDENTIALS !== "undefined" &&
+    process.env.GOOGLE_APPLICATION_CREDENTIALS.trim().length > 0
+  ) {
+    return { type: "adc" };
+  }
+
+  return null;
 }
 
 export function getFirebaseApp(): App | undefined {
@@ -43,37 +185,12 @@ export function getFirebaseApp(): App | undefined {
     return app;
   }
 
-  const rootServiceAccountPath = resolve(process.cwd(), "labourbaba-58a41-firebase-adminsdk-fbsvc-e72264934a.json");
-  const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const resolved = resolveFirebaseCredentials();
 
-  let serviceAccount: any = null;
-
-  if (existsSync(rootServiceAccountPath)) {
-    try {
-      const fileContent = readFileSync(rootServiceAccountPath, "utf-8");
-      serviceAccount = JSON.parse(fileContent);
-      logger.info(`[FCM] Found Firebase Service Account file at root.`);
-    } catch (error: any) {
-      logger.error("[FCM] Failed to parse local service account JSON file:", { error: error.message });
-      if (process.env.NODE_ENV === "production") {
-        throw new Error(`[FCM_CONFIG_ERROR] Failed to parse local service account JSON file: ${error.message}`);
-      }
-    }
-  } else if (serviceAccountVar) {
-    try {
-      serviceAccount = JSON.parse(serviceAccountVar);
-    } catch (error: any) {
-      logger.error("[FCM] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON env variable:", { error: error.message });
-      if (process.env.NODE_ENV === "production") {
-        throw new Error(`[FCM_CONFIG_ERROR] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON env variable: ${error.message}`);
-      }
-    }
-  }
-
-  if (serviceAccount) {
+  if (resolved?.type === "service_account") {
     try {
       app = initializeApp({
-        credential: cert(serviceAccount),
+        credential: cert(resolved.creds),
       });
       isFirebaseInitialized = true;
       logger.info("[FCM] Firebase Admin SDK initialized successfully via Service Account.");
@@ -83,11 +200,7 @@ export function getFirebaseApp(): App | undefined {
         throw new Error(`[FCM_INIT_ERROR] Failed to initialize Firebase Admin SDK: ${error.message}`);
       }
     }
-  } else if (
-    process.env.GOOGLE_APPLICATION_CREDENTIALS &&
-    process.env.GOOGLE_APPLICATION_CREDENTIALS !== "undefined" &&
-    process.env.GOOGLE_APPLICATION_CREDENTIALS.trim().length > 0
-  ) {
+  } else if (resolved?.type === "adc") {
     try {
       app = initializeApp();
       isFirebaseInitialized = true;
@@ -127,10 +240,8 @@ export function assertFcmConfig(): void {
     return;
   }
 
-  const rootServiceAccountPath = resolve(process.cwd(), "labourbaba-58a41-firebase-adminsdk-fbsvc-e72264934a.json");
-  const serviceAccountVar = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-  if (!existsSync(rootServiceAccountPath) && !serviceAccountVar && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  const resolved = resolveFirebaseCredentials();
+  if (!resolved) {
     throw new Error(
       "[FCM_CONFIG_ERROR] Production requires valid Firebase Admin SDK credentials (FIREBASE_SERVICE_ACCOUNT_JSON, service account JSON file, or GOOGLE_APPLICATION_CREDENTIALS)."
     );
@@ -145,18 +256,128 @@ export function assertFcmConfig(): void {
   }
 }
 
-export interface FCMPayload {
-  title: string;
-  body: string;
-  data?: Record<string, string>;
-}
+/**
+ * Classifies an FCM error into structured operational categories.
+ * Distinguishes invalid tokens (permanent) vs rate limiting / network outages (transient).
+ */
+export function classifyFCMError(error: any): ClassifiedFCMError {
+  if (!error) {
+    return {
+      category: "UNKNOWN",
+      isInvalidToken: false,
+      isPermanent: false,
+      shouldRetry: false,
+      message: "Unknown error",
+    };
+  }
 
-export interface FCMDeliveryResult {
-  token: string;
-  success: boolean;
-  messageId?: string;
-  error?: any;
-  isInvalidToken?: boolean;
+  const code = String(error.code || error.errorInfo?.code || "").toLowerCase();
+  const message = String(error.message || "").toLowerCase();
+
+  // 1. Unregistered device / dead token
+  if (
+    code.includes("registration-token-not-registered") ||
+    message.includes("registration-token-not-registered") ||
+    message.includes("requested entity was not found")
+  ) {
+    return {
+      category: "UNREGISTERED_DEVICE",
+      isInvalidToken: true,
+      isPermanent: true,
+      shouldRetry: false,
+      message: error.message || "Registration token is no longer registered",
+    };
+  }
+
+  // 2. Invalid token format
+  if (
+    code.includes("invalid-registration-token") ||
+    message.includes("invalid-registration-token") ||
+    message.includes("not a valid fcm registration token")
+  ) {
+    return {
+      category: "INVALID_REGISTRATION_TOKEN",
+      isInvalidToken: true,
+      isPermanent: true,
+      shouldRetry: false,
+      message: error.message || "Invalid FCM registration token format",
+    };
+  }
+
+  // 3. Invalid argument (malformed payload or token)
+  if (code.includes("invalid-argument") || message.includes("invalid-argument")) {
+    const isTokenIssue = message.includes("token") || message.includes("recipient");
+    return {
+      category: "INVALID_ARGUMENT",
+      isInvalidToken: isTokenIssue,
+      isPermanent: true,
+      shouldRetry: false,
+      message: error.message || "Invalid argument in FCM request",
+    };
+  }
+
+  // 4. Rate limiting / Quota exceeded
+  if (
+    code.includes("quota-exceeded") ||
+    code.includes("message-rate-exceeded") ||
+    code.includes("device-message-rate-exceeded") ||
+    message.includes("rate limit") ||
+    message.includes("429")
+  ) {
+    return {
+      category: "RATE_LIMITED",
+      isInvalidToken: false,
+      isPermanent: false,
+      shouldRetry: true,
+      message: error.message || "FCM quota or message rate exceeded",
+    };
+  }
+
+  // 5. Transient network or FCM server error
+  if (
+    code.includes("server-unavailable") ||
+    code.includes("internal-error") ||
+    message.includes("etimedout") ||
+    message.includes("econnreset") ||
+    message.includes("econnrefused") ||
+    message.includes("socket hang up") ||
+    message.includes("503") ||
+    message.includes("500") ||
+    message.includes("502") ||
+    message.includes("timeout")
+  ) {
+    return {
+      category: "TRANSIENT_FAILURE",
+      isInvalidToken: false,
+      isPermanent: false,
+      shouldRetry: true,
+      message: error.message || "Transient network or FCM server error",
+    };
+  }
+
+  // 6. Authentication or credential mismatch
+  if (
+    code.includes("authentication-error") ||
+    code.includes("mismatched-credential") ||
+    message.includes("credential") ||
+    message.includes("auth error")
+  ) {
+    return {
+      category: "AUTHENTICATION_ERROR",
+      isInvalidToken: false,
+      isPermanent: true,
+      shouldRetry: false,
+      message: error.message || "Firebase Admin authentication or credential mismatch",
+    };
+  }
+
+  return {
+    category: "UNKNOWN",
+    isInvalidToken: false,
+    isPermanent: false,
+    shouldRetry: true,
+    message: error.message || "Unknown FCM error",
+  };
 }
 
 /**
@@ -164,19 +385,7 @@ export interface FCMDeliveryResult {
  * Transient errors (e.g. server timeout, network disconnect) must NOT be treated as invalid tokens.
  */
 export function isPermanentInvalidTokenError(error: any): boolean {
-  if (!error) return false;
-  const code = String(error.code || error.errorInfo?.code || "").toLowerCase();
-  const message = String(error.message || "").toLowerCase();
-
-  return (
-    code.includes("registration-token-not-registered") ||
-    code.includes("invalid-registration-token") ||
-    code.includes("invalid-argument") ||
-    message.includes("registration-token-not-registered") ||
-    message.includes("invalid-registration-token") ||
-    message.includes("requested entity was not found") ||
-    message.includes("not a valid fcm registration token")
-  );
+  return classifyFCMError(error).isInvalidToken;
 }
 
 /**
@@ -187,6 +396,7 @@ export function isPermanentInvalidTokenError(error: any): boolean {
  * 1. Zero Fake Success: Never returns success: true or fake message IDs when Firebase is uninitialized.
  * 2. Explicit Mocking: In tests, mock delivery must use an explicit mock provider.
  * 3. Fail-Loud in Production: Uninitialized FCM in production returns explicit failure results.
+ * 4. Token Privacy: Logs strictly use SHA-256 token fingerprints, never raw tokens.
  */
 export async function sendFCMToTokens(
   tokens: string[],
@@ -196,7 +406,12 @@ export async function sendFCMToTokens(
   if (!tokens || tokens.length === 0) return [];
 
   // 1. Explicit Test Mock Provider check (strictly disallowed in production)
-  if (mockFcmProvider && process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV === "production") {
+    if (mockFcmProvider) {
+      mockFcmProvider = null;
+      throw new Error("[SECURITY_VIOLATION] Mock FCM provider cannot be active in production environment.");
+    }
+  } else if (mockFcmProvider) {
     return mockFcmProvider.sendToTokens(tokens, payload, onInvalidToken);
   }
 
@@ -206,6 +421,9 @@ export async function sendFCMToTokens(
   await Promise.allSettled(
     tokens.map(async (token) => {
       if (!token) return;
+      const fp = fingerprintToken(token);
+      const startTime = Date.now();
+
       try {
         if (isFirebaseInitialized && currentApp) {
           const message: Message = {
@@ -221,27 +439,75 @@ export async function sendFCMToTokens(
           };
 
           const messageId = await getMessaging(currentApp).send(message);
-          results.push({ token, success: true, messageId });
-        } else {
-          // Uninitialized FCM — NEVER return fake success or fake message IDs!
-          const uninitError = new Error("[FCM_UNINITIALIZED] Firebase Admin SDK is not initialized. Notification delivery failed.");
-          logger.error(`[FCM_DELIVERY_FAILED] Cannot send push notification: Firebase Admin SDK is uninitialized`, {
-            tokenMasked: token.slice(0, 8) + "...",
-            title: payload.title,
-          });
+          const latencyMs = Date.now() - startTime;
+
+          // Record telemetry
+          try {
+            metricsService.recordNotificationAttempt("fcm");
+            metricsService.recordNotificationSuccess("fcm");
+            metricsService.recordFcmSuccess(latencyMs);
+          } catch {}
+
           results.push({
             token,
+            tokenFingerprint: fp,
+            success: true,
+            messageId,
+            latencyMs,
+          });
+        } else {
+          // Uninitialized FCM — NEVER return fake success or fake message IDs!
+          const latencyMs = Date.now() - startTime;
+          const uninitError = new Error("[FCM_UNINITIALIZED] Firebase Admin SDK is not initialized. Notification delivery failed.");
+
+          try {
+            metricsService.recordNotificationAttempt("fcm");
+            metricsService.recordNotificationFailure("fcm", "permanent");
+            metricsService.recordFcmFailure("uninitialized");
+          } catch {}
+
+          logger.error("[FCM_DELIVERY_FAILED] Cannot send push notification: Firebase Admin SDK is uninitialized", {
+            tokenFingerprint: fp,
+            title: payload.title,
+          });
+
+          results.push({
+            token,
+            tokenFingerprint: fp,
             success: false,
             error: uninitError,
             isInvalidToken: false,
+            errorCategory: "UNKNOWN",
+            latencyMs,
           });
         }
       } catch (err: any) {
-        const isInvalid = isPermanentInvalidTokenError(err);
-        results.push({ token, success: false, error: err, isInvalidToken: isInvalid });
+        const latencyMs = Date.now() - startTime;
+        const classified = classifyFCMError(err);
 
-        if (isInvalid) {
-          logger.warn(`[FCM] Token is invalid/unregistered. Triggering revocation.`);
+        try {
+          metricsService.recordNotificationAttempt("fcm");
+          metricsService.recordNotificationFailure("fcm", classified.shouldRetry ? "transient" : "permanent");
+          metricsService.recordFcmFailure(classified.category);
+          if (classified.isInvalidToken) {
+            metricsService.recordFcmInvalidToken();
+          }
+        } catch {}
+
+        results.push({
+          token,
+          tokenFingerprint: fp,
+          success: false,
+          error: err,
+          isInvalidToken: classified.isInvalidToken,
+          errorCategory: classified.category,
+          latencyMs,
+        });
+
+        if (classified.isInvalidToken) {
+          logger.warn(`[FCM] Token is invalid/unregistered (${classified.category}). Triggering revocation.`, {
+            tokenFingerprint: fp,
+          });
           if (onInvalidToken) {
             try {
               await onInvalidToken(token);
@@ -250,7 +516,11 @@ export async function sendFCMToTokens(
             }
           }
         } else {
-          logger.error(`[FCM] Transient error sending push notification:`, { error: err.message });
+          logger.error(`[FCM] Transient error sending push notification:`, {
+            tokenFingerprint: fp,
+            category: classified.category,
+            error: err.message,
+          });
         }
       }
     }),
@@ -266,7 +536,6 @@ export async function sendFCMToWorker(
   workerId: string,
   payload: FCMPayload,
 ): Promise<FCMDeliveryResult[]> {
-  // Dynamically import workerDeviceService to prevent circular dependency
   const { workerDeviceService } = await import("../features/worker_device/worker_device.service");
   const activeDevices = await workerDeviceService.getActiveDevices(workerId);
 
@@ -288,7 +557,6 @@ export async function sendFCMToCustomer(
   customerId: string,
   payload: FCMPayload,
 ): Promise<FCMDeliveryResult[]> {
-  // Dynamically import customerDeviceService to prevent circular dependency
   const { customerDeviceService } = await import("../features/customer_device/customer_device.service");
   const activeDevices = await customerDeviceService.getActiveDevices(customerId);
 
