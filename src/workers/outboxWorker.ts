@@ -73,92 +73,177 @@ export class OutboxWorker {
   private async executeRecordDelivery(record: OutboxRecord): Promise<void> {
     const { id, recipient_type, recipient_id, event_type, payload, correlation_id } = record;
 
+    // Deterministic Canonical Metadata (P7 Issue 09)
+    const eventId = id;
+    const aggregateId = record.aggregate_id;
+    const aggregateType = record.aggregate_type;
+    const aggregateVersion = record.aggregate_version ?? 1;
+    const occurredAt = record.created_at ? new Date(record.created_at).toISOString() : new Date().toISOString();
+    const socketDeliveryId = `${eventId}:${recipient_id}:socket`;
+    const fcmDeliveryId = `${eventId}:${recipient_id}:fcm`;
+
     logger.info(`[OUTBOX_PROCESSING] Delivering outbox event ${id} (${event_type}) to ${recipient_type} ${recipient_id}`, {
       outboxId: id,
+      eventId,
       eventType: event_type,
       recipientId: recipient_id,
       correlationId: correlation_id,
+      socketStatus: record.socket_status,
+      fcmStatus: record.fcm_status,
     });
 
     try {
-      // 1. Socket.IO Real-time Delivery
-      const roomName = `${recipient_type}:${recipient_id}`;
-      const socketIo = this.getSocketIo();
-      if (socketIo && typeof socketIo.to === 'function') {
-        try {
-          metricsService.recordNotificationAttempt('socket');
-          const roomSockets = (socketIo as any).sockets?.adapter?.rooms?.get(roomName);
-          const hasOnlineSockets = Boolean(roomSockets && roomSockets.size > 0);
+      // ──────────────────────────────────────────────────────────────────────────
+      // 1. Socket.IO Real-time Delivery (Channel-Specific Idempotency)
+      // ──────────────────────────────────────────────────────────────────────────
+      let socketDelivered = record.socket_status === 'SENT';
+      let socketError: string | null = null;
 
-          socketIo.to(roomName).emit(`notification:${event_type}`, {
+      if (socketDelivered) {
+        logger.info(`[OUTBOX_SOCKET_SKIPPED] Outbox event ${id} Socket.IO already delivered. Suppressing replay.`, {
+          outboxId: id,
+          deliveryId: socketDeliveryId,
+        });
+      } else {
+        const roomName = `${recipient_type}:${recipient_id}`;
+        const socketIo = this.getSocketIo();
+        if (socketIo && typeof socketIo.to === 'function') {
+          try {
+            metricsService.recordNotificationAttempt('socket');
+            const roomSockets = (socketIo as any).sockets?.adapter?.rooms?.get(roomName);
+            const hasOnlineSockets = Boolean(roomSockets && roomSockets.size > 0);
+
+            // Canonical Contract: Top-level data preserved with deterministic event identity
+            const socketPayload = {
+              ...payload,
+              eventId,
+              deliveryId: socketDeliveryId,
+              outboxId: id, // backwards compatibility
+              eventType: event_type,
+              aggregateId,
+              aggregateType,
+              aggregateVersion,
+              occurredAt,
+              correlationId: correlation_id,
+            };
+
+            socketIo.to(roomName).emit(`notification:${event_type}`, socketPayload);
+
+            metricsService.recordNotificationSuccess('socket');
+            socketDelivered = true;
+            await outboxService.recordChannelSuccess(id, recipient_id, 'socket');
+
+            if (!hasOnlineSockets) {
+              logger.info(`[OUTBOX_SOCKET] Recipient ${recipient_type} ${recipient_id} has no active socket listeners. Real-time emit dispatched to room; push & durable recovery authoritative.`, { outboxId: id });
+            }
+          } catch (socketErr: any) {
+            socketError = socketErr.message || 'Socket emission failed';
+            metricsService.recordNotificationFailure('socket', 'transient');
+            logger.warn(`[OUTBOX_SOCKET_WARN] Failed socket delivery for outbox ${id}:`, { error: socketError });
+            await outboxService.recordChannelFailure(id, recipient_id, 'socket', socketError || 'Socket emission failed', false);
+          }
+        } else {
+          // Socket.IO server unavailable in this test/worker environment
+          socketDelivered = true;
+          await outboxService.recordChannelSuccess(id, recipient_id, 'socket');
+        }
+      }
+
+      // ──────────────────────────────────────────────────────────────────────────
+      // 2. Push Notification Delivery (FCM) (Channel-Specific Idempotency)
+      // ──────────────────────────────────────────────────────────────────────────
+      let fcmDelivered = record.fcm_status === 'SENT';
+      let fcmTransientError = false;
+      let fcmPermanentError = false;
+      let fcmErrorMessage = '';
+
+      if (fcmDelivered) {
+        logger.info(`[OUTBOX_FCM_SKIPPED] Outbox event ${id} FCM push already delivered. Suppressing replay.`, {
+          outboxId: id,
+          deliveryId: fcmDeliveryId,
+        });
+      } else {
+        if (recipient_type === 'worker' || recipient_type === 'customer') {
+          const fcmData = {
             ...payload,
+            eventId,
+            deliveryId: fcmDeliveryId,
             outboxId: id,
-            correlationId: correlation_id,
+            eventType: event_type,
+            aggregateId,
+            aggregateType,
+            aggregateVersion: String(aggregateVersion),
+            occurredAt,
+            correlationId: correlation_id || '',
+          };
+
+          const results = await sendFCMToRecipient(recipient_type, recipient_id, {
+            title: payload.title || 'LabourBaba Notification',
+            body: payload.body || '',
+            data: fcmData,
           });
 
-          metricsService.recordNotificationSuccess('socket');
+          if (results.length === 0) {
+            // Recipient has no registered active push devices; socket delivery dispatched or recoverable via PostgreSQL.
+            fcmDelivered = true;
+            await outboxService.recordChannelSuccess(id, recipient_id, 'fcm');
+          } else {
+            const anySuccess = results.some((r) => r.success);
+            const hasTransient = results.some((r) => !r.success && !r.isInvalidToken);
+            const allInvalid = results.every((r) => !r.success && r.isInvalidToken);
 
-          if (!hasOnlineSockets) {
-            logger.info(`[OUTBOX_SOCKET] Recipient ${recipient_type} ${recipient_id} has no active socket listeners. Real-time emit dispatched to room; push & durable recovery authoritative.`, { outboxId: id });
-          }
-        } catch (socketErr: any) {
-          metricsService.recordNotificationFailure('socket', 'transient');
-          logger.warn(`[OUTBOX_SOCKET_WARN] Failed socket delivery for outbox ${id}:`, { error: socketErr.message });
-        }
-      }
-
-      // 2. Push Notification Delivery (FCM)
-      let fcmSuccess = false;
-      let hasTransientError = false;
-      let lastErrorMessage = '';
-
-      if (recipient_type === 'worker' || recipient_type === 'customer') {
-        const results = await sendFCMToRecipient(recipient_type, recipient_id, {
-          title: payload.title || 'LabourBaba Notification',
-          body: payload.body || '',
-          data: {
-            ...payload,
-            outboxId: id,
-            correlationId: correlation_id || '',
-          },
-        });
-
-        if (results.length === 0) {
-          // Recipient has no registered active push devices; socket delivery dispatched or recoverable via PostgreSQL.
-          fcmSuccess = true;
-        } else {
-          for (const res of results) {
-            if (res.success) {
-              fcmSuccess = true;
-            } else if (!res.isInvalidToken) {
-              hasTransientError = true;
-              lastErrorMessage = res.error?.message || 'FCM delivery failed';
+            if (anySuccess) {
+              fcmDelivered = true;
+              await outboxService.recordChannelSuccess(id, recipient_id, 'fcm');
+            } else if (hasTransient) {
+              fcmTransientError = true;
+              fcmErrorMessage = results.find((r) => !r.success && !r.isInvalidToken)?.error?.message || 'FCM delivery failed';
+              await outboxService.recordChannelFailure(id, recipient_id, 'fcm', fcmErrorMessage, false);
+            } else if (allInvalid) {
+              fcmPermanentError = true;
+              fcmErrorMessage = 'All recipient device tokens were permanently invalid/unregistered';
+              await outboxService.recordChannelFailure(id, recipient_id, 'fcm', fcmErrorMessage, true);
             }
           }
+        } else {
+          // Non-worker/customer recipients (system/admin)
+          fcmDelivered = true;
+          await outboxService.recordChannelSuccess(id, recipient_id, 'fcm');
         }
-      } else {
-        // Non-worker/customer recipients
-        fcmSuccess = true;
       }
 
-      if (fcmSuccess) {
-        await outboxService.markEventSuccess(id, record.updated_at);
-      } else if (hasTransientError) {
+      // ──────────────────────────────────────────────────────────────────────────
+      // 3. Reconcile Overall Outbox Event Lifecycle (Durable Channel Invariant)
+      // ──────────────────────────────────────────────────────────────────────────
+      if (socketDelivered && fcmDelivered) {
+        // Both channels succeeded!
+        await outboxService.markEventSuccess(id);
+      } else if (fcmTransientError || (!socketDelivered && socketError)) {
+        // At least one channel failed transiently -> schedule retry with backoff.
+        // CRITICAL INVARIANT: The successful channel is already marked SENT in DB.
+        // On retry, the successful channel WILL NOT be replayed!
         try {
-          metricsService.recordFcmRetry();
+          if (fcmTransientError) metricsService.recordFcmRetry();
         } catch {}
-        await outboxService.markEventFailure(id, lastErrorMessage || 'Transient push delivery failure', false, record.updated_at);
+        const retryReason = [
+          socketError ? `Socket error: ${socketError}` : null,
+          fcmTransientError ? `FCM error: ${fcmErrorMessage}` : null,
+        ].filter(Boolean).join('; ');
+        await outboxService.markEventFailure(id, retryReason, false);
       } else {
-        // All recipient device tokens were permanently invalid/unregistered.
-        // Mark terminal failure so worker does not retry indefinitely.
-        await outboxService.markEventFailure(id, lastErrorMessage || 'Permanent push delivery failure: all device tokens invalid or unregistered', true, record.updated_at);
+        // Permanent failure on unfulfilled channel(s)
+        const failureReason = [
+          socketError ? `Socket error: ${socketError}` : null,
+          fcmPermanentError ? `FCM error: ${fcmErrorMessage}` : null,
+        ].filter(Boolean).join('; ');
+        await outboxService.markEventFailure(id, failureReason, true);
       }
     } catch (err: any) {
       const isPermanent = isPermanentInvalidTokenError(err);
       try {
         metricsService.recordNotificationFailure('fcm', isPermanent ? 'permanent' : 'transient');
       } catch {}
-      await outboxService.markEventFailure(id, err.message || 'Outbox processing failed', isPermanent, record.updated_at);
+      await outboxService.markEventFailure(id, err.message || 'Outbox processing failed', isPermanent);
     }
   }
 

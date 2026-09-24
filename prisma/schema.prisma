@@ -514,26 +514,35 @@ model customer_device {
 /// Durable transactional notification outbox (Issue #44)
 /// Guaranteed atomic persistence with business state transitions before asynchronous delivery to FCM / Socket.IO.
 model notification_outbox {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  event_type      String    @db.VarChar(50)
-  aggregate_type  String    @db.VarChar(50)
-  aggregate_id    String    @db.Uuid
-  recipient_type  String    @db.VarChar(30)
-  recipient_id    String    @db.Uuid
-  payload         Json
-  status          String    @default("PENDING") @db.VarChar(30)
-  attempts        Int       @default(0)
-  max_attempts    Int       @default(5)
-  available_at    DateTime  @default(now()) @db.Timestamptz(6)
-  processed_at    DateTime? @db.Timestamptz(6)
-  failed_at       DateTime? @db.Timestamptz(6)
-  last_error      String?   @db.Text
-  idempotency_key String?   @unique(map: "uniq_notification_outbox_idempotency_key") @db.VarChar(255)
-  correlation_id  String?   @db.VarChar(255)
-  acknowledged_at DateTime? @db.Timestamptz(6)
-  acknowledged_by String?   @db.VarChar(100)
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_type        String                  @db.VarChar(50)
+  aggregate_type    String                  @db.VarChar(50)
+  aggregate_id      String                  @db.Uuid
+  aggregate_version Int                     @default(1)
+  recipient_type    String                  @db.VarChar(30)
+  recipient_id      String                  @db.Uuid
+  payload           Json
+  status            String                  @default("PENDING") @db.VarChar(30)
+  socket_status     String                  @default("PENDING") @db.VarChar(30)
+  socket_sent_at    DateTime?               @db.Timestamptz(6)
+  socket_error      String?                 @db.Text
+  fcm_status        String                  @default("PENDING") @db.VarChar(30)
+  fcm_sent_at       DateTime?               @db.Timestamptz(6)
+  fcm_error         String?                 @db.Text
+  attempts          Int                     @default(0)
+  max_attempts      Int                     @default(5)
+  available_at      DateTime                @default(now()) @db.Timestamptz(6)
+  processed_at      DateTime?               @db.Timestamptz(6)
+  failed_at         DateTime?               @db.Timestamptz(6)
+  last_error        String?                 @db.Text
+  idempotency_key   String?                 @unique(map: "uniq_notification_outbox_idempotency_key") @db.VarChar(255)
+  correlation_id    String?                 @db.VarChar(255)
+  acknowledged_at   DateTime?               @db.Timestamptz(6)
+  acknowledged_by   String?                 @db.VarChar(100)
+  created_at        DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime                @default(now()) @updatedAt @db.Timestamptz(6)
+
+  deliveries        notification_delivery[]
 
   @@index([status, available_at], map: "idx_outbox_status_available")
   @@index([aggregate_type, aggregate_id], map: "idx_outbox_aggregate")
@@ -541,6 +550,27 @@ model notification_outbox {
   @@index([recipient_type, recipient_id, status, created_at], map: "idx_outbox_recipient_status_created")
   @@index([recipient_type, recipient_id, acknowledged_at], map: "idx_outbox_recipient_acknowledged")
   @@map("notification_outbox")
+}
+
+/// Durable channel-specific delivery state and idempotency tracking (P7 Issue 09)
+model notification_delivery {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id      String              @db.Uuid
+  recipient_id  String              @db.Uuid
+  channel       String              @db.VarChar(30)
+  status        String              @default("PENDING") @db.VarChar(30)
+  attempt_count Int                 @default(0)
+  last_error    String?             @db.Text
+  delivered_at  DateTime?           @db.Timestamptz(6)
+  created_at    DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime            @default(now()) @updatedAt @db.Timestamptz(6)
+
+  outbox        notification_outbox @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([event_id, recipient_id, channel], map: "uniq_notification_delivery_event_recipient_channel")
+  @@index([event_id], map: "idx_notification_delivery_event_id")
+  @@index([recipient_id, channel, status], map: "idx_notification_delivery_recipient_channel_status")
+  @@map("notification_delivery")
 }
 
 

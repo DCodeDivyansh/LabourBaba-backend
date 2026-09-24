@@ -7,6 +7,7 @@ export interface CreateOutboxEventDTO {
   eventType: string;
   aggregateType: string;
   aggregateId: string;
+  aggregateVersion?: number;
   recipientType: "worker" | "customer" | "admin" | "system";
   recipientId: string;
   payload: Record<string, any>;
@@ -19,10 +20,17 @@ export interface OutboxRecord {
   event_type: string;
   aggregate_type: string;
   aggregate_id: string;
+  aggregate_version: number;
   recipient_type: string;
   recipient_id: string;
   payload: any;
   status: string;
+  socket_status: string;
+  socket_sent_at: Date | null;
+  socket_error: string | null;
+  fcm_status: string;
+  fcm_sent_at: Date | null;
+  fcm_error: string | null;
   attempts: number;
   max_attempts: number;
   available_at: Date;
@@ -66,14 +74,38 @@ export class OutboxService {
           event_type: dto.eventType,
           aggregate_type: dto.aggregateType,
           aggregate_id: dto.aggregateId,
+          aggregate_version: dto.aggregateVersion ?? 1,
           recipient_type: dto.recipientType,
           recipient_id: dto.recipientId,
           payload: dto.payload,
           idempotency_key: idempotencyKey,
           correlation_id: correlationId,
           status: "PENDING",
+          socket_status: "PENDING",
+          fcm_status: "PENDING",
         },
       });
+
+      // Atomically create initial delivery tracking records if delivery model exists
+      if (typeof (tx as any).notification_delivery?.createMany === "function") {
+        await (tx as any).notification_delivery.createMany({
+          data: [
+            {
+              event_id: record.id,
+              recipient_id: dto.recipientId,
+              channel: "socket",
+              status: "PENDING",
+            },
+            {
+              event_id: record.id,
+              recipient_id: dto.recipientId,
+              channel: "fcm",
+              status: "PENDING",
+            },
+          ],
+          skipDuplicates: true,
+        }).catch(() => {});
+      }
 
       logger.info(`[OUTBOX_CREATED] Created outbox event ${dto.eventType} for ${dto.recipientType} ${dto.recipientId}`, {
         outboxId: record.id,
@@ -138,10 +170,17 @@ export class OutboxService {
           event_type: r.event_type,
           aggregate_type: r.aggregate_type,
           aggregate_id: r.aggregate_id,
+          aggregate_version: Number(r.aggregate_version ?? 1),
           recipient_type: r.recipient_type,
           recipient_id: r.recipient_id,
           payload: typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload,
           status: r.status,
+          socket_status: r.socket_status ?? "PENDING",
+          socket_sent_at: r.socket_sent_at ? new Date(r.socket_sent_at) : null,
+          socket_error: r.socket_error ?? null,
+          fcm_status: r.fcm_status ?? "PENDING",
+          fcm_sent_at: r.fcm_sent_at ? new Date(r.fcm_sent_at) : null,
+          fcm_error: r.fcm_error ?? null,
           attempts: Number(r.attempts ?? 0),
           max_attempts: Number(r.max_attempts ?? 5),
           available_at: r.available_at,
@@ -190,8 +229,192 @@ export class OutboxService {
         },
       });
 
-      return eligible;
+      return eligible.map((r: any) => ({
+        id: r.id,
+        event_type: r.event_type,
+        aggregate_type: r.aggregate_type,
+        aggregate_id: r.aggregate_id,
+        aggregate_version: Number(r.aggregate_version ?? 1),
+        recipient_type: r.recipient_type,
+        recipient_id: r.recipient_id,
+        payload: typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload,
+        status: "PROCESSING",
+        socket_status: r.socket_status ?? "PENDING",
+        socket_sent_at: r.socket_sent_at ? new Date(r.socket_sent_at) : null,
+        socket_error: r.socket_error ?? null,
+        fcm_status: r.fcm_status ?? "PENDING",
+        fcm_sent_at: r.fcm_sent_at ? new Date(r.fcm_sent_at) : null,
+        fcm_error: r.fcm_error ?? null,
+        attempts: Number(r.attempts ?? 0),
+        max_attempts: Number(r.max_attempts ?? 5),
+        available_at: r.available_at,
+        processed_at: r.processed_at,
+        failed_at: r.failed_at,
+        last_error: r.last_error,
+        idempotency_key: r.idempotency_key,
+        correlation_id: r.correlation_id,
+        created_at: r.created_at,
+        updated_at: now,
+      }));
     });
+  }
+
+  /**
+   * Records successful delivery for a specific channel (socket or fcm).
+   * Atomically upserts into notification_delivery with UNIQUE(event_id, recipient_id, channel)
+   * and marks the corresponding channel status in notification_outbox.
+   */
+  public async recordChannelSuccess(
+    eventId: string,
+    recipientId: string,
+    channel: "socket" | "fcm",
+    deliveredAt = new Date()
+  ): Promise<void> {
+    try {
+      if (typeof (prisma as any).notification_delivery?.upsert === "function") {
+        await (prisma as any).notification_delivery.upsert({
+          where: {
+            event_id_recipient_id_channel: {
+              event_id: eventId,
+              recipient_id: recipientId,
+              channel,
+            },
+          },
+          update: {
+            status: "SENT",
+            delivered_at: deliveredAt,
+            attempt_count: { increment: 1 },
+            last_error: null,
+            updated_at: new Date(),
+          },
+          create: {
+            event_id: eventId,
+            recipient_id: recipientId,
+            channel,
+            status: "SENT",
+            delivered_at: deliveredAt,
+            attempt_count: 1,
+          },
+        });
+      }
+    } catch (err: any) {
+      logger.warn(`[OUTBOX_DELIVERY_UPSERT_WARN] Could not upsert notification_delivery: ${err.message}`);
+    }
+
+    // Update channel progress on outbox WITHOUT mutating updated_at (which holds the worker lease)
+    const outboxUpdate: any = {};
+    if (channel === "socket") {
+      outboxUpdate.socket_status = "SENT";
+      outboxUpdate.socket_sent_at = deliveredAt;
+      outboxUpdate.socket_error = null;
+    } else if (channel === "fcm") {
+      outboxUpdate.fcm_status = "SENT";
+      outboxUpdate.fcm_sent_at = deliveredAt;
+      outboxUpdate.fcm_error = null;
+    }
+
+    if (typeof (prisma as any).notification_outbox?.update === "function") {
+      await (prisma as any).notification_outbox.update({
+        where: { id: eventId },
+        data: outboxUpdate,
+      }).catch((err: any) => {
+        logger.warn(`[OUTBOX_STATUS_UPDATE_WARN] Could not update outbox ${channel}_status: ${err.message}`);
+      });
+    }
+
+    logger.info(`[OUTBOX_CHANNEL_SUCCESS] Event ${eventId} channel ${channel} delivered successfully.`, {
+      eventId,
+      recipientId,
+      channel,
+    });
+  }
+
+  /**
+   * Records delivery failure for a specific channel.
+   * Updates notification_delivery attempt history and records error in notification_outbox.
+   */
+  public async recordChannelFailure(
+    eventId: string,
+    recipientId: string,
+    channel: "socket" | "fcm",
+    errorMessage: string,
+    isPermanent = false
+  ): Promise<void> {
+    const failureStatus = isPermanent ? "FAILED_PERMANENT" : "FAILED";
+    try {
+      if (typeof (prisma as any).notification_delivery?.upsert === "function") {
+        await (prisma as any).notification_delivery.upsert({
+          where: {
+            event_id_recipient_id_channel: {
+              event_id: eventId,
+              recipient_id: recipientId,
+              channel,
+            },
+          },
+          update: {
+            status: failureStatus,
+            last_error: errorMessage,
+            attempt_count: { increment: 1 },
+            updated_at: new Date(),
+          },
+          create: {
+            event_id: eventId,
+            recipient_id: recipientId,
+            channel,
+            status: failureStatus,
+            last_error: errorMessage,
+            attempt_count: 1,
+          },
+        });
+      }
+    } catch (err: any) {
+      logger.warn(`[OUTBOX_DELIVERY_UPSERT_WARN] Could not upsert notification_delivery failure: ${err.message}`);
+    }
+
+    // Update channel failure on outbox WITHOUT mutating updated_at (which holds the worker lease)
+    const outboxUpdate: any = {};
+    if (channel === "socket") {
+      outboxUpdate.socket_status = "FAILED";
+      outboxUpdate.socket_error = errorMessage;
+    } else if (channel === "fcm") {
+      outboxUpdate.fcm_status = "FAILED";
+      outboxUpdate.fcm_error = errorMessage;
+    }
+
+    if (typeof (prisma as any).notification_outbox?.update === "function") {
+      await (prisma as any).notification_outbox.update({
+        where: { id: eventId },
+        data: outboxUpdate,
+      }).catch((err: any) => {
+        logger.warn(`[OUTBOX_STATUS_UPDATE_WARN] Could not update outbox ${channel}_error: ${err.message}`);
+      });
+    }
+
+    logger.warn(`[OUTBOX_CHANNEL_FAILED] Event ${eventId} channel ${channel} failed: ${errorMessage}`, {
+      eventId,
+      recipientId,
+      channel,
+      isPermanent,
+    });
+  }
+
+  /**
+   * Returns complete delivery state for an event including per-channel tracking records.
+   */
+  public async getEventDeliveryState(eventId: string): Promise<{
+    outbox: OutboxRecord | null;
+    deliveries: any[];
+  }> {
+    const outbox = await (prisma as any).notification_outbox.findUnique({
+      where: { id: eventId },
+    });
+    let deliveries: any[] = [];
+    if (typeof (prisma as any).notification_delivery?.findMany === "function") {
+      deliveries = await (prisma as any).notification_delivery.findMany({
+        where: { event_id: eventId },
+      });
+    }
+    return { outbox, deliveries };
   }
 
   /**

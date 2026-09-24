@@ -317,25 +317,30 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
           },
         });
 
-        // Mandatory Transactional Outbox (Issue 12): Record booking_confirmed event atomically
+        // Mandatory Transactional Outbox (Issue 12 / P7 Issue 09): Record booking_confirmed event atomically
         if (typeof (tx as any).notification_outbox?.create === 'function') {
           await (tx as any).notification_outbox.create({
             data: {
               event_type: 'booking_confirmed',
               aggregate_type: 'booking',
               aggregate_id: booking.id,
+              aggregate_version: 1,
               recipient_type: 'customer',
               recipient_id: req.job.customer_id,
               payload: {
                 bookingId: booking.id,
                 jobId: req.job_id,
+                requirementId,
                 workerId,
                 skillType: req.skill_type,
+                otp,
                 title: 'Worker Confirmed',
                 body: 'A worker has accepted and confirmed your booking.',
               },
               idempotency_key: `booking_confirmed:${booking.id}:customer:${req.job.customer_id}`,
               status: 'PENDING',
+              socket_status: 'PENDING',
+              fcm_status: 'PENDING',
             },
           });
         }
@@ -470,55 +475,11 @@ export const acceptDispatch = async (requirementId: string, workerId: string) =>
     }
   }
 
-  // Notify the customer's website in real-time that a worker accepted the
-  // job, with enough worker detail to render a card (name/phone/rating).
-  try {
-    const coords = await prisma.$queryRaw<any[]>`
-      SELECT
-        ST_X(location_geo::geometry) AS longitude,
-        ST_Y(location_geo::geometry) AS latitude
-      FROM worker
-      WHERE id = ${workerId}::uuid;
-    `;
-
-    const worker = await prisma.worker.findUnique({
-      where: { id: workerId },
-      select: { id: true, name: true, phone: true, skill_type: true, worker_score: true },
-    });
-
-    const workerWithLoc = worker ? toWorkerPublicDTO({
-      id: worker.id,
-      name: worker.name,
-      phone: worker.phone,
-      skill_type: worker.skill_type,
-      worker_score: worker.worker_score,
-      latitude: coords[0]?.latitude || null,
-      longitude: coords[0]?.longitude || null,
-    }) : null;
-
-    io?.to(`customer:${result.customerId}`)?.emit('worker:accepted', {
-      jobId: result.jobId,
-      requirementId,
-      bookingId: result.booking.id,
-      otp: result.otp,
-      worker: workerWithLoc,
-      requirement: {
-        id: requirementId,
-        skill_type: result.skillType,
-        worker_count_needed: result.needed,
-        worker_count_filled: result.newFilled,
-        status: result.nowFilled ? 'filled' : 'dispatching',
-      },
-    });
-
-    if (result.jobFullyBooked) {
-      io?.to(`customer:${result.customerId}`)?.emit('job:fully_booked', {
-        jobId: result.jobId,
-      });
-    }
-  } catch (err: any) {
-    logger.error('[dispatchServices] Failed to emit worker:accepted:', { error: err?.message });
-  }
+  // SINGLE CANONICAL NOTIFICATION PIPELINE (P7 Issue 09 / Issue 12 / Issue 22):
+  // Direct Socket.IO emission from the API path is removed to prevent duplicate-emission
+  // and race conditions with the authoritative transactional outbox worker.
+  // The business transaction committed the durable outbox event 'booking_confirmed',
+  // which outboxWorker delivers with deterministic idempotency to both Socket.IO and FCM.
 
   try {
     metricsService.recordDispatchAccept(1000);
