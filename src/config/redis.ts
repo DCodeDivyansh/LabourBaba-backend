@@ -189,6 +189,41 @@ export const redis = {
 };
 
 /**
+ * Awaits until the shared Redis client reaches 'ready' state or rejects on error/timeout.
+ */
+export async function waitForRedisReady(timeoutMs = 10000): Promise<void> {
+  const client = getRedisClient();
+  if (client.status === 'ready') {
+    return;
+  }
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`[REDIS_TIMEOUT] Timeout waiting for Redis connection (${timeoutMs}ms)`));
+    }, timeoutMs);
+
+    const onReady = () => {
+      cleanup();
+      resolve();
+    };
+
+    const onError = (err: Error) => {
+      cleanup();
+      reject(err);
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      client.removeListener('ready', onReady);
+      client.removeListener('error', onError);
+    };
+
+    client.once('ready', onReady);
+    client.once('error', onError);
+  });
+}
+
+/**
  * Gracefully closes all shared Redis connections.
  */
 export async function closeRedisConnections(): Promise<void> {

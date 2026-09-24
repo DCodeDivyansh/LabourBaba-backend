@@ -10,7 +10,7 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIoServer } from 'socket.io';
 import prisma from '../config/prisma';
-import { getRedisClient, closeRedisConnections, assertRedisConfig } from '../config/redis';
+import { getRedisClient, closeRedisConnections, assertRedisConfig, waitForRedisReady } from '../config/redis';
 import { dispatchQueue, timeoutQueue, notificationQueue } from '../config/bullmq';
 import { closeAllWorkers } from '../workers/workerLifecycle';
 import { assertJwtConfig, assertProductionAuthConfig } from '../config/authConfig';
@@ -71,6 +71,7 @@ export class LifecycleManager {
     logger.info('[LIFECYCLE] PostgreSQL connection established.');
 
     // 3. Verify Redis connectivity
+    await waitForRedisReady(10000);
     const pong = await getRedisClient().ping();
     if (pong !== 'PONG') {
       throw new Error(`[LIFECYCLE] Redis ping failed with response: ${pong}`);

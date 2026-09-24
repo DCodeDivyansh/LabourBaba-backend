@@ -69,11 +69,12 @@ describe("Issue 54 - Dependency Failure & Fault Resilience Tests", () => {
   });
 
   describe("2. Redis Unavailability & Rate Limiter Resilience", () => {
-    it("gracefully falls back to in-memory rate limiting when Redis fails without throwing 500", async () => {
-      const limiter = createRateLimiter({
+    it("fails closed for security-sensitive rate limiting when Redis is unavailable (status: 'unavailable')", async () => {
+      const securityLimiter = createRateLimiter({
         windowSeconds: 60,
         maxLimit: 2,
-        keyPrefix: "resilience_test",
+        keyPrefix: "resilience_security_test",
+        isSecuritySensitive: true,
       });
 
       const req: any = {
@@ -87,17 +88,42 @@ describe("Issue 54 - Dependency Failure & Fault Resilience Tests", () => {
       };
       const next = jest.fn();
 
-      // First request -> allowed
-      await limiter(req, res, next);
+      // Security-sensitive operations strictly FAIL CLOSED during Redis degradation
+      // Zero in-memory fallback is permitted
+      await securityLimiter(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          code: "SECURITY_LIMITER_UNAVAILABLE",
+        })
+      );
+    });
+
+    it("fails open for generic non-security rate limiting when Redis is unavailable without throwing 500", async () => {
+      const genericLimiter = createRateLimiter({
+        windowSeconds: 60,
+        maxLimit: 2,
+        keyPrefix: "resilience_generic_test",
+        isSecuritySensitive: false,
+      });
+
+      const req: any = {
+        ip: "10.0.0.99",
+        headers: {},
+      };
+      const res: any = {
+        setHeader: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
+      const next = jest.fn();
+
+      // Generic non-security limiter fails open to preserve basic functionality
+      await genericLimiter(req, res, next);
       expect(next).toHaveBeenCalledTimes(1);
-
-      // Second request -> allowed
-      await limiter(req, res, next);
-      expect(next).toHaveBeenCalledTimes(2);
-
-      // Third request -> rate limited with 429 (in-memory defense still enforces limit)
-      await limiter(req, res, next);
-      expect(res.status).toHaveBeenCalledWith(429);
+      expect(res.status).not.toHaveBeenCalled();
     });
   });
 
