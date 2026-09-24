@@ -1,0 +1,1243 @@
+[
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues26_30Comprehensive.test.ts",
+    "failureCount": 1,
+    "testSuiteMessage": "  ● LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Suite › Issue 27: Observability Architecture & Alert Telemetry Parity › 27.1: Telemetry parity: Every alert rule in alerts.yml maps to an active producer in metrics.service\n\n    expect(received).toHaveLength(expected)\n\n    Expected ",
+    "failedTests": [
+      {
+        "title": "27.1: Telemetry parity: Every alert rule in alerts.yml maps to an active producer in metrics.service",
+        "ancestors": [
+          "LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Suite",
+          "Issue 27: Observability Architecture & Alert Telemetry Parity"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toHaveLength(expected)\n\nExpected length: 9\nReceived length: 10\nReceived array:  [{\"alert\": \"Elevated5xxRate\", \"annotations\": {\"description\": \"Over 5% of HTTP requests returned "
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\refreshSessionSecurity.test.ts",
+    "failureCount": 2,
+    "testSuiteMessage": "  ● P2 Security Suite — Issue #10: Server-Side Refresh Sessions › 2. Session Rotation Lifecycle › HTTP POST /api/auth/refresh MUST return new access token and rotated refreshToken\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 503\n\n    \u001b[0m \u001b[90m 312 |\u001b[3",
+    "failedTests": [
+      {
+        "title": "HTTP POST /api/auth/refresh MUST return new access token and rotated refreshToken",
+        "ancestors": [
+          "P2 Security Suite — Issue #10: Server-Side Refresh Sessions",
+          "2. Session Rotation Lifecycle"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\refreshSessionSecurity.test.ts:314:26)\n    a"
+        ]
+      },
+      {
+        "title": "MUST detect mid-air race condition where atomic updateMany returns count 0, revoking the family",
+        "ancestors": [
+          "P2 Security Suite — Issue #10: Server-Side Refresh Sessions",
+          "11. Concurrency Safety Gate"
+        ],
+        "failureMessages": [
+          "Error: expect(received).rejects.toMatchObject(expected)\n\n- Expected  - 1\n+ Received  + 1\n\n  Object {\n-   \"code\": \"REFRESH_TOKEN_REUSE\",\n+   \"code\": \"CONCURRENT_REFRESH_CONFLICT\",\n  }\n    at Object.toM"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "failureCount": 32,
+    "testSuiteMessage": "  ● 3. Ownership › customer B cannot create order for customer A booking (403)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 403\n    Received: 503\n\n    \u001b[0m \u001b[90m 393 |\u001b[39m       \u001b[33m.\u001b[39m\u001b[36mset\u001b[39m(\u001b[32m\"Authorization\"\u001b[39m\u001b[33m,\u001b[39m \u001b[32m`Bearer ${customerBToken(",
+    "failedTests": [
+      {
+        "title": "customer B cannot create order for customer A booking (403)",
+        "ancestors": [
+          "3. Ownership"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 403\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:395:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "customer B cannot refund customer A payment (403)",
+        "ancestors": [
+          "3. Ownership"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 403\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:413:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "Razorpay is called with rate_per_day × 100 paise (₹500/day → 50000p)",
+        "ancestors": [
+          "4 & 5. Server-side amount derivation and monetary units"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:427:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "high client-supplied amount is completely ignored",
+        "ancestors": [
+          "4 & 5. Server-side amount derivation and monetary units"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:438:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "low client-supplied amount is completely ignored",
+        "ancestors": [
+          "4 & 5. Server-side amount derivation and monetary units"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:447:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "zero client amount is ignored — server amount is used",
+        "ancestors": [
+          "4 & 5. Server-side amount derivation and monetary units"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:456:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "rejects booking with null rate_per_day (422)",
+        "ancestors": [
+          "4 & 5. Server-side amount derivation and monetary units"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 422\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:468:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "rejects booking with zero rate_per_day (422)",
+        "ancestors": [
+          "4 & 5. Server-side amount derivation and monetary units"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 422\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:481:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "rejects booking with negative rate_per_day (422)",
+        "ancestors": [
+          "4 & 5. Server-side amount derivation and monetary units"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 422\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:493:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "creates a durable local intent, creates Razorpay order, and persists provider order ID",
+        "ancestors": [
+          "6. Successful order creation"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:508:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "provider is called exactly once per successful order",
+        "ancestors": [
+          "6. Successful order creation"
+        ],
+        "failureMessages": [
+          "Error: expect(jest.fn()).toHaveBeenCalledTimes(expected)\n\nExpected number of calls: 1\nReceived number of calls: 0\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test"
+        ]
+      },
+      {
+        "title": "provider SDK failure → marks intent FAILED, returns 502",
+        "ancestors": [
+          "7. Provider failure handling"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 502\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:559:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "provider network timeout → marks intent FAILED, safe error response",
+        "ancestors": [
+          "7. Provider failure handling"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 500\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:573:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "amount mismatch from provider → 502, marks intent FAILED",
+        "ancestors": [
+          "8. Provider response validation"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 502\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:614:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "currency mismatch from provider → 502, marks intent FAILED",
+        "ancestors": [
+          "8. Provider response validation"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 502\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:634:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "missing order ID from provider → 502, marks intent FAILED",
+        "ancestors": [
+          "8. Provider response validation"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 502\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:654:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "newly created payment has status PENDING, not COMPLETED",
+        "ancestors": [
+          "9. Payment state after order creation"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:673:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "DB is persisted with status=PENDING, not COMPLETED",
+        "ancestors": [
+          "9. Payment state after order creation"
+        ],
+        "failureMessages": [
+          "TypeError: Cannot read properties of undefined (reading '0')\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:683:78)\n    at processTicksAndRejections (node:in"
+        ]
+      },
+      {
+        "title": "second request returns existing pending order without calling Razorpay again",
+        "ancestors": [
+          "10. Order creation idempotency"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:699:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "existing COMPLETED payment returns 409",
+        "ancestors": [
+          "10. Order creation idempotency"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 409\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:712:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "idempotency_key = bookingId is stored in the DB",
+        "ancestors": [
+          "10. Order creation idempotency"
+        ],
+        "failureMessages": [
+          "TypeError: Cannot read properties of undefined (reading '0')\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:722:78)\n    at processTicksAndRejections (node:in"
+        ]
+      },
+      {
+        "title": "concurrent P2002 on payment.create is handled gracefully",
+        "ancestors": [
+          "11. Concurrency — order creation"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBeGreaterThanOrEqual(expected)\n\nExpected: >= 1\nReceived:    0\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:754:72)\n    at process"
+        ]
+      },
+      {
+        "title": "S1: valid signature + payment.captured → 200",
+        "ancestors": [
+          "13. Webhook — Signature Tests (S1–S8)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:838:24)\n    at proce"
+        ]
+      },
+      {
+        "title": "R1: same event delivered twice — payment transitions exactly once",
+        "ancestors": [
+          "15. Webhook — DB Idempotency / Replay Protection (R1–R3)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1060:25)\n    at proc"
+        ]
+      },
+      {
+        "title": "R2: same event delivered many times — only one payment transition",
+        "ancestors": [
+          "15. Webhook — DB Idempotency / Replay Protection (R1–R3)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1094:26)\n    at proc"
+        ]
+      },
+      {
+        "title": "R3: concurrent duplicate delivery — only one claims the event",
+        "ancestors": [
+          "15. Webhook — DB Idempotency / Replay Protection (R1–R3)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1185:25)\n    at proc"
+        ]
+      },
+      {
+        "title": "P5/P6: valid captured event → exactly one PENDING→COMPLETED transition",
+        "ancestors": [
+          "16. Webhook — Payment Integrity (P1–P7)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1276:24)\n    at proc"
+        ]
+      },
+      {
+        "title": "payment.captured marks PENDING payment as COMPLETED",
+        "ancestors": [
+          "17. Webhook — State Machine"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1319:24)\n    at proc"
+        ]
+      },
+      {
+        "title": "payment.failed marks PENDING payment as FAILED",
+        "ancestors": [
+          "17. Webhook — State Machine"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1336:24)\n    at proc"
+        ]
+      },
+      {
+        "title": "cannot refund a PENDING payment (409)",
+        "ancestors": [
+          "20. Refund ownership and lifecycle"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 409\nReceived: 422\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1495:24)\n    at proc"
+        ]
+      },
+      {
+        "title": "can refund a COMPLETED payment",
+        "ancestors": [
+          "20. Refund ownership and lifecycle"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 502\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1511:24)\n    at proc"
+        ]
+      },
+      {
+        "title": "cannot refund a FAILED payment (409)",
+        "ancestors": [
+          "20. Refund ownership and lifecycle"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 409\nReceived: 422\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1524:24)\n    at proc"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\jwtSecurity.test.ts",
+    "failureCount": 2,
+    "testSuiteMessage": "  ● P0 Security Regression Tests — Issue #4: JWT Secrets Have Insecure Fallbacks › Test 14 — HTTP integration › MUST reject an access token on POST /api/auth/refresh\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 401\n    Received: 503\n\n    \u001b[0m \u001b[90m 408 |\u001b[39m         \u001b[3",
+    "failedTests": [
+      {
+        "title": "MUST reject an access token on POST /api/auth/refresh",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #4: JWT Secrets Have Insecure Fallbacks",
+          "Test 14 — HTTP integration"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\jwtSecurity.test.ts:410:26)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST accept a valid refresh token on POST /api/auth/refresh and return a new access token",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #4: JWT Secrets Have Insecure Fallbacks",
+          "Test 14 — HTTP integration"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\jwtSecurity.test.ts:430:26)\n    at processTi"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts",
+    "failureCount": 5,
+    "testSuiteMessage": "  ● Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation › 1. Issue 63 — Raw-Body Signature Verification › accepts valid HMAC signature and processes payment.captured\n\n    PrismaClientKnownRequestError: \n    Invalid `prisma.customer.create()` invocation in\n    E:\\LabourBaba\\Labour",
+    "failedTests": [
+      {
+        "title": "accepts valid HMAC signature and processes payment.captured",
+        "ancestors": [
+          "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation",
+          "1. Issue 63 — Raw-Body Signature Verification"
+        ],
+        "failureMessages": [
+          "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:27\n\n  49 }\n  50 skillCategoryId = cat"
+        ]
+      },
+      {
+        "title": "rejects invalid signature with 401 WEBHOOK_INVALID_SIGNATURE",
+        "ancestors": [
+          "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation",
+          "1. Issue 63 — Raw-Body Signature Verification"
+        ],
+        "failureMessages": [
+          "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:27\n\n  49 }\n  50 skillCategoryId = cat"
+        ]
+      },
+      {
+        "title": "safely handles duplicate webhook delivery without duplicate transitions",
+        "ancestors": [
+          "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation",
+          "2. Issue 64 — Webhook Idempotency & Duplicate Delivery"
+        ],
+        "failureMessages": [
+          "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:27\n\n  49 }\n  50 skillCategoryId = cat"
+        ]
+      },
+      {
+        "title": "quarantines payment and refuses transition when captured amount does not match expected amount",
+        "ancestors": [
+          "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation",
+          "3. Issue 65 — Amount & Currency Reconciliation Guardrails"
+        ],
+        "failureMessages": [
+          "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:27\n\n  49 }\n  50 skillCategoryId = cat"
+        ]
+      },
+      {
+        "title": "quarantines payment when currency does not match expected currency",
+        "ancestors": [
+          "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation",
+          "3. Issue 65 — Amount & Currency Reconciliation Guardrails"
+        ],
+        "failureMessages": [
+          "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:27\n\n  49 }\n  50 skillCategoryId = cat"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues6_10Comprehensive.test.ts",
+    "failureCount": 1,
+    "testSuiteMessage": "  ● P5 Issues 6–10 Comprehensive Production Hardening Suite › Issue 10 — Consolidate Notification Delivery Into One Durable Pipeline › Scenario F: Outbox worker processes batch and marks event SENT safely\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"SENT\"\n    Received: ",
+    "failedTests": [
+      {
+        "title": "Scenario F: Outbox worker processes batch and marks event SENT safely",
+        "ancestors": [
+          "P5 Issues 6–10 Comprehensive Production Hardening Suite",
+          "Issue 10 — Consolidate Notification Delivery Into One Durable Pipeline"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"SENT\"\nReceived: \"PENDING\"\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues6_10Comprehensive.test.ts:7"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\suspensionRevocationSecurity.test.ts",
+    "failureCount": 3,
+    "testSuiteMessage": "  ● P2 Security Suite — Issue #11: Revoke Sessions on Suspension/Deletion › Scenario B: Existing refresh session rejected after suspension › MUST reject refresh attempt and revoke session family for suspended worker\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 401\n    Re",
+    "failedTests": [
+      {
+        "title": "MUST reject refresh attempt and revoke session family for suspended worker",
+        "ancestors": [
+          "P2 Security Suite — Issue #11: Revoke Sessions on Suspension/Deletion",
+          "Scenario B: Existing refresh session rejected after suspension"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\suspensionRevocationSecurity.test.ts:353:33)"
+        ]
+      },
+      {
+        "title": "MUST reject password login for suspended worker",
+        "ancestors": [
+          "P2 Security Suite — Issue #11: Revoke Sessions on Suspension/Deletion",
+          "Scenario C: New authentication rejected after suspension"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\suspensionRevocationSecurity.test.ts:376:31)"
+        ]
+      },
+      {
+        "title": "MUST reject OTP verification login for suspended worker",
+        "ancestors": [
+          "P2 Security Suite — Issue #11: Revoke Sessions on Suspension/Deletion",
+          "Scenario C: New authentication rejected after suspension"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\suspensionRevocationSecurity.test.ts:402:29)"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\sensitiveDataLeakage.test.ts",
+    "failureCount": 3,
+    "testSuiteMessage": "  ● P0 Security Regression: Sensitive Data & Password Hash Leakage › Worker Endpoints › POST /api/workers/registerWorker must never leak password or device_token\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Received: 503\n\n    \u001b[0m \u001b[90m 262 |\u001b[39m         })\u001b[33m",
+    "failedTests": [
+      {
+        "title": "POST /api/workers/registerWorker must never leak password or device_token",
+        "ancestors": [
+          "P0 Security Regression: Sensitive Data & Password Hash Leakage",
+          "Worker Endpoints"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\sensitiveDataLeakage.test.ts:264:26)\n    at "
+        ]
+      },
+      {
+        "title": "GET /api/clients must never leak customer password",
+        "ancestors": [
+          "P0 Security Regression: Sensitive Data & Password Hash Leakage",
+          "Customer Endpoints"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 403\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\sensitiveDataLeakage.test.ts:357:26)\n    at "
+        ]
+      },
+      {
+        "title": "POST /api/clients/add must never leak customer password in response",
+        "ancestors": [
+          "P0 Security Regression: Sensitive Data & Password Hash Leakage",
+          "Customer Endpoints"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 403\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\sensitiveDataLeakage.test.ts:379:26)\n    at "
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\jobSecurity.test.ts",
+    "failureCount": 2,
+    "testSuiteMessage": "  ● Issue #2 Remediation — Client-Controlled customer_id Removal from Job APIs › 1. POST /api/jobs (Job Creation) › TEST 1: Customer A creates own job without customer_id -> job.customer_id is set to Customer A\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Receive",
+    "failedTests": [
+      {
+        "title": "TEST 1: Customer A creates own job without customer_id -> job.customer_id is set to Customer A",
+        "ancestors": [
+          "Issue #2 Remediation — Client-Controlled customer_id Removal from Job APIs",
+          "1. POST /api/jobs (Job Creation)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 404\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\jobSecurity.test.ts:195:26)\n    at processTi"
+        ]
+      },
+      {
+        "title": "TEST 13a: jobService.createJob always binds customer_id to authenticated parameter",
+        "ancestors": [
+          "Issue #2 Remediation — Client-Controlled customer_id Removal from Job APIs",
+          "5. Service-Layer Ownership Invariants"
+        ],
+        "failureMessages": [
+          "JobNotFoundError: Job 'mock-id' not found\n    at Object.transition (E:\\LabourBaba\\LabourBaba-backend\\src\\features\\jobs\\jobStateMachine.ts:293:13)\n    at processTicksAndRejections (node:internal/proces"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityFinalAudit.test.ts",
+    "failureCount": 1,
+    "testSuiteMessage": "  ● P3 Issues 16–20 Final Adversarial Evidence Audit › P3-17: Prometheus Alert Rules & Producers › Real database backup execution updates backup_last_successful_timestamp_seconds\n\n    thrown: \"Exceeded timeout of 5000 ms for a test.\n    Add a timeout value to this test to increase the timeout, if th",
+    "failedTests": [
+      {
+        "title": "Real database backup execution updates backup_last_successful_timestamp_seconds",
+        "ancestors": [
+          "P3 Issues 16–20 Final Adversarial Evidence Audit",
+          "P3-17: Prometheus Alert Rules & Producers"
+        ],
+        "failureMessages": [
+          "Error: thrown: \"Exceeded timeout of 5000 ms for a test.\nAdd a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.\"\n "
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "failureCount": 18,
+    "testSuiteMessage": "  ● P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants › Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated › MUST reject '123456' when no OTP request was issued (zero prior challenge)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    E",
+    "failedTests": [
+      {
+        "title": "MUST reject '123456' when no OTP request was issued (zero prior challenge)",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:187:26)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST reject other static patterns ('000000', '111111', '999999')",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:200:28)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST reject '123456' even after a genuine OTP is requested, if the generated OTP is different",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:209:30)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST generate a 6-digit uniform numeric code and authenticate successfully",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 2: Cryptographically Secure OTP Generation & Verification"
+        ],
+        "failureMessages": [
+          "TypeError: expect(received).toMatch(expected)\n\nMatcher error: received value must be a string\n\nReceived has value: undefined\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecuri"
+        ]
+      },
+      {
+        "title": "MUST allow first verification and REJECT subsequent replay of the same OTP",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 3: Single-Use Semantics (Replay Protection)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:268:31)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST lock challenge after maximum failed attempts (5) and reject subsequent valid OTP",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 4: Attempt Bounds and Brute-Force Locking"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:297:28)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST reject verification if OTP challenge has expired",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 5: Expiration / TTL Enforcement"
+        ],
+        "failureMessages": [
+          "TypeError: Cannot set properties of undefined (setting 'expires_at')\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:331:35)\n    at processTicksAndRejections (nod"
+        ]
+      },
+      {
+        "title": "MUST reject consecutive resend within 60s cooldown window",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 6: Resend Cooldown and Challenge Invalidation"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:351:28)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST invalidate earlier OTP when a new OTP is requested after cooldown",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 6: Resend Cooldown and Challenge Invalidation"
+        ],
+        "failureMessages": [
+          "TypeError: Cannot set properties of undefined (setting 'created_at')\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:368:35)\n    at processTicksAndRejections (nod"
+        ]
+      },
+      {
+        "title": "MUST reject an OTP requested for 'register' when verified for 'login'",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 7: Purpose / Context Isolation"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:408:37)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST allow exactly ONE request to consume the OTP and reject all other concurrent callers",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 8: Concurrency Safety (N simultaneous verification requests)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:443:32)\n    at processTicksA"
+        ]
+      },
+      {
+        "title": "MUST enforce cooldown atomically under concurrent resend attempts (0 SMS duplication)",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 8: Concurrency Safety (N simultaneous verification requests)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:468:32)\n    at processTicksA"
+        ]
+      },
+      {
+        "title": "MUST invalidate challenge and return error if SMS provider fails to deliver",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 9: SMS Delivery Failure Handling"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 502\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:487:26)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST reject non-numeric OTP before expensive database lookup",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 10: Input Validation & Information Leakage Defense"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 400\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:509:26)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST reject OTP with invalid length (5 or 7 digits)",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 10: Input Validation & Information Leakage Defense"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 400\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:517:31)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST NOT return plaintext OTP in API response for send-otp",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 10: Input Validation & Information Leakage Defense"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:530:26)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST enforce device-level rate limit when device_id is supplied in body",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 11: Multi-Dimension Rate Limiting (IP, Phone, Device) & Key Privacy"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:552:28)\n    at processTi"
+        ]
+      },
+      {
+        "title": "MUST enforce device-level rate limit when x-device-id header is provided",
+        "ancestors": [
+          "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+          "Invariant 11: Multi-Dimension Rate Limiting (IP, Phone, Device) & Key Privacy"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:573:28)\n    at processTi"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts",
+    "failureCount": 5,
+    "testSuiteMessage": "  ● API Integration Tests › POST /api/auth/send-otp › should return 200 for valid input and dispatch OTP via provider\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 503\n\n    \u001b[0m \u001b[90m 83 |\u001b[39m         \u001b[33m.\u001b[39msend({ phone\u001b[33m:\u001b[39m \u001b[32m\"+9198765432",
+    "failedTests": [
+      {
+        "title": "should return 200 for valid input and dispatch OTP via provider",
+        "ancestors": [
+          "API Integration Tests",
+          "POST /api/auth/send-otp"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts:85:26)\n    at processTicksAndRej"
+        ]
+      },
+      {
+        "title": "should return 400 for invalid phone number",
+        "ancestors": [
+          "API Integration Tests",
+          "POST /api/auth/send-otp"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 400\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts:99:26)\n    at processTicksAndRej"
+        ]
+      },
+      {
+        "title": "should verify legitimate cryptographically generated OTP and return JWT for existing customer",
+        "ancestors": [
+          "API Integration Tests",
+          "POST /api/auth/verify-otp"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts:128:26)\n    at processTicksAndRe"
+        ]
+      },
+      {
+        "title": "should return 401 for incorrect OTP",
+        "ancestors": [
+          "API Integration Tests",
+          "POST /api/auth/verify-otp"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts:156:26)\n    at processTicksAndRe"
+        ]
+      },
+      {
+        "title": "should reject hard-coded '123456' when it does not match issued OTP challenge",
+        "ancestors": [
+          "API Integration Tests",
+          "POST /api/auth/verify-otp"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts:182:26)\n    at processTicksAndRe"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\coordinateValidation.test.ts",
+    "failureCount": 2,
+    "testSuiteMessage": "  ● Issue #29: Hardened Coordinate Validation Suite › 4. HTTP Location Endpoints Integration › POST /api/jobs › accepts valid paired coordinates\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Received: 404\n\n    \u001b[0m \u001b[90m 419 |\u001b[39m           })\u001b[33m;\u001b[39m\n     \u001b[9",
+    "failedTests": [
+      {
+        "title": "accepts valid paired coordinates",
+        "ancestors": [
+          "Issue #29: Hardened Coordinate Validation Suite",
+          "4. HTTP Location Endpoints Integration",
+          "POST /api/jobs"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 404\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\coordinateValidation.test.ts:421:28)\n    at "
+        ]
+      },
+      {
+        "title": "accepts job without coordinates (both omitted)",
+        "ancestors": [
+          "Issue #29: Hardened Coordinate Validation Suite",
+          "4. HTTP Location Endpoints Integration",
+          "POST /api/jobs"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 404\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\coordinateValidation.test.ts:434:28)\n    at "
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts",
+    "failureCount": 10,
+    "testSuiteMessage": "  ● Issue #12: Canonicalize Phone Identity (E.164) › 2. Customer Registration & Duplicate Prevention › should canonicalize phone number on customer signup\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Received: 503\n\n    \u001b[0m \u001b[90m 113 |\u001b[39m         })\u001b[33m;\u001b[39m\n",
+    "failedTests": [
+      {
+        "title": "should canonicalize phone number on customer signup",
+        "ancestors": [
+          "Issue #12: Canonicalize Phone Identity (E.164)",
+          "2. Customer Registration & Duplicate Prevention"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:115:26)\n    at pr"
+        ]
+      },
+      {
+        "title": "should reject duplicate customer signup when differently formatted phone resolves to same canonical E.164",
+        "ancestors": [
+          "Issue #12: Canonicalize Phone Identity (E.164)",
+          "2. Customer Registration & Duplicate Prevention"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 409\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:144:26)\n    at pr"
+        ]
+      },
+      {
+        "title": "should handle P2002 race condition on customer signup with 409",
+        "ancestors": [
+          "Issue #12: Canonicalize Phone Identity (E.164)",
+          "2. Customer Registration & Duplicate Prevention"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 409\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:163:26)\n    at pr"
+        ]
+      },
+      {
+        "title": "should allow customer login using differently formatted phone string",
+        "ancestors": [
+          "Issue #12: Canonicalize Phone Identity (E.164)",
+          "3. Customer Login Canonical Equivalence"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:188:26)\n    at pr"
+        ]
+      },
+      {
+        "title": "should canonicalize phone on worker registration",
+        "ancestors": [
+          "Issue #12: Canonicalize Phone Identity (E.164)",
+          "4. Worker Registration, Update & Duplicate Prevention"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:217:26)\n    at pr"
+        ]
+      },
+      {
+        "title": "should reject worker registration if phone format resolves to existing canonical phone",
+        "ancestors": [
+          "Issue #12: Canonicalize Phone Identity (E.164)",
+          "4. Worker Registration, Update & Duplicate Prevention"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 409\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:246:26)\n    at pr"
+        ]
+      },
+      {
+        "title": "should reject worker login with malformed phone number",
+        "ancestors": [
+          "Issue #12: Canonicalize Phone Identity (E.164)",
+          "4. Worker Registration, Update & Duplicate Prevention"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 400\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:290:26)\n    at pr"
+        ]
+      },
+      {
+        "title": "should send OTP and store challenge with canonical E.164 phone",
+        "ancestors": [
+          "Issue #12: Canonicalize Phone Identity (E.164)",
+          "5. OTP Flow Equivalence & Cross-Representation Verification"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:322:26)\n    at pr"
+        ]
+      },
+      {
+        "title": "should verify OTP sent in one format using another format of the same phone",
+        "ancestors": [
+          "Issue #12: Canonicalize Phone Identity (E.164)",
+          "5. OTP Flow Equivalence & Cross-Representation Verification"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:393:26)\n    at pr"
+        ]
+      },
+      {
+        "title": "should share the same rate limiting bucket across equivalent phone representations",
+        "ancestors": [
+          "Issue #12: Canonicalize Phone Identity (E.164)",
+          "6. Rate Limiting Canonical Phone Key Equivalence"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:431:28)\n    at pr"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentAbuseControls.test.ts",
+    "failureCount": 2,
+    "testSuiteMessage": "  ● Issue 72 - Payment Abuse Controls › enforces rate limits on payment order creation (10 requests per window)\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected value: 503\n    Received array: [200, 201]\n\n    \u001b[0m \u001b[90m 147 |\u001b[39m         \u001b[33m.\u001b[39m\u001b[36mset\u001b[39m(\u001b[32m\"Authorization",
+    "failedTests": [
+      {
+        "title": "enforces rate limits on payment order creation (10 requests per window)",
+        "ancestors": [
+          "Issue 72 - Payment Abuse Controls"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toContain(expected) // indexOf\n\nExpected value: 503\nReceived array: [200, 201]\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentAbuseControls.test.ts:14"
+        ]
+      },
+      {
+        "title": "enforces rate limits on payment refund requests (5 requests per window)",
+        "ancestors": [
+          "Issue 72 - Payment Abuse Controls"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 429\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentAbuseControls.test.ts:192:33)\n    at "
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\dtoBoundarySecurity.test.ts",
+    "failureCount": 1,
+    "testSuiteMessage": "  ● HTTP DTO Boundary Security & Data Exposure Tests (Issue #4) › Customer Profile & Auth Boundaries › GET /api/clients MUST never expose passwords\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 403\n\n    \u001b[0m \u001b[90m 244 |\u001b[39m         \u001b[33m.\u001b[39m\u001b[36mset\u001b[",
+    "failedTests": [
+      {
+        "title": "GET /api/clients MUST never expose passwords",
+        "ancestors": [
+          "HTTP DTO Boundary Security & Data Exposure Tests (Issue #4)",
+          "Customer Profile & Auth Boundaries"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 403\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\dtoBoundarySecurity.test.ts:246:26)\n    at p"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\apiProtection.test.ts",
+    "failureCount": 2,
+    "testSuiteMessage": "  ● API Protection and JWT Validation Tests › Job Endpoints (/api/jobs) › POST /api/jobs should return 201 when authenticated\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Received: 404\n\n    \u001b[0m \u001b[90m 323 |\u001b[39m         \u001b[33m.\u001b[39m\u001b[36mset\u001b[39m(\u001b[32m\"Authorizatio",
+    "failedTests": [
+      {
+        "title": "POST /api/jobs should return 201 when authenticated",
+        "ancestors": [
+          "API Protection and JWT Validation Tests",
+          "Job Endpoints (/api/jobs)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 404\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\apiProtection.test.ts:325:26)\n    at process"
+        ]
+      },
+      {
+        "title": "POST /api/payments/:bookingId/create-order should return 201 when authenticated",
+        "ancestors": [
+          "API Protection and JWT Validation Tests",
+          "Payment Endpoints (/api/payments)"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\apiProtection.test.ts:472:26)\n    at process"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts",
+    "failureCount": 5,
+    "testSuiteMessage": "  ● Worker Authentication API Tests › POST /api/workers/registerWorker › should successfully register a worker and hash the password\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Received: 503\n\n    \u001b[0m \u001b[90m 62 |\u001b[39m         \u001b[33m.\u001b[39msend(mockPayload)\u001b[33m;\u001b[3",
+    "failedTests": [
+      {
+        "title": "should successfully register a worker and hash the password",
+        "ancestors": [
+          "Worker Authentication API Tests",
+          "POST /api/workers/registerWorker"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts:64:26)\n    at processTick"
+        ]
+      },
+      {
+        "title": "should return 400 validation error if password is too short",
+        "ancestors": [
+          "Worker Authentication API Tests",
+          "POST /api/workers/registerWorker"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 400\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts:88:26)\n    at processTick"
+        ]
+      },
+      {
+        "title": "should login successfully with correct credentials and return JWT token",
+        "ancestors": [
+          "Worker Authentication API Tests",
+          "POST /api/workers/login"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts:116:26)\n    at processTic"
+        ]
+      },
+      {
+        "title": "should return 401 for incorrect password",
+        "ancestors": [
+          "Worker Authentication API Tests",
+          "POST /api/workers/login"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts:151:26)\n    at processTic"
+        ]
+      },
+      {
+        "title": "should return 401 for non-existent worker",
+        "ancestors": [
+          "Worker Authentication API Tests",
+          "POST /api/workers/login"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts:166:26)\n    at processTic"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\dispatchOperationIdempotency.test.ts",
+    "failureCount": 5,
+    "testSuiteMessage": "  ● Issue #23 — Dispatch Operation Idempotency Suite › 2. Real PostgreSQL Concurrency & Unique Constraints › MUST enforce UNIQUE(operation_id) on dispatch_wave under 10 concurrent direct inserts\n\n    PrismaClientKnownRequestError: \n    Invalid `prisma.customer.create()` invocation in\n    E:\\LabourBa",
+    "failedTests": [
+      {
+        "title": "MUST enforce UNIQUE(operation_id) on dispatch_wave under 10 concurrent direct inserts",
+        "ancestors": [
+          "Issue #23 — Dispatch Operation Idempotency Suite",
+          "2. Real PostgreSQL Concurrency & Unique Constraints"
+        ],
+        "failureMessages": [
+          "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\dispatchOperationIdempotency.test.ts:127:46\n\n  124 \n  125 beforeAll(async () => "
+        ]
+      },
+      {
+        "title": "MUST return the same logical result on sequential retry without duplicate database writes",
+        "ancestors": [
+          "Issue #23 — Dispatch Operation Idempotency Suite",
+          "2. Real PostgreSQL Concurrency & Unique Constraints"
+        ],
+        "failureMessages": [
+          "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\dispatchOperationIdempotency.test.ts:127:46\n\n  124 \n  125 beforeAll(async () => "
+        ]
+      },
+      {
+        "title": "MUST handle concurrent processDispatchJob calls and converge to the same logical result",
+        "ancestors": [
+          "Issue #23 — Dispatch Operation Idempotency Suite",
+          "2. Real PostgreSQL Concurrency & Unique Constraints"
+        ],
+        "failureMessages": [
+          "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\dispatchOperationIdempotency.test.ts:127:46\n\n  124 \n  125 beforeAll(async () => "
+        ]
+      },
+      {
+        "title": "MUST resolve duplicate BullMQ jobs with different BullMQ job IDs to the same logical result",
+        "ancestors": [
+          "Issue #23 — Dispatch Operation Idempotency Suite",
+          "2. Real PostgreSQL Concurrency & Unique Constraints"
+        ],
+        "failureMessages": [
+          "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\dispatchOperationIdempotency.test.ts:127:46\n\n  124 \n  125 beforeAll(async () => "
+        ]
+      },
+      {
+        "title": "MUST return skipped_terminal if requirement is already in FILLED state",
+        "ancestors": [
+          "Issue #23 — Dispatch Operation Idempotency Suite",
+          "3. Processor Edge Cases & Failure Scenarios"
+        ],
+        "failureMessages": [
+          "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\dispatchOperationIdempotency.test.ts:398:46\n\n  395 \n  396 it('MUST return skippe"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.test.ts",
+    "failureCount": 3,
+    "testSuiteMessage": "  ● Issue 42 - Route-Specific Multi-Dimensional Rate Limiting › Rate Limit Invariants & Threshold Enforcement › allows requests below threshold and blocks requests exceeding limit with 429\n\n    expect(jest.fn()).toHaveBeenCalledTimes(expected)\n\n    Expected number of calls: 3\n    Received number of ",
+    "failedTests": [
+      {
+        "title": "allows requests below threshold and blocks requests exceeding limit with 429",
+        "ancestors": [
+          "Issue 42 - Route-Specific Multi-Dimensional Rate Limiting",
+          "Rate Limit Invariants & Threshold Enforcement"
+        ],
+        "failureMessages": [
+          "Error: expect(jest.fn()).toHaveBeenCalledTimes(expected)\n\nExpected number of calls: 3\nReceived number of calls: 4\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.te"
+        ]
+      },
+      {
+        "title": "isolates rate limit buckets between different users / workers",
+        "ancestors": [
+          "Issue 42 - Route-Specific Multi-Dimensional Rate Limiting",
+          "Rate Limit Invariants & Threshold Enforcement"
+        ],
+        "failureMessages": [
+          "Error: expect(jest.fn()).toHaveBeenCalledTimes(expected)\n\nExpected number of calls: 2\nReceived number of calls: 3\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.te"
+        ]
+      },
+      {
+        "title": "supports custom keyGenerator for compound dimensions (phone + IP)",
+        "ancestors": [
+          "Issue 42 - Route-Specific Multi-Dimensional Rate Limiting",
+          "Multi-Dimensional Keys"
+        ],
+        "failureMessages": [
+          "Error: expect(jest.fn()).toHaveBeenCalledTimes(expected)\n\nExpected number of calls: 2\nReceived number of calls: 3\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.te"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityAlertCorrectnessP4_27.test.ts",
+    "failureCount": 1,
+    "testSuiteMessage": "  ● P4 Issue 27: Observability Architecture & Alert Rule Correctness › 2. Telemetry Parity for All 9 Prometheus Alert Rules › ensures every alert in alerts.yml references an active metric in metrics.service\n\n    expect(received).toHaveLength(expected)\n\n    Expected length: 9\n    Received length: 10\n",
+    "failedTests": [
+      {
+        "title": "ensures every alert in alerts.yml references an active metric in metrics.service",
+        "ancestors": [
+          "P4 Issue 27: Observability Architecture & Alert Rule Correctness",
+          "2. Telemetry Parity for All 9 Prometheus Alert Rules"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toHaveLength(expected)\n\nExpected length: 9\nReceived length: 10\nReceived array:  [{\"alert\": \"Elevated5xxRate\", \"annotations\": {\"description\": \"Over 5% of HTTP requests returned "
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\candidatePaginationExhaustion.test.ts",
+    "failureCount": 0,
+    "testSuiteMessage": "  ● Test suite failed to run\n\n    \u001b[96mtests/candidatePaginationExhaustion.test.ts\u001b[0m:\u001b[93m247\u001b[0m:\u001b[93m34\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS2353: \u001b[0mObject literal may only specify known properties, and 'device_token' does not exist in type 'EligibleWorkerCandidate'.\n\n    \u001b[7m247\u001b[0m         { id: 'w-3",
+    "failedTests": []
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues11_15Comprehensive.test.ts",
+    "failureCount": 1,
+    "testSuiteMessage": "  ● P5 Issues 11–15: Comprehensive Production Hardening & Verification Suite › Issue 11: Distributed-Safe Outbox Claiming & Concurrency › Fencing token: A stale worker cannot mark success or failure after another worker reclaimed the event\n\n    expect(received).toBeDefined()\n\n    Received: undefined",
+    "failedTests": [
+      {
+        "title": "Fencing token: A stale worker cannot mark success or failure after another worker reclaimed the event",
+        "ancestors": [
+          "P5 Issues 11–15: Comprehensive Production Hardening & Verification Suite",
+          "Issue 11: Distributed-Safe Outbox Claiming & Concurrency"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBeDefined()\n\nReceived: undefined\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues11_15Comprehensive.test.ts:148:28)\n    at processTicksAndRejections"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOutboxIntegration.test.ts",
+    "failureCount": 1,
+    "testSuiteMessage": "  ● Issue 71 - Payment Notifications Behind Durable Outbox › creates durable outbox events atomically when payment is captured\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"SENT\"\n    Received: \"PENDING\"\n\n    \u001b[0m \u001b[90m 204 |\u001b[39m       where\u001b[33m:\u001b[39m { id\u001b[33m:\u001b[39m cu",
+    "failedTests": [
+      {
+        "title": "creates durable outbox events atomically when payment is captured",
+        "ancestors": [
+          "Issue 71 - Payment Notifications Behind Durable Outbox"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"SENT\"\nReceived: \"PENDING\"\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOutboxIntegration.test.ts:20"
+        ]
+      }
+    ]
+  },
+  {
+    "suite": "E:\\LabourBaba\\LabourBaba-backend\\tests\\outboxWorkerGracefulShutdownP6_8.test.ts",
+    "failureCount": 2,
+    "testSuiteMessage": "  ● P6 Issue 8 — Outbox Worker Graceful Shutdown & Drain Suite › TEST 11: Real PostgreSQL CTE SKIP LOCKED & Lease Invariant Proof › atomically claims PENDING event using CTE with FOR UPDATE SKIP LOCKED\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n    \u001b",
+    "failedTests": [
+      {
+        "title": "atomically claims PENDING event using CTE with FOR UPDATE SKIP LOCKED",
+        "ancestors": [
+          "P6 Issue 8 — Outbox Worker Graceful Shutdown & Drain Suite",
+          "TEST 11: Real PostgreSQL CTE SKIP LOCKED & Lease Invariant Proof"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\outboxWorkerGracefulShutdownP6_8.test.ts:604:31)"
+        ]
+      },
+      {
+        "title": "proves optimistic lease locking prevents stale worker from clobbering recovered event",
+        "ancestors": [
+          "P6 Issue 8 — Outbox Worker Graceful Shutdown & Drain Suite",
+          "TEST 11: Real PostgreSQL CTE SKIP LOCKED & Lease Invariant Proof"
+        ],
+        "failureMessages": [
+          "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"PROCESSING\"\nReceived: \"PENDING\"\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\outboxWorkerGracefulShutdownP"
+        ]
+      }
+    ]
+  }
+]

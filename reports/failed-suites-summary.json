@@ -1,0 +1,127 @@
+[
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues26_30Comprehensive.test.ts",
+    "message": "  ● LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Suite › Issue 27: Observability Architecture & Alert Telemetry Parity › 27.1: Telemetry parity: Every alert rule in alerts.yml maps to an active producer in metrics.service\n\n    expect(received).toHaveLength(expected)\n\n    Expected ",
+    "numFailingTests": 1
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\refreshSessionSecurity.test.ts",
+    "message": "  ● P2 Security Suite — Issue #10: Server-Side Refresh Sessions › 2. Session Rotation Lifecycle › HTTP POST /api/auth/refresh MUST return new access token and rotated refreshToken\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 503\n\n    \u001b[0m \u001b[90m 312 |\u001b[3",
+    "numFailingTests": 2
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "message": "  ● 3. Ownership › customer B cannot create order for customer A booking (403)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 403\n    Received: 503\n\n    \u001b[0m \u001b[90m 393 |\u001b[39m       \u001b[33m.\u001b[39m\u001b[36mset\u001b[39m(\u001b[32m\"Authorization\"\u001b[39m\u001b[33m,\u001b[39m \u001b[32m`Bearer ${customerBToken(",
+    "numFailingTests": 32
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\jwtSecurity.test.ts",
+    "message": "  ● P0 Security Regression Tests — Issue #4: JWT Secrets Have Insecure Fallbacks › Test 14 — HTTP integration › MUST reject an access token on POST /api/auth/refresh\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 401\n    Received: 503\n\n    \u001b[0m \u001b[90m 408 |\u001b[39m         \u001b[3",
+    "numFailingTests": 2
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts",
+    "message": "  ● Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation › 1. Issue 63 — Raw-Body Signature Verification › accepts valid HMAC signature and processes payment.captured\n\n    PrismaClientKnownRequestError: \n    Invalid `prisma.customer.create()` invocation in\n    E:\\LabourBaba\\Labour",
+    "numFailingTests": 5
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues6_10Comprehensive.test.ts",
+    "message": "  ● P5 Issues 6–10 Comprehensive Production Hardening Suite › Issue 10 — Consolidate Notification Delivery Into One Durable Pipeline › Scenario F: Outbox worker processes batch and marks event SENT safely\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"SENT\"\n    Received: ",
+    "numFailingTests": 1
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\suspensionRevocationSecurity.test.ts",
+    "message": "  ● P2 Security Suite — Issue #11: Revoke Sessions on Suspension/Deletion › Scenario B: Existing refresh session rejected after suspension › MUST reject refresh attempt and revoke session family for suspended worker\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 401\n    Re",
+    "numFailingTests": 3
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\sensitiveDataLeakage.test.ts",
+    "message": "  ● P0 Security Regression: Sensitive Data & Password Hash Leakage › Worker Endpoints › POST /api/workers/registerWorker must never leak password or device_token\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Received: 503\n\n    \u001b[0m \u001b[90m 262 |\u001b[39m         })\u001b[33m",
+    "numFailingTests": 3
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\jobSecurity.test.ts",
+    "message": "  ● Issue #2 Remediation — Client-Controlled customer_id Removal from Job APIs › 1. POST /api/jobs (Job Creation) › TEST 1: Customer A creates own job without customer_id -> job.customer_id is set to Customer A\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Receive",
+    "numFailingTests": 2
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityFinalAudit.test.ts",
+    "message": "  ● P3 Issues 16–20 Final Adversarial Evidence Audit › P3-17: Prometheus Alert Rules & Producers › Real database backup execution updates backup_last_successful_timestamp_seconds\n\n    thrown: \"Exceeded timeout of 5000 ms for a test.\n    Add a timeout value to this test to increase the timeout, if th",
+    "numFailingTests": 1
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "message": "  ● P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants › Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated › MUST reject '123456' when no OTP request was issued (zero prior challenge)\n\n    expect(received).toBe(expected) // Object.is equality\n\n    E",
+    "numFailingTests": 18
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts",
+    "message": "  ● API Integration Tests › POST /api/auth/send-otp › should return 200 for valid input and dispatch OTP via provider\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 503\n\n    \u001b[0m \u001b[90m 83 |\u001b[39m         \u001b[33m.\u001b[39msend({ phone\u001b[33m:\u001b[39m \u001b[32m\"+9198765432",
+    "numFailingTests": 5
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\coordinateValidation.test.ts",
+    "message": "  ● Issue #29: Hardened Coordinate Validation Suite › 4. HTTP Location Endpoints Integration › POST /api/jobs › accepts valid paired coordinates\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Received: 404\n\n    \u001b[0m \u001b[90m 419 |\u001b[39m           })\u001b[33m;\u001b[39m\n     \u001b[9",
+    "numFailingTests": 2
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts",
+    "message": "  ● Issue #12: Canonicalize Phone Identity (E.164) › 2. Customer Registration & Duplicate Prevention › should canonicalize phone number on customer signup\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Received: 503\n\n    \u001b[0m \u001b[90m 113 |\u001b[39m         })\u001b[33m;\u001b[39m\n",
+    "numFailingTests": 10
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentAbuseControls.test.ts",
+    "message": "  ● Issue 72 - Payment Abuse Controls › enforces rate limits on payment order creation (10 requests per window)\n\n    expect(received).toContain(expected) // indexOf\n\n    Expected value: 503\n    Received array: [200, 201]\n\n    \u001b[0m \u001b[90m 147 |\u001b[39m         \u001b[33m.\u001b[39m\u001b[36mset\u001b[39m(\u001b[32m\"Authorization",
+    "numFailingTests": 2
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\dtoBoundarySecurity.test.ts",
+    "message": "  ● HTTP DTO Boundary Security & Data Exposure Tests (Issue #4) › Customer Profile & Auth Boundaries › GET /api/clients MUST never expose passwords\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 200\n    Received: 403\n\n    \u001b[0m \u001b[90m 244 |\u001b[39m         \u001b[33m.\u001b[39m\u001b[36mset\u001b[",
+    "numFailingTests": 1
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\apiProtection.test.ts",
+    "message": "  ● API Protection and JWT Validation Tests › Job Endpoints (/api/jobs) › POST /api/jobs should return 201 when authenticated\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Received: 404\n\n    \u001b[0m \u001b[90m 323 |\u001b[39m         \u001b[33m.\u001b[39m\u001b[36mset\u001b[39m(\u001b[32m\"Authorizatio",
+    "numFailingTests": 2
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts",
+    "message": "  ● Worker Authentication API Tests › POST /api/workers/registerWorker › should successfully register a worker and hash the password\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 201\n    Received: 503\n\n    \u001b[0m \u001b[90m 62 |\u001b[39m         \u001b[33m.\u001b[39msend(mockPayload)\u001b[33m;\u001b[3",
+    "numFailingTests": 5
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\dispatchOperationIdempotency.test.ts",
+    "message": "  ● Issue #23 — Dispatch Operation Idempotency Suite › 2. Real PostgreSQL Concurrency & Unique Constraints › MUST enforce UNIQUE(operation_id) on dispatch_wave under 10 concurrent direct inserts\n\n    PrismaClientKnownRequestError: \n    Invalid `prisma.customer.create()` invocation in\n    E:\\LabourBa",
+    "numFailingTests": 5
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.test.ts",
+    "message": "  ● Issue 42 - Route-Specific Multi-Dimensional Rate Limiting › Rate Limit Invariants & Threshold Enforcement › allows requests below threshold and blocks requests exceeding limit with 429\n\n    expect(jest.fn()).toHaveBeenCalledTimes(expected)\n\n    Expected number of calls: 3\n    Received number of ",
+    "numFailingTests": 3
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityAlertCorrectnessP4_27.test.ts",
+    "message": "  ● P4 Issue 27: Observability Architecture & Alert Rule Correctness › 2. Telemetry Parity for All 9 Prometheus Alert Rules › ensures every alert in alerts.yml references an active metric in metrics.service\n\n    expect(received).toHaveLength(expected)\n\n    Expected length: 9\n    Received length: 10\n",
+    "numFailingTests": 1
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\candidatePaginationExhaustion.test.ts",
+    "message": "  ● Test suite failed to run\n\n    \u001b[96mtests/candidatePaginationExhaustion.test.ts\u001b[0m:\u001b[93m247\u001b[0m:\u001b[93m34\u001b[0m - \u001b[91merror\u001b[0m\u001b[90m TS2353: \u001b[0mObject literal may only specify known properties, and 'device_token' does not exist in type 'EligibleWorkerCandidate'.\n\n    \u001b[7m247\u001b[0m         { id: 'w-3",
+    "numFailingTests": 0
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues11_15Comprehensive.test.ts",
+    "message": "  ● P5 Issues 11–15: Comprehensive Production Hardening & Verification Suite › Issue 11: Distributed-Safe Outbox Claiming & Concurrency › Fencing token: A stale worker cannot mark success or failure after another worker reclaimed the event\n\n    expect(received).toBeDefined()\n\n    Received: undefined",
+    "numFailingTests": 1
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOutboxIntegration.test.ts",
+    "message": "  ● Issue 71 - Payment Notifications Behind Durable Outbox › creates durable outbox events atomically when payment is captured\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: \"SENT\"\n    Received: \"PENDING\"\n\n    \u001b[0m \u001b[90m 204 |\u001b[39m       where\u001b[33m:\u001b[39m { id\u001b[33m:\u001b[39m cu",
+    "numFailingTests": 1
+  },
+  {
+    "path": "E:\\LabourBaba\\LabourBaba-backend\\tests\\outboxWorkerGracefulShutdownP6_8.test.ts",
+    "message": "  ● P6 Issue 8 — Outbox Worker Graceful Shutdown & Drain Suite › TEST 11: Real PostgreSQL CTE SKIP LOCKED & Lease Invariant Proof › atomically claims PENDING event using CTE with FOR UPDATE SKIP LOCKED\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 1\n    Received: 0\n\n    \u001b",
+    "numFailingTests": 2
+  }
+]
