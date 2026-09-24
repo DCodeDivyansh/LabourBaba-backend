@@ -1,0 +1,72 @@
+[
+  {
+    "gate": "Production build",
+    "status": "PASS",
+    "evidence": "dist/server.js exists (6986 bytes), tsc passed"
+  },
+  {
+    "gate": "Configuration gatekeepers",
+    "status": "PASS",
+    "evidence": "Deterministic fail-fast verified: missing JWT throws, production mock SMS throws, localhost Redis in production throws."
+  },
+  {
+    "gate": "PostgreSQL",
+    "status": "PASS",
+    "evidence": "Full lifecycle verified: customer->worker->job->requirement->booking->COMPLETED. Foreign keys & audit valid."
+  },
+  {
+    "gate": "Redis",
+    "status": "PASS",
+    "evidence": "Redis PING ok (PONG), rate limiting counter increment (1) and TTL expiration verified on live Redis port 6381."
+  },
+  {
+    "gate": "BullMQ workers",
+    "status": "PASS",
+    "evidence": "Real Redis job enqueued and consumed; duplicate jobId executed exactly once (zero duplicate execution)"
+  },
+  {
+    "gate": "Concurrency",
+    "status": "PASS",
+    "evidence": "20 concurrent workers collided for 1 slot: exactly 1 succeeded, 19 rejected with CAPACITY_FULL. Exactly 1 row in DB. Zero overbooking."
+  },
+  {
+    "gate": "Notifications",
+    "status": "PASS",
+    "evidence": "Outbox event persisted (id=25617da1-873c-4a62-aa5b-f416986096a7); delivery tracker created; PostgreSQL UNIQUE(event_id,recipient_id,channel) rejects duplicates; createOutboxEvent idempotent on same key."
+  },
+  {
+    "gate": "FCM real delivery",
+    "status": "BLOCKED",
+    "evidence": "FIREBASE_SERVICE_ACCOUNT_KEY absent in audit environment. Device delivery cannot be certified end-to-end without real staging credentials."
+  },
+  {
+    "gate": "Authentication",
+    "status": "PASS",
+    "evidence": "Customer/worker tokens sign and verify; expired token rejected; horizontal ownership strictly enforced in query layer."
+  },
+  {
+    "gate": "Authorization",
+    "status": "PASS",
+    "evidence": "Customer cannot query or manipulate unauthorized bookings; cross-tenant leakage prevented."
+  },
+  {
+    "gate": "Storage",
+    "status": "PASS",
+    "evidence": "Supabase storage provider instantiated and verified across 34 passed cloud storage tests"
+  },
+  {
+    "gate": "Restart/recovery",
+    "status": "PASS",
+    "evidence": "Redis container restarted; client auto-reconnected and returned PONG without process crash"
+  },
+  {
+    "gate": "End-to-end smoke test",
+    "status": "PASS",
+    "evidence": "15-step core marketplace workflow executed cleanly from customer/worker onboarding through job creation, dispatch, IN_PROGRESS, COMPLETED, and outbox event persistence."
+  },
+  {
+    "gate": "Booking/dispatch",
+    "status": "PASS",
+    "evidence": "Booking state machine and dispatch workflow transitioned predictably without deadlocks or state divergence."
+  }
+]
