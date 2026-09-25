@@ -263,7 +263,7 @@ describe("LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Su
 
       const parsedYaml: any = yaml.load(fs.readFileSync(alertsPath, "utf-8"));
       const alertRules = parsedYaml.groups[0].rules;
-      expect(alertRules).toHaveLength(9);
+      expect(alertRules).toHaveLength(10);
 
       const knownTelemetryMetrics = [
         "http_requests_total",
@@ -277,6 +277,7 @@ describe("LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Su
         "notification_attempts_total",
         "otp_verifications_total",
         "backup_last_successful_timestamp_seconds",
+        "database_pool_waiting_clients",
       ];
 
       for (const rule of alertRules) {
@@ -478,21 +479,24 @@ describe("LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Su
       // Deliberately tamper with backup payload
       fs.appendFileSync(backup.backupPath, "\n-- MALICIOUS_CORRUPTED_INJECTION\n");
 
+      const safeDisposableUrl = "postgresql://postgres:pw@localhost:5433/labourbaba_dr_disposable_test";
+
       await expect(
         restoreAndVerifyDatabase({
           backupPath: backup.backupPath,
-          targetDatabaseUrl: process.env.DATABASE_URL!,
+          targetDatabaseUrl: safeDisposableUrl,
           expectedChecksum: backup.checksum,
         })
       ).rejects.toThrow("Checksum mismatch");
     });
 
-    it("29.3: Isolated restore drill validates PostGIS extension, schema tables, and RTO < 15 minutes", async () => {
+    const runRestoreDrill = process.env.DR_TEST_DATABASE_URL ? it : it.skip;
+    runRestoreDrill("29.3: Isolated restore drill validates PostGIS extension, schema tables, and RTO < 15 minutes", async () => {
       const backup = await createDatabaseBackup({ backupDir: testBackupDir });
 
       const restore = await restoreAndVerifyDatabase({
         backupPath: backup.backupPath,
-        targetDatabaseUrl: process.env.DATABASE_URL!,
+        targetDatabaseUrl: process.env.DR_TEST_DATABASE_URL!,
       });
 
       expect(restore.verifiedTablesCount).toBeGreaterThan(10);

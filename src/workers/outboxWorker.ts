@@ -177,6 +177,7 @@ export class OutboxWorker {
             correlationId: correlation_id || '',
           };
 
+          metricsService.recordNotificationAttempt('fcm');
           const results = await sendFCMToRecipient(recipient_type, recipient_id, {
             title: payload.title || 'LabourBaba Notification',
             body: payload.body || '',
@@ -185,6 +186,7 @@ export class OutboxWorker {
 
           if (results.length === 0) {
             // Recipient has no registered active push devices; socket delivery dispatched or recoverable via PostgreSQL.
+            metricsService.recordNotificationSuccess('fcm');
             fcmDelivered = true;
             await outboxService.recordChannelSuccess(id, recipient_id, 'fcm');
           } else {
@@ -193,13 +195,16 @@ export class OutboxWorker {
             const allInvalid = results.every((r) => !r.success && r.isInvalidToken);
 
             if (anySuccess) {
+              metricsService.recordNotificationSuccess('fcm');
               fcmDelivered = true;
               await outboxService.recordChannelSuccess(id, recipient_id, 'fcm');
             } else if (hasTransient) {
+              metricsService.recordNotificationFailure('fcm', 'transient');
               fcmTransientError = true;
               fcmErrorMessage = results.find((r) => !r.success && !r.isInvalidToken)?.error?.message || 'FCM delivery failed';
               await outboxService.recordChannelFailure(id, recipient_id, 'fcm', fcmErrorMessage, false);
             } else if (allInvalid) {
+              metricsService.recordNotificationFailure('fcm', 'permanent');
               fcmPermanentError = true;
               fcmErrorMessage = 'All recipient device tokens were permanently invalid/unregistered';
               await outboxService.recordChannelFailure(id, recipient_id, 'fcm', fcmErrorMessage, true);

@@ -57,7 +57,7 @@ describe("P4 Issue 27: Observability Architecture & Alert Rule Correctness", () 
       const parsedYaml: any = yaml.load(readFileSync(alertsPath, "utf-8"));
       const alertRules = parsedYaml.groups[0].rules;
 
-      expect(alertRules).toHaveLength(9);
+      expect(alertRules).toHaveLength(10);
 
       const requiredMetrics = [
         "http_requests_total",
@@ -71,6 +71,7 @@ describe("P4 Issue 27: Observability Architecture & Alert Rule Correctness", () 
         "notification_attempts_total",
         "otp_verifications_total",
         "backup_last_successful_timestamp_seconds",
+        "database_pool_waiting_clients",
       ];
 
       for (const rule of alertRules) {

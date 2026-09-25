@@ -1,14 +1,7 @@
 {
-  "timestamp": "2026-09-24T20:38:26.096Z",
-  "status": "FAIL",
-  "secretFindings": [
-    {
-      "file": "\\scripts\\verify-production-capacity.ts",
-      "line": 55,
-      "patternName": "Unredacted Production Razorpay Key Secret",
-      "matchedSnippet": "process.env.RAZORPAY_KEY_SECRET = \"capac..."
-    }
-  ],
+  "timestamp": "2026-09-25T19:06:18.645Z",
+  "status": "PASS",
+  "secretFindings": [],
   "backupArtifactFindings": [],
   "dependencyAudit": {
     "scanned": true,
@@ -26,7 +19,5 @@
     "hasReadinessHealthcheck": true,
     "isHardened": true
   },
-  "errors": [
-    "\\scripts\\verify-production-capacity.ts:55 - Unredacted Production Razorpay Key Secret"
-  ]
+  "errors": []
 }

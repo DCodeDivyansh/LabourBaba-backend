@@ -22,6 +22,7 @@ import { storageConfig } from "../src/config/storageConfig";
 import { workerDeviceService } from "../src/features/worker_device/worker_device.service";
 import { outboxService } from "../src/services/outboxService";
 import { outboxWorker } from "../src/workers/outboxWorker";
+import { setMockFcmProvider } from "../src/shared/fcm";
 
 describe("P5 Issues 6–10 Comprehensive Production Hardening Suite", () => {
   jest.setTimeout(45000);
@@ -767,6 +768,10 @@ describe("P5 Issues 6–10 Comprehensive Production Hardening Suite", () => {
     });
 
     it("Scenario F: Outbox worker processes batch and marks event SENT safely", async () => {
+      setMockFcmProvider({
+        sendToTokens: async () => [{ token: "mock-worker-token", success: true }],
+      });
+
       const testKey = `p5:test:process:${Date.now()}`;
       const record = await prisma.$transaction(async (tx) => {
         return await outboxService.createOutboxEvent(tx, {

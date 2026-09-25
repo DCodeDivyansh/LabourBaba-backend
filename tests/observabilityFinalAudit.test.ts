@@ -262,7 +262,7 @@ describe('P3 Issues 16–20 Final Adversarial Evidence Audit', () => {
 
       // Verify zero production console.* calls in src/
       const srcConsoleFindings = findings.filter(
-        (f: any) => f.filePath.includes('src') && f.patternName.includes('console.*')
+        (f: any) => (f.filePath || '').includes('src') && (f.patternName || '').includes('console.*')
       );
       expect(srcConsoleFindings).toHaveLength(0);
     });

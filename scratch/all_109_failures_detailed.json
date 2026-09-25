@@ -1,0 +1,1621 @@
+[
+  {
+    "suite": "dependencyFailure.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\dependencyFailure.test.ts",
+    "testName": "Issue 54 - Dependency Failure & Fault Resilience Tests 2. Redis Unavailability & Rate Limiter Resilience fails closed for security-sensitive rate limiting when Redis is unavailable (status: 'unavailable')",
+    "ancestorTitles": [
+      "Issue 54 - Dependency Failure & Fault Resilience Tests",
+      "2. Redis Unavailability & Rate Limiter Resilience"
+    ],
+    "title": "fails closed for security-sensitive rate limiting when Redis is unavailable (status: 'unavailable')",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(jest.fn()).not.toHaveBeenCalled()\n\nExpected number of calls: 0\nReceived number of calls: 1\n\n1: called with 0 arguments\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\dependencyFailure.test.ts:94:24)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 66
+  },
+  {
+    "suite": "paymentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "testName": "13. Webhook — Signature Tests (S1–S8) S1: valid signature + payment.captured → 200",
+    "ancestorTitles": [
+      "13. Webhook — Signature Tests (S1–S8)"
+    ],
+    "title": "S1: valid signature + payment.captured → 200",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:838:24)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 130
+  },
+  {
+    "suite": "paymentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "testName": "15. Webhook — DB Idempotency / Replay Protection (R1–R3) R1: same event delivered twice — payment transitions exactly once",
+    "ancestorTitles": [
+      "15. Webhook — DB Idempotency / Replay Protection (R1–R3)"
+    ],
+    "title": "R1: same event delivered twice — payment transitions exactly once",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1060:25)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 42
+  },
+  {
+    "suite": "paymentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "testName": "15. Webhook — DB Idempotency / Replay Protection (R1–R3) R2: same event delivered many times — only one payment transition",
+    "ancestorTitles": [
+      "15. Webhook — DB Idempotency / Replay Protection (R1–R3)"
+    ],
+    "title": "R2: same event delivered many times — only one payment transition",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1094:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 43
+  },
+  {
+    "suite": "paymentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "testName": "15. Webhook — DB Idempotency / Replay Protection (R1–R3) R3: concurrent duplicate delivery — only one claims the event",
+    "ancestorTitles": [
+      "15. Webhook — DB Idempotency / Replay Protection (R1–R3)"
+    ],
+    "title": "R3: concurrent duplicate delivery — only one claims the event",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1185:25)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 56
+  },
+  {
+    "suite": "paymentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "testName": "16. Webhook — Payment Integrity (P1–P7) P5/P6: valid captured event → exactly one PENDING→COMPLETED transition",
+    "ancestorTitles": [
+      "16. Webhook — Payment Integrity (P1–P7)"
+    ],
+    "title": "P5/P6: valid captured event → exactly one PENDING→COMPLETED transition",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1276:24)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 43
+  },
+  {
+    "suite": "paymentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "testName": "17. Webhook — State Machine payment.captured marks PENDING payment as COMPLETED",
+    "ancestorTitles": [
+      "17. Webhook — State Machine"
+    ],
+    "title": "payment.captured marks PENDING payment as COMPLETED",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1319:24)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 40
+  },
+  {
+    "suite": "paymentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "testName": "17. Webhook — State Machine payment.failed marks PENDING payment as FAILED",
+    "ancestorTitles": [
+      "17. Webhook — State Machine"
+    ],
+    "title": "payment.failed marks PENDING payment as FAILED",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 500\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1336:24)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 288
+  },
+  {
+    "suite": "paymentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "testName": "20. Refund ownership and lifecycle cannot refund a PENDING payment (409)",
+    "ancestorTitles": [
+      "20. Refund ownership and lifecycle"
+    ],
+    "title": "cannot refund a PENDING payment (409)",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 409\nReceived: 422\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1495:24)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 105
+  },
+  {
+    "suite": "paymentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "testName": "20. Refund ownership and lifecycle can refund a COMPLETED payment",
+    "ancestorTitles": [
+      "20. Refund ownership and lifecycle"
+    ],
+    "title": "can refund a COMPLETED payment",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 502\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1511:24)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 102
+  },
+  {
+    "suite": "paymentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts",
+    "testName": "20. Refund ownership and lifecycle cannot refund a FAILED payment (409)",
+    "ancestorTitles": [
+      "20. Refund ownership and lifecycle"
+    ],
+    "title": "cannot refund a FAILED payment (409)",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 409\nReceived: 422\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentSecurity.test.ts:1524:24)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 104
+  },
+  {
+    "suite": "productionObservabilityWiringP6_4.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\productionObservabilityWiringP6_4.test.ts",
+    "testName": "P6 Issue 4 — Production Observability and Metrics End-to-End Wiring TEST C — Outbox worker processing increments notification_attempts_total and notification_success_total",
+    "ancestorTitles": [
+      "P6 Issue 4 — Production Observability and Metrics End-to-End Wiring"
+    ],
+    "title": "TEST C — Outbox worker processing increments notification_attempts_total and notification_success_total",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"notification_attempts_total{channel=\\\"fcm\\\"}\"\nReceived string:    \"# HELP nodejs_process_cpu_user_seconds_total Total user CPU time spent in seconds.\n# TYPE nodejs_process_cpu_user_seconds_total counter\nnodejs_process_cpu_user_seconds_total 5.202999999999999·\n# HELP nodejs_process_cpu_system_seconds_total Total system CPU time spent in seconds.\n# TYPE nodejs_process_cpu_system_seconds_total counter\nnodejs_process_cpu_system_seconds_total 0.766·\n# HELP nodejs_process_cpu_seconds_total Total user and system CPU time spent in seconds.\n# TYPE nodejs_process_cpu_seconds_total counter\nnodejs_process_cpu_seconds_total 5.969·\n# HELP nodejs_process_start_time_seconds Start time of the process since unix epoch in seconds.\n# TYPE nodejs_process_start_time_seconds gauge\nnodejs_process_start_time_seconds 1790357657·\n# HELP nodejs_process_resident_memory_bytes Resident memory size in bytes.\n# TYPE nodejs_process_resident_memory_bytes gauge\nnodejs_process_resident_memory_bytes 633016320·\n# HELP nodejs_nodejs_eventloop_lag_seconds Lag of event loop in seconds.\n# TYPE nodejs_nodejs_eventloop_lag_seconds gauge\nnodejs_nodejs_eventloop_lag_seconds 0.0075438·\n# HELP nodejs_nodejs_eventloop_lag_min_seconds The minimum recorded event loop delay.\n# TYPE nodejs_nodejs_eventloop_lag_min_seconds gauge\nnodejs_nodejs_eventloop_lag_min_seconds 0.00933888·\n# HELP nodejs_nodejs_eventloop_lag_max_seconds The maximum recorded event loop delay.\n# TYPE nodejs_nodejs_eventloop_lag_max_seconds gauge\nnodejs_nodejs_eventloop_lag_max_seconds 0.464781311·\n# HELP nodejs_nodejs_eventloop_lag_mean_seconds The mean of the recorded event loop delays.\n# TYPE nodejs_nodejs_eventloop_lag_mean_seconds gauge\nnodejs_nodejs_eventloop_lag_mean_seconds 0.02099622268041237·\n# HELP nodejs_nodejs_eventloop_lag_stddev_seconds The standard deviation of the recorded event loop delays.\n# TYPE nodejs_nodejs_eventloop_lag_stddev_seconds gauge\nnodejs_nodejs_eventloop_lag_stddev_seconds 0.04541714030581852·\n# HELP nodejs_nodejs_eventloop_lag_p50_seconds The 50th percentile of the recorded event loop delays.\n# TYPE nodejs_nodejs_eventloop_lag_p50_seconds gauge\nnodejs_nodejs_eventloop_lag_p50_seconds 0.015679487·\n# HELP nodejs_nodejs_eventloop_lag_p90_seconds The 90th percentile of the recorded event loop delays.\n# TYPE nodejs_nodejs_eventloop_lag_p90_seconds gauge\nnodejs_nodejs_eventloop_lag_p90_seconds 0.020643839·\n# HELP nodejs_nodejs_eventloop_lag_p99_seconds The 99th percentile of the recorded event loop delays.\n# TYPE nodejs_nodejs_eventloop_lag_p99_seconds gauge\nnodejs_nodejs_eventloop_lag_p99_seconds 0.029655039·\n# HELP nodejs_nodejs_active_resources Number of active resources that are currently keeping the event loop alive, grouped by async resource type.\n# TYPE nodejs_nodejs_active_resources gauge\nnodejs_nodejs_active_resources{type=\\\"PipeWrap\\\"} 3\nnodejs_nodejs_active_resources{type=\\\"TCPSocketWrap\\\"} 5\nnodejs_nodejs_active_resources{type=\\\"Timeout\\\"} 2\nnodejs_nodejs_active_resources{type=\\\"Immediate\\\"} 1·\n# HELP nodejs_nodejs_active_resources_total Total number of active resources.\n# TYPE nodejs_nodejs_active_resources_total gauge\nnodejs_nodejs_active_resources_total 11·\n# HELP nodejs_nodejs_active_handles Number of active libuv handles grouped by handle type. Every handle type is C++ class name.\n# TYPE nodejs_nodejs_active_handles gauge\nnodejs_nodejs_active_handles{type=\\\"Pipe\\\"} 1\nnodejs_nodejs_active_handles{type=\\\"Socket\\\"} 7·\n# HELP nodejs_nodejs_active_handles_total Total number of active handles.\n# TYPE nodejs_nodejs_active_handles_total gauge\nnodejs_nodejs_active_handles_total 8·\n# HELP nodejs_nodejs_active_requests Number of active libuv requests grouped by request type. Every request type is C++ class name.\n# TYPE nodejs_nodejs_active_requests gauge·\n# HELP nodejs_nodejs_active_requests_total Total number of active requests.\n# TYPE nodejs_nodejs_active_requests_total gauge\nnodejs_nodejs_active_requests_total 0·\n# HELP nodejs_nodejs_heap_size_total_bytes Process heap size from Node.js in bytes.\n# TYPE nodejs_nodejs_heap_size_total_bytes gauge\nnodejs_nodejs_heap_size_total_bytes 517677056·\n# HELP nodejs_nodejs_heap_size_used_bytes Process heap size used from Node.js in bytes.\n# TYPE nodejs_nodejs_heap_size_used_bytes gauge\nnodejs_nodejs_heap_size_used_bytes 485855728·\n# HELP nodejs_nodejs_external_memory_bytes Node.js external memory size in bytes.\n# TYPE nodejs_nodejs_external_memory_bytes gauge\nnodejs_nodejs_external_memory_bytes 29046491·\n# HELP nodejs_nodejs_heap_space_size_total_bytes Process heap space size total from Node.js in bytes.\n# TYPE nodejs_nodejs_heap_space_size_total_bytes gauge\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"read_only\\\"} 0\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"new\\\"} 33554432\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"old\\\"} 417361920\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"code\\\"} 11010048\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"shared\\\"} 0\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"trusted\\\"} 9199616\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"new_large_object\\\"} 827392\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"large_object\\\"} 45105152\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"code_large_object\\\"} 155648\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"shared_large_object\\\"} 0\nnodejs_nodejs_heap_space_size_total_bytes{space=\\\"trusted_large_object\\\"} 462848·\n# HELP nodejs_nodejs_heap_space_size_used_bytes Process heap space size used from Node.js in bytes.\n# TYPE nodejs_nodejs_heap_space_size_used_bytes gauge\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"read_only\\\"} 0\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"new\\\"} 10888728\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"old\\\"} 409806368\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"code\\\"} 10173568\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"shared\\\"} 0\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"trusted\\\"} 8960400\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"new_large_object\\\"} 813712\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"large_object\\\"} 44630264\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"code_large_object\\\"} 138304\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"shared_large_object\\\"} 0\nnodejs_nodejs_heap_space_size_used_bytes{space=\\\"trusted_large_object\\\"} 449600·\n# HELP nodejs_nodejs_heap_space_size_available_bytes Process heap space size available from Node.js in bytes.\n# TYPE nodejs_nodejs_heap_space_size_available_bytes gauge\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"read_only\\\"} 0\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"new\\\"} 5605864\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"old\\\"} 415984\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"code\\\"} 147008\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"shared\\\"} 0\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"trusted\\\"} 79808\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"new_large_object\\\"} 15963504\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"large_object\\\"} 0\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"code_large_object\\\"} 0\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"shared_large_object\\\"} 0\nnodejs_nodejs_heap_space_size_available_bytes{space=\\\"trusted_large_object\\\"} 0·\n# HELP nodejs_nodejs_version_info Node.js version info.\n# TYPE nodejs_nodejs_version_info gauge\nnodejs_nodejs_version_info{version=\\\"v22.16.0\\\",major=\\\"22\\\",minor=\\\"16\\\",patch=\\\"0\\\"} 1·\n# HELP nodejs_nodejs_gc_duration_seconds Garbage collection duration by kind, one of major, minor, incremental or weakcb.\n# TYPE nodejs_nodejs_gc_duration_seconds histogram\nnodejs_nodejs_gc_duration_seconds_bucket{le=\\\"0.001\\\",kind=\\\"minor\\\"} 0\nnodejs_nodejs_gc_duration_seconds_bucket{le=\\\"0.01\\\",kind=\\\"minor\\\"} 1\nnodejs_nodejs_gc_duration_seconds_bucket{le=\\\"0.1\\\",kind=\\\"minor\\\"} 2\nnodejs_nodejs_gc_duration_seconds_bucket{le=\\\"1\\\",kind=\\\"minor\\\"} 2\nnodejs_nodejs_gc_duration_seconds_bucket{le=\\\"2\\\",kind=\\\"minor\\\"} 2\nnodejs_nodejs_gc_duration_seconds_bucket{le=\\\"5\\\",kind=\\\"minor\\\"} 2\nnodejs_nodejs_gc_duration_seconds_bucket{le=\\\"+Inf\\\",kind=\\\"minor\\\"} 2\nnodejs_nodejs_gc_duration_seconds_sum{kind=\\\"minor\\\"} 0.020498500000685455\nnodejs_nodejs_gc_duration_seconds_count{kind=\\\"minor\\\"} 2·\n# HELP http_requests_total Total number of HTTP requests processed by LabourBaba API\n# TYPE http_requests_total counter·\n# HELP http_request_duration_ms HTTP request latency distribution in milliseconds\n# TYPE http_request_duration_ms histogram·\n# HELP http_request_duration_seconds HTTP request latency in seconds for p50/p95/p99 quantile calculation\n# TYPE http_request_duration_seconds histogram·\n# HELP health_ready_database_status PostgreSQL Database readiness probe health status (1 = healthy, 0 = unhealthy)\n# TYPE health_ready_database_status gauge\nhealth_ready_database_status 1·\n# HELP health_ready_redis_status Redis data store readiness probe health status (1 = healthy, 0 = unhealthy)\n# TYPE health_ready_redis_status gauge\nhealth_ready_redis_status 1·\n# HELP health_ready_status Overall application readiness status (1 = ready, 0 = not ready)\n# TYPE health_ready_status gauge\nhealth_ready_status 1·\n# HELP bullmq_waiting_jobs_total Current number of waiting jobs across BullMQ queues\n# TYPE bullmq_waiting_jobs_total gauge\nbullmq_waiting_jobs_total{queue=\\\"dispatch\\\"} 23\nbullmq_waiting_jobs_total{queue=\\\"timeout\\\"} 0\nbullmq_waiting_jobs_total{queue=\\\"notification\\\"} 0·\n# HELP bullmq_active_jobs_total Current number of actively processing jobs across BullMQ queues\n# TYPE bullmq_active_jobs_total gauge\nbullmq_active_jobs_total{queue=\\\"dispatch\\\"} 0\nbullmq_active_jobs_total{queue=\\\"timeout\\\"} 0\nbullmq_active_jobs_total{queue=\\\"notification\\\"} 0·\n# HELP bullmq_failed_jobs_total Total number of failed jobs across BullMQ queues\n# TYPE bullmq_failed_jobs_total gauge\nbullmq_failed_jobs_total{queue=\\\"dispatch\\\"} 1\nbullmq_failed_jobs_total{queue=\\\"timeout\\\"} 1\nbullmq_failed_jobs_total{queue=\\\"notification\\\"} 1·\n# HELP bullmq_delayed_jobs_total Total number of delayed jobs across BullMQ queues\n# TYPE bullmq_delayed_jobs_total gauge\nbullmq_delayed_jobs_total{queue=\\\"dispatch\\\"} 0\nbullmq_delayed_jobs_total{queue=\\\"timeout\\\"} 0\nbullmq_delayed_jobs_total{queue=\\\"notification\\\"} 0·\n# HELP database_pool_total_connections Total allocated connections in the PostgreSQL connection pool\n# TYPE database_pool_total_connections gauge\ndatabase_pool_total_connections 1·\n# HELP database_pool_active_connections Number of active connections currently in use by queries\n# TYPE database_pool_active_connections gauge\ndatabase_pool_active_connections 0·\n# HELP database_pool_idle_connections Number of idle connections available in the pool\n# TYPE database_pool_idle_connections gauge\ndatabase_pool_idle_connections 1·\n# HELP database_pool_waiting_clients Number of clients queued waiting for an available connection (pool saturation indicator)\n# TYPE database_pool_waiting_clients gauge\ndatabase_pool_waiting_clients 0·\n# HELP database_pool_max_connections Configured maximum connections limit for the pool\n# TYPE database_pool_max_connections gauge\ndatabase_pool_max_connections 12·\n# HELP redis_errors_total Total number of Redis connection and operation errors\n# TYPE redis_errors_total counter·\n# HELP database_errors_total Total number of PostgreSQL connection pool and query errors\n# TYPE database_errors_total counter·\n# HELP http_errors_total Total number of HTTP 4xx and 5xx errors returned by API\n# TYPE http_errors_total counter·\n# HELP jobs_created_total Total number of marketplace jobs created\n# TYPE jobs_created_total counter\njobs_created_total 0·\n# HELP dispatch_attempts_total Total number of dispatch attempts initiated\n# TYPE dispatch_attempts_total counter\ndispatch_attempts_total 2·\n# HELP dispatch_success_total Total number of successful dispatches where candidates were notified\n# TYPE dispatch_success_total counter\ndispatch_success_total 1·\n# HELP dispatch_failure_total Total number of failed dispatch attempts\n# TYPE dispatch_failure_total counter\ndispatch_failure_total{reason=\\\"invalid_coordinates\\\"} 1·\n# HELP dispatch_accept_total Total number of dispatches accepted by workers\n# TYPE dispatch_accept_total counter\ndispatch_accept_total 0·\n# HELP dispatch_latency_ms Dispatch matching and notification latency in milliseconds\n# TYPE dispatch_latency_ms histogram\ndispatch_latency_ms_bucket{le=\\\"10\\\"} 0\ndispatch_latency_ms_bucket{le=\\\"50\\\"} 0\ndispatch_latency_ms_bucket{le=\\\"100\\\"} 0\ndispatch_latency_ms_bucket{le=\\\"250\\\"} 0\ndispatch_latency_ms_bucket{le=\\\"500\\\"} 0\ndispatch_latency_ms_bucket{le=\\\"1000\\\"} 1\ndispatch_latency_ms_bucket{le=\\\"2500\\\"} 1\ndispatch_latency_ms_bucket{le=\\\"5000\\\"} 1\ndispatch_latency_ms_bucket{le=\\\"+Inf\\\"} 1\ndispatch_latency_ms_sum 817\ndispatch_latency_ms_count 1·\n# HELP dispatch_reconciliation_total Total number of dispatch reconciliation execution runs\n# TYPE dispatch_reconciliation_total counter·\n# HELP dispatch_reconciliation_repairs_total Total number of orphaned dispatch operations repaired by reconciliation\n# TYPE dispatch_reconciliation_repairs_total counter·\n# HELP dispatch_enqueue_failures_total Total number of BullMQ dispatch queue enqueue failures\n# TYPE dispatch_enqueue_failures_total counter·\n# HELP outbox_shutdown_total Total number of outbox worker shutdown outcomes\n# TYPE outbox_shutdown_total counter·\n# HELP dispatch_candidate_count Distribution of candidates found per dispatch attempt\n# TYPE dispatch_candidate_count histogram\ndispatch_candidate_count_bucket{le=\\\"1\\\"} 1\ndispatch_candidate_count_bucket{le=\\\"3\\\"} 1\ndispatch_candidate_count_bucket{le=\\\"5\\\"} 1\ndispatch_candidate_count_bucket{le=\\\"10\\\"} 1\ndispatch_candidate_count_bucket{le=\\\"20\\\"} 1\ndispatch_candidate_count_bucket{le=\\\"50\\\"} 1\ndispatch_candidate_count_bucket{le=\\\"+Inf\\\"} 1\ndispatch_candidate_count_sum 1\ndispatch_candidate_count_count 1·\n# HELP dispatch_accept_latency_ms Time elapsed from dispatch broadcast to worker acceptance in milliseconds\n# TYPE dispatch_accept_latency_ms histogram·\n# HELP location_updates_total Total number of worker GPS location pings received\n# TYPE location_updates_total counter\nlocation_updates_total 0·\n# HELP location_cleanup_rows_deleted_total Total number of stale location rows pruned by retention worker\n# TYPE location_cleanup_rows_deleted_total counter\nlocation_cleanup_rows_deleted_total 0·\n# HELP location_cleanup_duration_ms Location retention cleanup execution time in milliseconds\n# TYPE location_cleanup_duration_ms histogram·\n# HELP location_exclusions_total Total number of workers excluded from candidate matching due to location reasons\n# TYPE location_exclusions_total counter·\n# HELP notification_attempts_total Total notification delivery attempts\n# TYPE notification_attempts_total counter\nnotification_attempts_total{channel=\\\"socket\\\"} 1·\n# HELP notification_success_total Total successful notification deliveries\n# TYPE notification_success_total counter\nnotification_success_total{channel=\\\"socket\\\"} 1·\n# HELP notification_failure_total Total failed notification deliveries\n# TYPE notification_failure_total counter·\n# HELP notification_fcm_attempts_total Total FCM notification attempts\n# TYPE notification_fcm_attempts_total counter\nnotification_fcm_attempts_total 0·\n# HELP notification_fcm_success_total Total successful FCM deliveries\n# TYPE notification_fcm_success_total counter\nnotification_fcm_success_total 0·\n# HELP notification_fcm_failure_total Total failed FCM deliveries\n# TYPE notification_fcm_failure_total counter·\n# HELP notification_fcm_invalid_token_total Total invalid or unregistered FCM tokens detected\n# TYPE notification_fcm_invalid_token_total counter\nnotification_fcm_invalid_token_total 0·\n# HELP notification_fcm_retry_total Total FCM notification retries scheduled\n# TYPE notification_fcm_retry_total counter\nnotification_fcm_retry_total 0·\n# HELP notification_fcm_latency_seconds FCM delivery latency in seconds\n# TYPE notification_fcm_latency_seconds histogram·\n# HELP otp_challenges_created_total Total OTP challenges generated\n# TYPE otp_challenges_created_total counter·\n# HELP otp_delivery_failed_total Total failed OTP SMS deliveries\n# TYPE otp_delivery_failed_total counter·\n# HELP otp_verifications_total Total OTP verification attempts\n# TYPE otp_verifications_total counter·\n# HELP security_audit_events_total Total security audit log events recorded\n# TYPE security_audit_events_total counter·\n# HELP payments_created_total Total payment intents/orders created\n# TYPE payments_created_total counter\npayments_created_total 0·\n# HELP payments_captured_total Total payments successfully captured\n# TYPE payments_captured_total counter\npayments_captured_total 0·\n# HELP payments_captured_amount_paise_total Total amount captured in paise\n# TYPE payments_captured_amount_paise_total counter\npayments_captured_amount_paise_total 0·\n# HELP payments_failed_total Total payment failures\n# TYPE payments_failed_total counter·\n# HELP refunds_created_total Total refunds initiated\n# TYPE refunds_created_total counter\nrefunds_created_total 0·\n# HELP refunds_amount_paise_total Total amount refunded in paise\n# TYPE refunds_amount_paise_total counter\nrefunds_amount_paise_total 0·\n# HELP webhook_signature_failures_total Total invalid payment webhook signature attempts\n# TYPE webhook_signature_failures_total counter\nwebhook_signature_failures_total 0·\n# HELP payments_quarantined_total Total payments placed in quarantine due to mismatch or fraud flags\n# TYPE payments_quarantined_total counter·\n# HELP booking_created_total Total bookings confirmed\n# TYPE booking_created_total counter\nbooking_created_total 0·\n# HELP booking_cancelled_total Total bookings cancelled\n# TYPE booking_cancelled_total counter·\n# HELP booking_completed_total Total bookings successfully completed\n# TYPE booking_completed_total counter\nbooking_completed_total 0·\n# HELP backup_last_successful_timestamp_seconds Unix timestamp in seconds of the last verified database backup\n# TYPE backup_last_successful_timestamp_seconds gauge\nbackup_last_successful_timestamp_seconds 0·\n# HELP storage_upload_attempt_total Total document upload attempts to object storage\n# TYPE storage_upload_attempt_total counter·\n# HELP storage_upload_success_total Total document uploads successfully persisted in object storage\n# TYPE storage_upload_success_total counter·\n# HELP storage_upload_failure_total Total document upload failures in object storage\n# TYPE storage_upload_failure_total counter·\n# HELP storage_download_attempt_total Total document download attempts from object storage\n# TYPE storage_download_attempt_total counter·\n# HELP storage_download_success_total Total document downloads successfully retrieved from object storage\n# TYPE storage_download_success_total counter·\n# HELP storage_download_failure_total Total document download failures from object storage\n# TYPE storage_download_failure_total counter·\n# HELP storage_delete_attempt_total Total document deletion attempts from object storage\n# TYPE storage_delete_attempt_total counter·\n# HELP storage_delete_success_total Total document deletions successfully executed in object storage\n# TYPE storage_delete_success_total counter·\n# HELP storage_delete_failure_total Total document deletion failures in object storage\n# TYPE storage_delete_failure_total counter·\n# HELP signed_url_generation_total Total short-lived HMAC signed document URLs generated\n# TYPE signed_url_generation_total counter·\n# HELP unauthorized_document_access_total Total unauthorized access attempts to private worker documents\n# TYPE unauthorized_document_access_total counter·\n# HELP storage_provider_latency_seconds Object storage provider operation latency in seconds\n# TYPE storage_provider_latency_seconds histogram\n\"\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\productionObservabilityWiringP6_4.test.ts:255:24)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 1964
+  },
+  {
+    "suite": "phoneNormalization.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts",
+    "testName": "Issue #12: Canonicalize Phone Identity (E.164) 6. Rate Limiting Canonical Phone Key Equivalence should share the same rate limiting bucket across equivalent phone representations",
+    "ancestorTitles": [
+      "Issue #12: Canonicalize Phone Identity (E.164)",
+      "6. Rate Limiting Canonical Phone Key Equivalence"
+    ],
+    "title": "should share the same rate limiting bucket across equivalent phone representations",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 429\nReceived: 200\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\phoneNormalization.test.ts:439:37)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 1082
+  },
+  {
+    "suite": "p5Issues6_10Comprehensive.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues6_10Comprehensive.test.ts",
+    "testName": "P5 Issues 6–10 Comprehensive Production Hardening Suite Issue 10 — Consolidate Notification Delivery Into One Durable Pipeline Scenario F: Outbox worker processes batch and marks event SENT safely",
+    "ancestorTitles": [
+      "P5 Issues 6–10 Comprehensive Production Hardening Suite",
+      "Issue 10 — Consolidate Notification Delivery Into One Durable Pipeline"
+    ],
+    "title": "Scenario F: Outbox worker processes batch and marks event SENT safely",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: \"SENT\"\nReceived: \"PENDING\"\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues6_10Comprehensive.test.ts:796:29)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 4038
+  },
+  {
+    "suite": "paymentOrderConcurrency.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts",
+    "testName": "P3 Issue 5 — Payment Order Creation Real PostgreSQL Concurrency 1. Real PostgreSQL 50-Request Concurrency Test 50 simultaneous requests produce EXACTLY 1 local payment intent and EXACTLY 1 provider call",
+    "ancestorTitles": [
+      "P3 Issue 5 — Payment Order Creation Real PostgreSQL Concurrency",
+      "1. Real PostgreSQL 50-Request Concurrency Test"
+    ],
+    "title": "50 simultaneous requests produce EXACTLY 1 local payment intent and EXACTLY 1 provider call",
+    "status": "failed",
+    "failureMessages": [
+      "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts:51:27\n\n  48 }\n  49 skillCategoryId = category.id;\n  50 \n→ 51 await prisma.customer.create(\nUnique constraint failed on the fields: (`id`)\n    at zr.handleRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at a (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts:51:5)"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "paymentOrderConcurrency.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts",
+    "testName": "P3 Issue 5 — Payment Order Creation Real PostgreSQL Concurrency 2. Sequential Retries & Idempotency Sequential retry returns existing order with ZERO additional provider calls",
+    "ancestorTitles": [
+      "P3 Issue 5 — Payment Order Creation Real PostgreSQL Concurrency",
+      "2. Sequential Retries & Idempotency"
+    ],
+    "title": "Sequential retry returns existing order with ZERO additional provider calls",
+    "status": "failed",
+    "failureMessages": [
+      "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts:51:27\n\n  48 }\n  49 skillCategoryId = category.id;\n  50 \n→ 51 await prisma.customer.create(\nUnique constraint failed on the fields: (`id`)\n    at zr.handleRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at a (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts:51:5)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "paymentOrderConcurrency.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts",
+    "testName": "P3 Issue 5 — Payment Order Creation Real PostgreSQL Concurrency 3. Provider Failure & Subsequent Retry Recovery Failed provider call transitions local intent to FAILED and subsequent retry succeeds",
+    "ancestorTitles": [
+      "P3 Issue 5 — Payment Order Creation Real PostgreSQL Concurrency",
+      "3. Provider Failure & Subsequent Retry Recovery"
+    ],
+    "title": "Failed provider call transitions local intent to FAILED and subsequent retry succeeds",
+    "status": "failed",
+    "failureMessages": [
+      "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts:51:27\n\n  48 }\n  49 skillCategoryId = category.id;\n  50 \n→ 51 await prisma.customer.create(\nUnique constraint failed on the fields: (`id`)\n    at zr.handleRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at a (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts:51:5)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "paymentOrderConcurrency.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts",
+    "testName": "P3 Issue 5 — Payment Order Creation Real PostgreSQL Concurrency 4. Security & Authorization Matrix Customer B cannot create order for Customer A's booking (403)",
+    "ancestorTitles": [
+      "P3 Issue 5 — Payment Order Creation Real PostgreSQL Concurrency",
+      "4. Security & Authorization Matrix"
+    ],
+    "title": "Customer B cannot create order for Customer A's booking (403)",
+    "status": "failed",
+    "failureMessages": [
+      "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts:51:27\n\n  48 }\n  49 skillCategoryId = category.id;\n  50 \n→ 51 await prisma.customer.create(\nUnique constraint failed on the fields: (`id`)\n    at zr.handleRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at a (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts:51:5)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "paymentOrderConcurrency.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts",
+    "testName": "P3 Issue 5 — Payment Order Creation Real PostgreSQL Concurrency 4. Security & Authorization Matrix Order creation is rejected if booking is in non-payable state",
+    "ancestorTitles": [
+      "P3 Issue 5 — Payment Order Creation Real PostgreSQL Concurrency",
+      "4. Security & Authorization Matrix"
+    ],
+    "title": "Order creation is rejected if booking is in non-payable state",
+    "status": "failed",
+    "failureMessages": [
+      "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts:51:27\n\n  48 }\n  49 skillCategoryId = category.id;\n  50 \n→ 51 await prisma.customer.create(\nUnique constraint failed on the fields: (`id`)\n    at zr.handleRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at a (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentOrderConcurrency.test.ts:51:5)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "paymentWebhookAndReconciliation.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts",
+    "testName": "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation 1. Issue 63 — Raw-Body Signature Verification accepts valid HMAC signature and processes payment.captured",
+    "ancestorTitles": [
+      "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation",
+      "1. Issue 63 — Raw-Body Signature Verification"
+    ],
+    "title": "accepts valid HMAC signature and processes payment.captured",
+    "status": "failed",
+    "failureMessages": [
+      "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:27\n\n  49 }\n  50 skillCategoryId = category.id;\n  51 \n→ 52 await prisma.customer.create(\nUnique constraint failed on the fields: (`id`)\n    at zr.handleRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at a (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:5)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "paymentWebhookAndReconciliation.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts",
+    "testName": "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation 1. Issue 63 — Raw-Body Signature Verification rejects invalid signature with 401 WEBHOOK_INVALID_SIGNATURE",
+    "ancestorTitles": [
+      "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation",
+      "1. Issue 63 — Raw-Body Signature Verification"
+    ],
+    "title": "rejects invalid signature with 401 WEBHOOK_INVALID_SIGNATURE",
+    "status": "failed",
+    "failureMessages": [
+      "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:27\n\n  49 }\n  50 skillCategoryId = category.id;\n  51 \n→ 52 await prisma.customer.create(\nUnique constraint failed on the fields: (`id`)\n    at zr.handleRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at a (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:5)"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "paymentWebhookAndReconciliation.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts",
+    "testName": "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation 2. Issue 64 — Webhook Idempotency & Duplicate Delivery safely handles duplicate webhook delivery without duplicate transitions",
+    "ancestorTitles": [
+      "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation",
+      "2. Issue 64 — Webhook Idempotency & Duplicate Delivery"
+    ],
+    "title": "safely handles duplicate webhook delivery without duplicate transitions",
+    "status": "failed",
+    "failureMessages": [
+      "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:27\n\n  49 }\n  50 skillCategoryId = category.id;\n  51 \n→ 52 await prisma.customer.create(\nUnique constraint failed on the fields: (`id`)\n    at zr.handleRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at a (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:5)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "paymentWebhookAndReconciliation.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts",
+    "testName": "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation 3. Issue 65 — Amount & Currency Reconciliation Guardrails quarantines payment and refuses transition when captured amount does not match expected amount",
+    "ancestorTitles": [
+      "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation",
+      "3. Issue 65 — Amount & Currency Reconciliation Guardrails"
+    ],
+    "title": "quarantines payment and refuses transition when captured amount does not match expected amount",
+    "status": "failed",
+    "failureMessages": [
+      "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:27\n\n  49 }\n  50 skillCategoryId = category.id;\n  51 \n→ 52 await prisma.customer.create(\nUnique constraint failed on the fields: (`id`)\n    at zr.handleRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at a (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:5)"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "paymentWebhookAndReconciliation.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts",
+    "testName": "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation 3. Issue 65 — Amount & Currency Reconciliation Guardrails quarantines payment when currency does not match expected currency",
+    "ancestorTitles": [
+      "Issues 63, 64 & 65 - Webhook Verification, Idempotency & Reconciliation",
+      "3. Issue 65 — Amount & Currency Reconciliation Guardrails"
+    ],
+    "title": "quarantines payment when currency does not match expected currency",
+    "status": "failed",
+    "failureMessages": [
+      "PrismaClientKnownRequestError: \nInvalid `prisma.customer.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:27\n\n  49 }\n  50 skillCategoryId = category.id;\n  51 \n→ 52 await prisma.customer.create(\nUnique constraint failed on the fields: (`id`)\n    at zr.handleRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:237:13)\n    at zr.handleAndLogRequestError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:183:12)\n    at zr.request (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\RequestHandler.ts:152:12)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at a (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\@prisma\\client\\src\\runtime\\getPrismaClient.ts:963:24)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookAndReconciliation.test.ts:52:5)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "observabilityFinalAudit.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityFinalAudit.test.ts",
+    "testName": "P3 Issues 16–20 Final Adversarial Evidence Audit P3-20: Universal Structured Logging, Context, and Redaction Security scan detects direct console.log in source directory",
+    "ancestorTitles": [
+      "P3 Issues 16–20 Final Adversarial Evidence Audit",
+      "P3-20: Universal Structured Logging, Context, and Redaction"
+    ],
+    "title": "Security scan detects direct console.log in source directory",
+    "status": "failed",
+    "failureMessages": [
+      "TypeError: Cannot read properties of undefined (reading 'includes')\n    at E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityFinalAudit.test.ts:265:32\n    at Array.filter (<anonymous>)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityFinalAudit.test.ts:264:43)\n    at Promise.finally.completed (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1501:10)\n    at _callCircusTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1011:40)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at _runTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:951:3)\n    at E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:853:7\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:866:11)\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:861:11)\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:861:11)\n    at run (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:765:3)\n    at runAndTransformResultsToJestFormat (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1993:21)\n    at jestAdapter (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\runner.js:111:19)\n    at runTestInternal (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:276:16)\n    at runTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:344:7)\n    at Object.worker (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:498:12)"
+    ],
+    "duration": 454
+  },
+  {
+    "suite": "observabilityIssues16_20.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityIssues16_20.test.ts",
+    "testName": "P3 Issues 16–20 Comprehensive Remediation Verification P3-19: Safe Controller Error Handling Validation errors return client-actionable 400/422 responses",
+    "ancestorTitles": [
+      "P3 Issues 16–20 Comprehensive Remediation Verification",
+      "P3-19: Safe Controller Error Handling"
+    ],
+    "title": "Validation errors return client-actionable 400/422 responses",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toContain(expected) // indexOf\n\nExpected value: 503\nReceived array: [400, 422]\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityIssues16_20.test.ts:136:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 44
+  },
+  {
+    "suite": "paymentWebhookConcurrency.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookConcurrency.test.ts",
+    "testName": "Issue 70 - Real PostgreSQL Webhook Concurrency & Replay safely handles replay of an already PROCESSED webhook event",
+    "ancestorTitles": [
+      "Issue 70 - Real PostgreSQL Webhook Concurrency & Replay"
+    ],
+    "title": "safely handles replay of an already PROCESSED webhook event",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toContain(expected) // indexOf\n\nExpected substring: \"already processed\"\nReceived string:    \"already completed\"\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentWebhookConcurrency.test.ts:207:31)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 1091
+  },
+  {
+    "suite": "observabilityAlertCorrectnessP4_27.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityAlertCorrectnessP4_27.test.ts",
+    "testName": "P4 Issue 27: Observability Architecture & Alert Rule Correctness 2. Telemetry Parity for All 9 Prometheus Alert Rules ensures every alert in alerts.yml references an active metric in metrics.service",
+    "ancestorTitles": [
+      "P4 Issue 27: Observability Architecture & Alert Rule Correctness",
+      "2. Telemetry Parity for All 9 Prometheus Alert Rules"
+    ],
+    "title": "ensures every alert in alerts.yml references an active metric in metrics.service",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toHaveLength(expected)\n\nExpected length: 9\nReceived length: 10\nReceived array:  [{\"alert\": \"Elevated5xxRate\", \"annotations\": {\"description\": \"Over 5% of HTTP requests returned 5xx status codes in the last 5 minutes.\", \"runbook_url\": \"docs/runbooks/elevated-5xx.md\", \"summary\": \"Elevated HTTP 5xx error rate on LabourBaba API\"}, \"expr\": \"(sum(rate(http_requests_total{status=~\\\"5..\\\"}[5m])) / sum(rate(http_requests_total[5m]))) * 100 > 5\", \"for\": \"2m\", \"labels\": {\"category\": \"availability\", \"severity\": \"critical\"}}, {\"alert\": \"DatabaseUnavailable\", \"annotations\": {\"description\": \"Health readiness probe cannot execute database heartbeat query.\", \"runbook_url\": \"docs/runbooks/database-failure.md\", \"summary\": \"PostgreSQL Database is unreachable\"}, \"expr\": \"health_ready_database_status == 0\", \"for\": \"1m\", \"labels\": {\"category\": \"infrastructure\", \"severity\": \"critical\"}}, {\"alert\": \"RedisUnavailable\", \"annotations\": {\"description\": \"Health readiness probe cannot ping Redis instance.\", \"runbook_url\": \"docs/runbooks/redis-failure.md\", \"summary\": \"Redis Cache / Queue data store is unreachable\"}, \"expr\": \"health_ready_redis_status == 0\", \"for\": \"1m\", \"labels\": {\"category\": \"infrastructure\", \"severity\": \"critical\"}}, {\"alert\": \"QueueLagHigh\", \"annotations\": {\"description\": \"More than 100 jobs are waiting in queue for over 5 minutes.\", \"runbook_url\": \"docs/runbooks/queue-lag.md\", \"summary\": \"BullMQ queue backlog is growing\"}, \"expr\": \"bullmq_waiting_jobs_total > 100\", \"for\": \"5m\", \"labels\": {\"category\": \"background_workers\", \"severity\": \"warning\"}}, {\"alert\": \"DispatchFailureRateHigh\", \"annotations\": {\"description\": \"Dispatch failure rate exceeds 10% over a 5-minute evaluation window.\", \"runbook_url\": \"docs/runbooks/dispatch-failure.md\", \"summary\": \"High Dispatch Failure Rate\"}, \"expr\": \"(sum(rate(dispatch_failure_total[5m])) / (sum(rate(dispatch_attempts_total[5m])) + 0.001)) * 100 > 10\", \"for\": \"5m\", \"labels\": {\"category\": \"marketplace\", \"severity\": \"critical\"}}, {\"alert\": \"StaleLocationSupplyHigh\", \"annotations\": {\"description\": \"Dispatch candidate selection is rejecting significant worker supply due to stale coordinates (>15m old).\", \"runbook_url\": \"docs/runbooks/stale-location.md\", \"summary\": \"High number of workers excluded due to stale GPS location\"}, \"expr\": \"location_exclusions_total{reason=\\\"stale_location\\\"} > 50\", \"for\": \"10m\", \"labels\": {\"category\": \"marketplace\", \"severity\": \"warning\"}}, {\"alert\": \"NotificationFailureRateHigh\", \"annotations\": {\"description\": \"More than 5% of FCM push notifications failed in the last 5 minutes.\", \"runbook_url\": \"docs/runbooks/notification-failure.md\", \"summary\": \"High Push Notification / FCM failure rate\"}, \"expr\": \"(sum(rate(notification_failure_total[5m])) / (sum(rate(notification_attempts_total[5m])) + 0.001)) * 100 > 5\", \"for\": \"5m\", \"labels\": {\"category\": \"notifications\", \"severity\": \"warning\"}}, {\"alert\": \"AbnormalOtpAttempts\", \"annotations\": {\"description\": \"Detected more than 20 failed OTP attempts per minute, potential brute force or abuse pattern.\", \"runbook_url\": \"docs/runbooks/abnormal-otp.md\", \"summary\": \"Spike in failed OTP verification attempts\"}, \"expr\": \"sum(rate(otp_verifications_total{status=\\\"failed\\\"}[5m])) > 20\", \"for\": \"2m\", \"labels\": {\"category\": \"security\", \"severity\": \"warning\"}}, {\"alert\": \"BackupFailure\", \"annotations\": {\"description\": \"Last verified database backup is older than 24 hours. RPO target at risk.\", \"runbook_url\": \"docs/runbooks/backup-failure.md\", \"summary\": \"Automated database backup has not succeeded in over 24 hours\"}, \"expr\": \"(time() - backup_last_successful_timestamp_seconds) > 86400\", \"for\": \"1h\", \"labels\": {\"category\": \"reliability\", \"severity\": \"critical\"}}, {\"alert\": \"DatabasePoolSaturation\", \"annotations\": {\"description\": \"Clients are queuing waiting for an available database connection. Connection pool capacity is saturated.\", \"runbook_url\": \"docs/runbooks/database-saturation.md\", \"summary\": \"PostgreSQL connection pool exhausted\"}, \"expr\": \"database_pool_waiting_clients > 0\", \"for\": \"1m\", \"labels\": {\"category\": \"database\", \"severity\": \"critical\"}}]\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\observabilityAlertCorrectnessP4_27.test.ts:60:26)\n    at Promise.finally.completed (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1501:10)\n    at _callCircusTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1011:40)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at _runTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:951:3)\n    at E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:853:7\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:866:11)\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:861:11)\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:861:11)\n    at run (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:765:3)\n    at runAndTransformResultsToJestFormat (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1993:21)\n    at jestAdapter (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\runner.js:111:19)\n    at runTestInternal (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:276:16)\n    at runTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:344:7)\n    at Object.worker (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:498:12)"
+    ],
+    "duration": 27
+  },
+  {
+    "suite": "workerAuth.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts",
+    "testName": "Worker Authentication API Tests POST /api/workers/registerWorker should successfully register a worker and hash the password",
+    "ancestorTitles": [
+      "Worker Authentication API Tests",
+      "POST /api/workers/registerWorker"
+    ],
+    "title": "should successfully register a worker and hash the password",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts:64:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 88
+  },
+  {
+    "suite": "workerAuth.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts",
+    "testName": "Worker Authentication API Tests POST /api/workers/registerWorker should return 400 validation error if password is too short",
+    "ancestorTitles": [
+      "Worker Authentication API Tests",
+      "POST /api/workers/registerWorker"
+    ],
+    "title": "should return 400 validation error if password is too short",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 400\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts:88:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 26
+  },
+  {
+    "suite": "workerAuth.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts",
+    "testName": "Worker Authentication API Tests POST /api/workers/login should login successfully with correct credentials and return JWT token",
+    "ancestorTitles": [
+      "Worker Authentication API Tests",
+      "POST /api/workers/login"
+    ],
+    "title": "should login successfully with correct credentials and return JWT token",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts:116:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 170
+  },
+  {
+    "suite": "workerAuth.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts",
+    "testName": "Worker Authentication API Tests POST /api/workers/login should return 401 for incorrect password",
+    "ancestorTitles": [
+      "Worker Authentication API Tests",
+      "POST /api/workers/login"
+    ],
+    "title": "should return 401 for incorrect password",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts:151:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 148
+  },
+  {
+    "suite": "workerAuth.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts",
+    "testName": "Worker Authentication API Tests POST /api/workers/login should return 401 for non-existent worker",
+    "ancestorTitles": [
+      "Worker Authentication API Tests",
+      "POST /api/workers/login"
+    ],
+    "title": "should return 401 for non-existent worker",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\workerAuth.test.ts:166:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 12
+  },
+  {
+    "suite": "paymentAbuseControls.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentAbuseControls.test.ts",
+    "testName": "Issue 72 - Payment Abuse Controls enforces rate limits on payment order creation (10 requests per window)",
+    "ancestorTitles": [
+      "Issue 72 - Payment Abuse Controls"
+    ],
+    "title": "enforces rate limits on payment order creation (10 requests per window)",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toContain(expected) // indexOf\n\nExpected value: 503\nReceived array: [200, 201]\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentAbuseControls.test.ts:149:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 387
+  },
+  {
+    "suite": "paymentAbuseControls.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentAbuseControls.test.ts",
+    "testName": "Issue 72 - Payment Abuse Controls enforces rate limits on payment refund requests (5 requests per window)",
+    "ancestorTitles": [
+      "Issue 72 - Payment Abuse Controls"
+    ],
+    "title": "enforces rate limits on payment refund requests (5 requests per window)",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 429\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\paymentAbuseControls.test.ts:192:33)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 972
+  },
+  {
+    "suite": "routeRateLimiting.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.test.ts",
+    "testName": "Issue 42 - Route-Specific Multi-Dimensional Rate Limiting Rate Limit Invariants & Threshold Enforcement allows requests below threshold and blocks requests exceeding limit with 429",
+    "ancestorTitles": [
+      "Issue 42 - Route-Specific Multi-Dimensional Rate Limiting",
+      "Rate Limit Invariants & Threshold Enforcement"
+    ],
+    "title": "allows requests below threshold and blocks requests exceeding limit with 429",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(jest.fn()).toHaveBeenCalledTimes(expected)\n\nExpected number of calls: 3\nReceived number of calls: 4\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.test.ts:64:20)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 7
+  },
+  {
+    "suite": "routeRateLimiting.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.test.ts",
+    "testName": "Issue 42 - Route-Specific Multi-Dimensional Rate Limiting Rate Limit Invariants & Threshold Enforcement isolates rate limit buckets between different users / workers",
+    "ancestorTitles": [
+      "Issue 42 - Route-Specific Multi-Dimensional Rate Limiting",
+      "Rate Limit Invariants & Threshold Enforcement"
+    ],
+    "title": "isolates rate limit buckets between different users / workers",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(jest.fn()).toHaveBeenCalledTimes(expected)\n\nExpected number of calls: 2\nReceived number of calls: 3\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.test.ts:99:20)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 3
+  },
+  {
+    "suite": "routeRateLimiting.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.test.ts",
+    "testName": "Issue 42 - Route-Specific Multi-Dimensional Rate Limiting Multi-Dimensional Keys supports custom keyGenerator for compound dimensions (phone + IP)",
+    "ancestorTitles": [
+      "Issue 42 - Route-Specific Multi-Dimensional Rate Limiting",
+      "Multi-Dimensional Keys"
+    ],
+    "title": "supports custom keyGenerator for compound dimensions (phone + IP)",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(jest.fn()).toHaveBeenCalledTimes(expected)\n\nExpected number of calls: 2\nReceived number of calls: 3\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\routeRateLimiting.test.ts:135:20)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 4
+  },
+  {
+    "suite": "api.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts",
+    "testName": "API Integration Tests POST /api/auth/send-otp should return 200 for valid input and dispatch OTP via provider",
+    "ancestorTitles": [
+      "API Integration Tests",
+      "POST /api/auth/send-otp"
+    ],
+    "title": "should return 200 for valid input and dispatch OTP via provider",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts:85:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 33
+  },
+  {
+    "suite": "api.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts",
+    "testName": "API Integration Tests POST /api/auth/send-otp should return 400 for invalid phone number",
+    "ancestorTitles": [
+      "API Integration Tests",
+      "POST /api/auth/send-otp"
+    ],
+    "title": "should return 400 for invalid phone number",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 400\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts:99:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 16
+  },
+  {
+    "suite": "api.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts",
+    "testName": "API Integration Tests POST /api/auth/verify-otp should verify legitimate cryptographically generated OTP and return JWT for existing customer",
+    "ancestorTitles": [
+      "API Integration Tests",
+      "POST /api/auth/verify-otp"
+    ],
+    "title": "should verify legitimate cryptographically generated OTP and return JWT for existing customer",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts:128:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 169
+  },
+  {
+    "suite": "api.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts",
+    "testName": "API Integration Tests POST /api/auth/verify-otp should return 401 for incorrect OTP",
+    "ancestorTitles": [
+      "API Integration Tests",
+      "POST /api/auth/verify-otp"
+    ],
+    "title": "should return 401 for incorrect OTP",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts:156:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 178
+  },
+  {
+    "suite": "api.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts",
+    "testName": "API Integration Tests POST /api/auth/verify-otp should reject hard-coded '123456' when it does not match issued OTP challenge",
+    "ancestorTitles": [
+      "API Integration Tests",
+      "POST /api/auth/verify-otp"
+    ],
+    "title": "should reject hard-coded '123456' when it does not match issued OTP challenge",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\api.test.ts:182:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 220
+  },
+  {
+    "suite": "p5Issues26_30Comprehensive.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues26_30Comprehensive.test.ts",
+    "testName": "LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Suite Issue 27: Observability Architecture & Alert Telemetry Parity 27.1: Telemetry parity: Every alert rule in alerts.yml maps to an active producer in metrics.service",
+    "ancestorTitles": [
+      "LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Suite",
+      "Issue 27: Observability Architecture & Alert Telemetry Parity"
+    ],
+    "title": "27.1: Telemetry parity: Every alert rule in alerts.yml maps to an active producer in metrics.service",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toHaveLength(expected)\n\nExpected length: 9\nReceived length: 10\nReceived array:  [{\"alert\": \"Elevated5xxRate\", \"annotations\": {\"description\": \"Over 5% of HTTP requests returned 5xx status codes in the last 5 minutes.\", \"runbook_url\": \"docs/runbooks/elevated-5xx.md\", \"summary\": \"Elevated HTTP 5xx error rate on LabourBaba API\"}, \"expr\": \"(sum(rate(http_requests_total{status=~\\\"5..\\\"}[5m])) / sum(rate(http_requests_total[5m]))) * 100 > 5\", \"for\": \"2m\", \"labels\": {\"category\": \"availability\", \"severity\": \"critical\"}}, {\"alert\": \"DatabaseUnavailable\", \"annotations\": {\"description\": \"Health readiness probe cannot execute database heartbeat query.\", \"runbook_url\": \"docs/runbooks/database-failure.md\", \"summary\": \"PostgreSQL Database is unreachable\"}, \"expr\": \"health_ready_database_status == 0\", \"for\": \"1m\", \"labels\": {\"category\": \"infrastructure\", \"severity\": \"critical\"}}, {\"alert\": \"RedisUnavailable\", \"annotations\": {\"description\": \"Health readiness probe cannot ping Redis instance.\", \"runbook_url\": \"docs/runbooks/redis-failure.md\", \"summary\": \"Redis Cache / Queue data store is unreachable\"}, \"expr\": \"health_ready_redis_status == 0\", \"for\": \"1m\", \"labels\": {\"category\": \"infrastructure\", \"severity\": \"critical\"}}, {\"alert\": \"QueueLagHigh\", \"annotations\": {\"description\": \"More than 100 jobs are waiting in queue for over 5 minutes.\", \"runbook_url\": \"docs/runbooks/queue-lag.md\", \"summary\": \"BullMQ queue backlog is growing\"}, \"expr\": \"bullmq_waiting_jobs_total > 100\", \"for\": \"5m\", \"labels\": {\"category\": \"background_workers\", \"severity\": \"warning\"}}, {\"alert\": \"DispatchFailureRateHigh\", \"annotations\": {\"description\": \"Dispatch failure rate exceeds 10% over a 5-minute evaluation window.\", \"runbook_url\": \"docs/runbooks/dispatch-failure.md\", \"summary\": \"High Dispatch Failure Rate\"}, \"expr\": \"(sum(rate(dispatch_failure_total[5m])) / (sum(rate(dispatch_attempts_total[5m])) + 0.001)) * 100 > 10\", \"for\": \"5m\", \"labels\": {\"category\": \"marketplace\", \"severity\": \"critical\"}}, {\"alert\": \"StaleLocationSupplyHigh\", \"annotations\": {\"description\": \"Dispatch candidate selection is rejecting significant worker supply due to stale coordinates (>15m old).\", \"runbook_url\": \"docs/runbooks/stale-location.md\", \"summary\": \"High number of workers excluded due to stale GPS location\"}, \"expr\": \"location_exclusions_total{reason=\\\"stale_location\\\"} > 50\", \"for\": \"10m\", \"labels\": {\"category\": \"marketplace\", \"severity\": \"warning\"}}, {\"alert\": \"NotificationFailureRateHigh\", \"annotations\": {\"description\": \"More than 5% of FCM push notifications failed in the last 5 minutes.\", \"runbook_url\": \"docs/runbooks/notification-failure.md\", \"summary\": \"High Push Notification / FCM failure rate\"}, \"expr\": \"(sum(rate(notification_failure_total[5m])) / (sum(rate(notification_attempts_total[5m])) + 0.001)) * 100 > 5\", \"for\": \"5m\", \"labels\": {\"category\": \"notifications\", \"severity\": \"warning\"}}, {\"alert\": \"AbnormalOtpAttempts\", \"annotations\": {\"description\": \"Detected more than 20 failed OTP attempts per minute, potential brute force or abuse pattern.\", \"runbook_url\": \"docs/runbooks/abnormal-otp.md\", \"summary\": \"Spike in failed OTP verification attempts\"}, \"expr\": \"sum(rate(otp_verifications_total{status=\\\"failed\\\"}[5m])) > 20\", \"for\": \"2m\", \"labels\": {\"category\": \"security\", \"severity\": \"warning\"}}, {\"alert\": \"BackupFailure\", \"annotations\": {\"description\": \"Last verified database backup is older than 24 hours. RPO target at risk.\", \"runbook_url\": \"docs/runbooks/backup-failure.md\", \"summary\": \"Automated database backup has not succeeded in over 24 hours\"}, \"expr\": \"(time() - backup_last_successful_timestamp_seconds) > 86400\", \"for\": \"1h\", \"labels\": {\"category\": \"reliability\", \"severity\": \"critical\"}}, {\"alert\": \"DatabasePoolSaturation\", \"annotations\": {\"description\": \"Clients are queuing waiting for an available database connection. Connection pool capacity is saturated.\", \"runbook_url\": \"docs/runbooks/database-saturation.md\", \"summary\": \"PostgreSQL connection pool exhausted\"}, \"expr\": \"database_pool_waiting_clients > 0\", \"for\": \"1m\", \"labels\": {\"category\": \"database\", \"severity\": \"critical\"}}]\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues26_30Comprehensive.test.ts:266:26)\n    at Promise.finally.completed (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1501:10)\n    at _callCircusTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1011:40)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at _runTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:951:3)\n    at E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:853:7\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:866:11)\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:861:11)\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:861:11)\n    at run (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:765:3)\n    at runAndTransformResultsToJestFormat (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1993:21)\n    at jestAdapter (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\runner.js:111:19)\n    at runTestInternal (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:276:16)\n    at runTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:344:7)\n    at Object.worker (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:498:12)"
+    ],
+    "duration": 49
+  },
+  {
+    "suite": "p5Issues26_30Comprehensive.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues26_30Comprehensive.test.ts",
+    "testName": "LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Suite Issue 29: Disaster Recovery, Backup Verification & Isolated Restore Drill 29.2: Cryptographic integrity fails closed upon tampered backup content",
+    "ancestorTitles": [
+      "LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Suite",
+      "Issue 29: Disaster Recovery, Backup Verification & Isolated Restore Drill"
+    ],
+    "title": "29.2: Cryptographic integrity fails closed upon tampered backup content",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).rejects.toThrow(expected)\n\nExpected substring: \"Checksum mismatch\"\nReceived message:   \"[RESTORE_SECURITY_VIOLATION] Target database matches primary application DATABASE_URL (postgresql://***:***@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true). Disaster recovery restore MUST target an isolated disposable database, NEVER the active application database!\"\n\n    \u001b[0m \u001b[90m 105 |\u001b[39m\n     \u001b[90m 106 |\u001b[39m     \u001b[36mif\u001b[39m (primaryDbUrl \u001b[33m&&\u001b[39m trimmedUrl \u001b[33m===\u001b[39m primaryDbUrl) {\n    \u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 107 |\u001b[39m       \u001b[36mthrow\u001b[39m \u001b[36mnew\u001b[39m \u001b[33mError\u001b[39m(\n     \u001b[90m     |\u001b[39m             \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n     \u001b[90m 108 |\u001b[39m         \u001b[32m`[RESTORE_SECURITY_VIOLATION] Target database matches primary application DATABASE_URL (${redacted}). `\u001b[39m \u001b[33m+\u001b[39m\n     \u001b[90m 109 |\u001b[39m         \u001b[32m\"Disaster recovery restore MUST target an isolated disposable database, NEVER the active application database!\"\u001b[39m\n     \u001b[90m 110 |\u001b[39m       )\u001b[33m;\u001b[39m\u001b[0m\n\n      at assertSafeRestoreTarget (src/utils/databaseSafety.ts:107:13)\n      at restoreAndVerifyDatabase (scripts/restore-db.ts:37:41)\n      at Object.<anonymous> (tests/p5Issues26_30Comprehensive.test.ts:482:33)\n    at Object.toThrow (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\expect\\build\\index.js:2155:20)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues26_30Comprehensive.test.ts:487:17)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 5941
+  },
+  {
+    "suite": "p5Issues26_30Comprehensive.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues26_30Comprehensive.test.ts",
+    "testName": "LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Suite Issue 29: Disaster Recovery, Backup Verification & Isolated Restore Drill 29.3: Isolated restore drill validates PostGIS extension, schema tables, and RTO < 15 minutes",
+    "ancestorTitles": [
+      "LabourBaba Backend — P5 Issues 26–30 Comprehensive Verification Suite",
+      "Issue 29: Disaster Recovery, Backup Verification & Isolated Restore Drill"
+    ],
+    "title": "29.3: Isolated restore drill validates PostGIS extension, schema tables, and RTO < 15 minutes",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [RESTORE_SECURITY_VIOLATION] Target database matches primary application DATABASE_URL (postgresql://***:***@aws-1-ap-south-1.pooler.supabase.com:6543/postgres?pgbouncer=true). Disaster recovery restore MUST target an isolated disposable database, NEVER the active application database!\n    at assertSafeRestoreTarget (E:\\LabourBaba\\LabourBaba-backend\\src\\utils\\databaseSafety.ts:107:13)\n    at restoreAndVerifyDatabase (E:\\LabourBaba\\LabourBaba-backend\\scripts\\restore-db.ts:37:41)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\p5Issues26_30Comprehensive.test.ts:493:53)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 8190
+  },
+  {
+    "suite": "supplyChainSecurityP4.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\supplyChainSecurityP4.test.ts",
+    "testName": "P4 Issue 21: Supply-Chain & Container Security Gate Full security audit generates reports/security-audit-report.json with PASS status",
+    "ancestorTitles": [
+      "P4 Issue 21: Supply-Chain & Container Security Gate"
+    ],
+    "title": "Full security audit generates reports/security-audit-report.json with PASS status",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\supplyChainSecurityP4.test.ts:111:25)\n    at Promise.finally.completed (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1561:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1501:10)\n    at _callCircusTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1011:40)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at _runTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:951:3)\n    at E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:853:7\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:866:11)\n    at _runTestsForDescribeBlock (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:861:11)\n    at run (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:765:3)\n    at runAndTransformResultsToJestFormat (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:1993:21)\n    at jestAdapter (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\runner.js:111:19)\n    at runTestInternal (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:276:16)\n    at runTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:344:7)\n    at Object.worker (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:498:12)"
+    ],
+    "duration": 5638
+  },
+  {
+    "suite": "durableNotificationOutbox.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\durableNotificationOutbox.test.ts",
+    "testName": "Issue 44 - Durable Notification Outbox Outbox Lifecycle State Machine & Retries claims pending events and transitions status to PROCESSING",
+    "ancestorTitles": [
+      "Issue 44 - Durable Notification Outbox",
+      "Outbox Lifecycle State Machine & Retries"
+    ],
+    "title": "claims pending events and transitions status to PROCESSING",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\durableNotificationOutbox.test.ts:104:33)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 245
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated MUST reject '123456' when no OTP request was issued (zero prior challenge)",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated"
+    ],
+    "title": "MUST reject '123456' when no OTP request was issued (zero prior challenge)",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:187:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 33
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated MUST reject other static patterns ('000000', '111111', '999999')",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated"
+    ],
+    "title": "MUST reject other static patterns ('000000', '111111', '999999')",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:200:28)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 5
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated MUST reject '123456' even after a genuine OTP is requested, if the generated OTP is different",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 1: Hard-Coded OTP Authentication Bypass is Eliminated"
+    ],
+    "title": "MUST reject '123456' even after a genuine OTP is requested, if the generated OTP is different",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:209:30)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 4
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 2: Cryptographically Secure OTP Generation & Verification MUST generate a 6-digit uniform numeric code and authenticate successfully",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 2: Cryptographically Secure OTP Generation & Verification"
+    ],
+    "title": "MUST generate a 6-digit uniform numeric code and authenticate successfully",
+    "status": "failed",
+    "failureMessages": [
+      "TypeError: expect(received).toMatch(expected)\n\nMatcher error: received value must be a string\n\nReceived has value: undefined\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:236:29)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 4
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 3: Single-Use Semantics (Replay Protection) MUST allow first verification and REJECT subsequent replay of the same OTP",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 3: Single-Use Semantics (Replay Protection)"
+    ],
+    "title": "MUST allow first verification and REJECT subsequent replay of the same OTP",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:268:31)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 9
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 4: Attempt Bounds and Brute-Force Locking MUST lock challenge after maximum failed attempts (5) and reject subsequent valid OTP",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 4: Attempt Bounds and Brute-Force Locking"
+    ],
+    "title": "MUST lock challenge after maximum failed attempts (5) and reject subsequent valid OTP",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:297:28)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 9
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 5: Expiration / TTL Enforcement MUST reject verification if OTP challenge has expired",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 5: Expiration / TTL Enforcement"
+    ],
+    "title": "MUST reject verification if OTP challenge has expired",
+    "status": "failed",
+    "failureMessages": [
+      "TypeError: Cannot set properties of undefined (setting 'expires_at')\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:331:35)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 4
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 6: Resend Cooldown and Challenge Invalidation MUST reject consecutive resend within 60s cooldown window",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 6: Resend Cooldown and Challenge Invalidation"
+    ],
+    "title": "MUST reject consecutive resend within 60s cooldown window",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:351:28)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 4
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 6: Resend Cooldown and Challenge Invalidation MUST invalidate earlier OTP when a new OTP is requested after cooldown",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 6: Resend Cooldown and Challenge Invalidation"
+    ],
+    "title": "MUST invalidate earlier OTP when a new OTP is requested after cooldown",
+    "status": "failed",
+    "failureMessages": [
+      "TypeError: Cannot set properties of undefined (setting 'created_at')\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:368:35)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 3
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 7: Purpose / Context Isolation MUST reject an OTP requested for 'register' when verified for 'login'",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 7: Purpose / Context Isolation"
+    ],
+    "title": "MUST reject an OTP requested for 'register' when verified for 'login'",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 401\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:408:37)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 7
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 8: Concurrency Safety (N simultaneous verification requests) MUST allow exactly ONE request to consume the OTP and reject all other concurrent callers",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 8: Concurrency Safety (N simultaneous verification requests)"
+    ],
+    "title": "MUST allow exactly ONE request to consume the OTP and reject all other concurrent callers",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:443:32)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 19
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 8: Concurrency Safety (N simultaneous verification requests) MUST enforce cooldown atomically under concurrent resend attempts (0 SMS duplication)",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 8: Concurrency Safety (N simultaneous verification requests)"
+    ],
+    "title": "MUST enforce cooldown atomically under concurrent resend attempts (0 SMS duplication)",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 1\nReceived: 0\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:468:32)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 13
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 9: SMS Delivery Failure Handling MUST invalidate challenge and return error if SMS provider fails to deliver",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 9: SMS Delivery Failure Handling"
+    ],
+    "title": "MUST invalidate challenge and return error if SMS provider fails to deliver",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 502\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:487:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 4
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 10: Input Validation & Information Leakage Defense MUST reject non-numeric OTP before expensive database lookup",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 10: Input Validation & Information Leakage Defense"
+    ],
+    "title": "MUST reject non-numeric OTP before expensive database lookup",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 400\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:509:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 3
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 10: Input Validation & Information Leakage Defense MUST reject OTP with invalid length (5 or 7 digits)",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 10: Input Validation & Information Leakage Defense"
+    ],
+    "title": "MUST reject OTP with invalid length (5 or 7 digits)",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 400\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:517:31)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 5
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 10: Input Validation & Information Leakage Defense MUST NOT return plaintext OTP in API response for send-otp",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 10: Input Validation & Information Leakage Defense"
+    ],
+    "title": "MUST NOT return plaintext OTP in API response for send-otp",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:530:26)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 4
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 11: Multi-Dimension Rate Limiting (IP, Phone, Device) & Key Privacy MUST enforce device-level rate limit when device_id is supplied in body",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 11: Multi-Dimension Rate Limiting (IP, Phone, Device) & Key Privacy"
+    ],
+    "title": "MUST enforce device-level rate limit when device_id is supplied in body",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:552:28)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 4
+  },
+  {
+    "suite": "otpSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts",
+    "testName": "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants Invariant 11: Multi-Dimension Rate Limiting (IP, Phone, Device) & Key Privacy MUST enforce device-level rate limit when x-device-id header is provided",
+    "ancestorTitles": [
+      "P0 Security Regression Tests — Issue #3 & #13: OTP Abuse Controls & Security Invariants",
+      "Invariant 11: Multi-Dimension Rate Limiting (IP, Phone, Device) & Key Privacy"
+    ],
+    "title": "MUST enforce device-level rate limit when x-device-id header is provided",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 200\nReceived: 503\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\otpSecurity.test.ts:573:28)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 5
+  },
+  {
+    "suite": "customerNotificationDeliverySemantics.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\customerNotificationDeliverySemantics.test.ts",
+    "testName": "P6 Issue 5 — Customer Notification Delivery Semantics Suite TEST 10 — Crash Recovery: stale PROCESSING outbox events are safely recovered back to PENDING",
+    "ancestorTitles": [
+      "P6 Issue 5 — Customer Notification Delivery Semantics Suite"
+    ],
+    "title": "TEST 10 — Crash Recovery: stale PROCESSING outbox events are safely recovered back to PENDING",
+    "status": "failed",
+    "failureMessages": [
+      "Error: expect(received).toBeGreaterThanOrEqual(expected)\n\nExpected: >= 1\nReceived:    0\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\customerNotificationDeliverySemantics.test.ts:529:28)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)"
+    ],
+    "duration": 162
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section A: Firebase Initialization & Credential Security prohibits registering mock FCM provider in production environment",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section A: Firebase Initialization & Credential Security"
+    ],
+    "title": "prohibits registering mock FCM provider in production environment",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 2
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section A: Firebase Initialization & Credential Security fails fast in production if Firebase Admin SDK credentials are missing",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section A: Firebase Initialization & Credential Security"
+    ],
+    "title": "fails fast in production if Firebase Admin SDK credentials are missing",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section A: Firebase Initialization & Credential Security safely initializes Firebase Admin SDK from dynamically generated PKCS8 RSA credentials",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section A: Firebase Initialization & Credential Security"
+    ],
+    "title": "safely initializes Firebase Admin SDK from dynamically generated PKCS8 RSA credentials",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section A: Firebase Initialization & Credential Security safely normalizes literal newline escapes in private keys from CI/CD secrets",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section A: Firebase Initialization & Credential Security"
+    ],
+    "title": "safely normalizes literal newline escapes in private keys from CI/CD secrets",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section A: Firebase Initialization & Credential Security strictly computes safe SHA-256 token fingerprints without leaking raw registration tokens",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section A: Firebase Initialization & Credential Security"
+    ],
+    "title": "strictly computes safe SHA-256 token fingerprints without leaking raw registration tokens",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section B: Error Classification & Token Revocation classifies registration-token-not-registered as permanent UNREGISTERED_DEVICE",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section B: Error Classification & Token Revocation"
+    ],
+    "title": "classifies registration-token-not-registered as permanent UNREGISTERED_DEVICE",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section B: Error Classification & Token Revocation classifies invalid-registration-token as permanent INVALID_REGISTRATION_TOKEN",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section B: Error Classification & Token Revocation"
+    ],
+    "title": "classifies invalid-registration-token as permanent INVALID_REGISTRATION_TOKEN",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section B: Error Classification & Token Revocation classifies server-unavailable and timeout as retryable TRANSIENT_FAILURE",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section B: Error Classification & Token Revocation"
+    ],
+    "title": "classifies server-unavailable and timeout as retryable TRANSIENT_FAILURE",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section B: Error Classification & Token Revocation classifies quota-exceeded and 429 as retryable RATE_LIMITED",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section B: Error Classification & Token Revocation"
+    ],
+    "title": "classifies quota-exceeded and 429 as retryable RATE_LIMITED",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section C: Token Rotation & Push Identity Discipline maintains stable device identity across token rotation without duplicate rows",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section C: Token Rotation & Push Identity Discipline"
+    ],
+    "title": "maintains stable device identity across token rotation without duplicate rows",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section C: Token Rotation & Push Identity Discipline idempotently auto-revokes invalid token upon FCM permanent rejection",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section C: Token Rotation & Push Identity Discipline"
+    ],
+    "title": "idempotently auto-revokes invalid token upon FCM permanent rejection",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section D: Durable Outbox Pipeline & Failure Semantics schedules exponential backoff on transient FCM failure and preserves PENDING state",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section D: Durable Outbox Pipeline & Failure Semantics"
+    ],
+    "title": "schedules exponential backoff on transient FCM failure and preserves PENDING state",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section D: Durable Outbox Pipeline & Failure Semantics marks terminal FAILED state when all recipient tokens are invalid without retrying",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section D: Durable Outbox Pipeline & Failure Semantics"
+    ],
+    "title": "marks terminal FAILED state when all recipient tokens are invalid without retrying",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section D: Durable Outbox Pipeline & Failure Semantics marks SENT when at least one multi-device push succeeds despite another token failing",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section D: Durable Outbox Pipeline & Failure Semantics"
+    ],
+    "title": "marks SENT when at least one multi-device push succeeds despite another token failing",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section E: Socket.IO + FCM Dual-Delivery Interaction delivers both Socket.IO realtime event and FCM push for connected customer without duplication",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section E: Socket.IO + FCM Dual-Delivery Interaction"
+    ],
+    "title": "delivers both Socket.IO realtime event and FCM push for connected customer without duplication",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)",
+      "Error: websocket error\n    at WS.onError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\engine.io-client\\build\\cjs\\transport.js:48:37)\n    at WebSocket.ws.onerror (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\engine.io-client\\build\\cjs\\transports\\websocket.js:57:39)\n    at callListener (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\ws\\lib\\event-target.js:290:14)\n    at WebSocket.onError (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\ws\\lib\\event-target.js:230:9)\n    at WebSocket.emit (node:events:518:28)\n    at emitErrorAndClose (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\ws\\lib\\websocket.js:1060:13)\n    at ClientRequest.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\ws\\lib\\websocket.js:898:5)\n    at ClientRequest.emit (node:events:518:28)\n    at emitErrorEvent (node:_http_client:104:11)\n    at Socket.socketErrorListener (node:_http_client:518:5)\n    at Socket.emit (node:events:518:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at processTicksAndRejections (node:internal/process/task_queues:90:21)"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section F: Real Firebase Cloud Messaging Provider Verification verifies production environment safeguards against silent mock fallback",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section F: Real Firebase Cloud Messaging Provider Verification"
+    ],
+    "title": "verifies production environment safeguards against silent mock fallback",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "p7Issue03RealFcmDelivery.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\p7Issue03RealFcmDelivery.test.ts",
+    "testName": "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite Section F: Real Firebase Cloud Messaging Provider Verification REAL PROVIDER ENVIRONMENT STATUS: credentials not present in local dev — marked ENVIRONMENT_BLOCKED",
+    "ancestorTitles": [
+      "P7 Issue 03 — Real FCM Delivery, Configuration, & Reliability Suite",
+      "Section F: Real Firebase Cloud Messaging Provider Verification"
+    ],
+    "title": "REAL PROVIDER ENVIRONMENT STATUS: credentials not present in local dev — marked ENVIRONMENT_BLOCKED",
+    "status": "failed",
+    "failureMessages": [
+      "Error: [REDIS_TIMEOUT] Timeout waiting for Redis connection (10000ms)\n    at Timeout.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\src\\config\\redis.ts:200:14)\n    at listOnTimeout (node:internal/timers:588:17)\n    at processTimers (node:internal/timers:523:7)"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 1. Authentication & Token Integrity Anonymous request to GET /api/workers/me/documents is rejected (401)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "1. Authentication & Token Integrity"
+    ],
+    "title": "Anonymous request to GET /api/workers/me/documents is rejected (401)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 1. Authentication & Token Integrity Anonymous request to POST /api/workers/me/documents/upload-url is rejected (401)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "1. Authentication & Token Integrity"
+    ],
+    "title": "Anonymous request to POST /api/workers/me/documents/upload-url is rejected (401)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 1. Authentication & Token Integrity Anonymous request to GET /api/workers/me/documents/:documentId/access is rejected (401)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "1. Authentication & Token Integrity"
+    ],
+    "title": "Anonymous request to GET /api/workers/me/documents/:documentId/access is rejected (401)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 1. Authentication & Token Integrity Request with invalid or expired token is rejected (401)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "1. Authentication & Token Integrity"
+    ],
+    "title": "Request with invalid or expired token is rejected (401)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 2. Worker Document Authorization & IDOR Protection Worker A CAN access their own document signed URL (200, short-lived signed URL)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "2. Worker Document Authorization & IDOR Protection"
+    ],
+    "title": "Worker A CAN access their own document signed URL (200, short-lived signed URL)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 2. Worker Document Authorization & IDOR Protection Worker B CANNOT access Worker A's document (IDOR attempt -> 403)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "2. Worker Document Authorization & IDOR Protection"
+    ],
+    "title": "Worker B CANNOT access Worker A's document (IDOR attempt -> 403)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 2. Worker Document Authorization & IDOR Protection Signed URL expiry CANNOT be manipulated by the client via query parameters",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "2. Worker Document Authorization & IDOR Protection"
+    ],
+    "title": "Signed URL expiry CANNOT be manipulated by the client via query parameters",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 2. Worker Document Authorization & IDOR Protection Non-existent document returns 404",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "2. Worker Document Authorization & IDOR Protection"
+    ],
+    "title": "Non-existent document returns 404",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 2. Worker Document Authorization & IDOR Protection Invalid documentId format is rejected immediately by validation (400)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "2. Worker Document Authorization & IDOR Protection"
+    ],
+    "title": "Invalid documentId format is rejected immediately by validation (400)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 3. Presigned Upload URL & Key Derivation Security Worker A can request pre-signed upload URL scoped to their worker identity",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "3. Presigned Upload URL & Key Derivation Security"
+    ],
+    "title": "Worker A can request pre-signed upload URL scoped to their worker identity",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 3. Presigned Upload URL & Key Derivation Security Document object key never exposes Aadhaar numbers or PII",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "3. Presigned Upload URL & Key Derivation Security"
+    ],
+    "title": "Document object key never exposes Aadhaar numbers or PII",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 3. Presigned Upload URL & Key Derivation Security Worker A CANNOT upload document with mismatched client-controlled worker_id (400)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "3. Presigned Upload URL & Key Derivation Security"
+    ],
+    "title": "Worker A CANNOT upload document with mismatched client-controlled worker_id (400)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 3. Presigned Upload URL & Key Derivation Security Worker A CANNOT attach a private storage key belonging to Worker B (403)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "3. Presigned Upload URL & Key Derivation Security"
+    ],
+    "title": "Worker A CANNOT attach a private storage key belonging to Worker B (403)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 4. Customer Isolation & Zero Document Access Customer CANNOT list worker documents via /api/workers/me/documents (403)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "4. Customer Isolation & Zero Document Access"
+    ],
+    "title": "Customer CANNOT list worker documents via /api/workers/me/documents (403)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 4. Customer Isolation & Zero Document Access Customer CANNOT request upload URL via /api/workers/me/documents/upload-url (403)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "4. Customer Isolation & Zero Document Access"
+    ],
+    "title": "Customer CANNOT request upload URL via /api/workers/me/documents/upload-url (403)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 4. Customer Isolation & Zero Document Access Customer CANNOT access worker document signed URL via /api/workers/me/documents/:docId/access (403)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "4. Customer Isolation & Zero Document Access"
+    ],
+    "title": "Customer CANNOT access worker document signed URL via /api/workers/me/documents/:docId/access (403)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 4. Customer Isolation & Zero Document Access Customer CANNOT access admin worker documents endpoint (403)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "4. Customer Isolation & Zero Document Access"
+    ],
+    "title": "Customer CANNOT access admin worker documents endpoint (403)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 4. Customer Isolation & Zero Document Access Customer CANNOT access admin worker document access endpoint (403)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "4. Customer Isolation & Zero Document Access"
+    ],
+    "title": "Customer CANNOT access admin worker document access endpoint (403)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 5. Admin Access & Durable Audit Logging Admin CAN list document metadata for a worker (200)",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "5. Admin Access & Durable Audit Logging"
+    ],
+    "title": "Admin CAN list document metadata for a worker (200)",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 5. Admin Access & Durable Audit Logging Admin CAN access worker document signed URL and it generates an audit log entry",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "5. Admin Access & Durable Audit Logging"
+    ],
+    "title": "Admin CAN access worker document signed URL and it generates an audit log entry",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 5. Admin Access & Durable Audit Logging Admin access to mismatched worker and document returns 404",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "5. Admin Access & Durable Audit Logging"
+    ],
+    "title": "Admin access to mismatched worker and document returns 404",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 6. DTO Boundaries & Privacy Invariants toWorkerPublicDTO NEVER exposes document URLs, storage keys, or signed URLs",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "6. DTO Boundaries & Privacy Invariants"
+    ],
+    "title": "toWorkerPublicDTO NEVER exposes document URLs, storage keys, or signed URLs",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 6. DTO Boundaries & Privacy Invariants toWorkerSelfDTO NEVER exposes document URLs or storage keys",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "6. DTO Boundaries & Privacy Invariants"
+    ],
+    "title": "toWorkerSelfDTO NEVER exposes document URLs or storage keys",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 1
+  },
+  {
+    "suite": "workerDocumentSecurity.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\workerDocumentSecurity.test.ts",
+    "testName": "Issue #8 — Harden Worker-Document Access 6. DTO Boundaries & Privacy Invariants toWorkerAdminDTO NEVER exposes document storage keys or signed URLs",
+    "ancestorTitles": [
+      "Issue #8 — Harden Worker-Document Access",
+      "6. DTO Boundaries & Privacy Invariants"
+    ],
+    "title": "toWorkerAdminDTO NEVER exposes document storage keys or signed URLs",
+    "status": "failed",
+    "failureMessages": [
+      "Caught error after test environment was torn down\n\nFailed: [Error: websocket error]"
+    ],
+    "duration": 0
+  },
+  {
+    "suite": "bullmqProductionCoverage.test.ts",
+    "suitePath": "E:\\LabourBaba\\LabourBaba-backend\\tests\\bullmqProductionCoverage.test.ts",
+    "testName": "P7 Issue 08 — BullMQ Production Architecture & Reliability Verification TEST 16: BullMQ Queue Metrics -> collectBullMQQueueMetrics collects live queue depths",
+    "ancestorTitles": [
+      "P7 Issue 08 — BullMQ Production Architecture & Reliability Verification"
+    ],
+    "title": "TEST 16: BullMQ Queue Metrics -> collectBullMQQueueMetrics collects live queue depths",
+    "status": "failed",
+    "failureMessages": [
+      "Error: thrown: \"Exceeded timeout of 45000 ms for a test.\nAdd a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.\"\n    at E:\\LabourBaba\\LabourBaba-backend\\tests\\bullmqProductionCoverage.test.ts:714:3\n    at _dispatchDescribe (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:608:26)\n    at describe (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\jestAdapterInit.js:576:44)\n    at Object.<anonymous> (E:\\LabourBaba\\LabourBaba-backend\\tests\\bullmqProductionCoverage.test.ts:44:1)\n    at ModuleExecutor.exec (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runtime\\build\\index.js:2078:26)\n    at CjsLoader.loadModule (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runtime\\build\\index.js:323:36)\n    at CjsLoader.requireModule (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runtime\\build\\index.js:289:12)\n    at Runtime.requireModule (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runtime\\build\\index.js:3657:27)\n    at jestAdapter (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-circus\\build\\runner.js:96:13)\n    at processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at runTestInternal (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:276:16)\n    at runTest (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:344:7)\n    at Object.worker (E:\\LabourBaba\\LabourBaba-backend\\node_modules\\jest-runner\\build\\testWorker.js:498:12)"
+    ],
+    "duration": 45016
+  }
+]

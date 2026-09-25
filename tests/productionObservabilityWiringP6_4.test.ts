@@ -100,6 +100,17 @@ describe('P6 Issue 4 — Production Observability and Metrics End-to-End Wiring'
           last_location_at = NOW();
     `;
 
+    await (prisma as any).worker_device.upsert({
+      where: { worker_id_device_id: { worker_id: testWorkerId, device_id: 'test-device-p6-4' } },
+      update: { fcm_token: 'test-fcm-token-p6-4', revoked_at: null },
+      create: {
+        worker_id: testWorkerId,
+        device_id: 'test-device-p6-4',
+        fcm_token: 'test-fcm-token-p6-4',
+        platform: 'android',
+      },
+    });
+
     // Create test job near the worker (28.6140, 77.2091)
     const job = await prisma.job.create({
       data: {

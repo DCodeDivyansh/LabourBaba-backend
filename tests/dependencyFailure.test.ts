@@ -1,6 +1,7 @@
 import { outboxService } from "../src/services/outboxService";
 import { workerDeviceService } from "../src/features/worker_device/worker_device.service";
 import { createRateLimiter } from "../src/middlewares/rateLimiter";
+import { getRedisClient } from "../src/config/redis";
 import prisma from "../src/config/prisma";
 import { isPermanentInvalidTokenError } from "../src/shared/fcm";
 
@@ -70,6 +71,9 @@ describe("Issue 54 - Dependency Failure & Fault Resilience Tests", () => {
 
   describe("2. Redis Unavailability & Rate Limiter Resilience", () => {
     it("fails closed for security-sensitive rate limiting when Redis is unavailable (status: 'unavailable')", async () => {
+      const redisClient = getRedisClient();
+      const evalSpy = jest.spyOn(redisClient, "eval").mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
       const securityLimiter = createRateLimiter({
         windowSeconds: 60,
         maxLimit: 2,
@@ -99,9 +103,13 @@ describe("Issue 54 - Dependency Failure & Fault Resilience Tests", () => {
           code: "SECURITY_LIMITER_UNAVAILABLE",
         })
       );
+      evalSpy.mockRestore();
     });
 
     it("fails open for generic non-security rate limiting when Redis is unavailable without throwing 500", async () => {
+      const redisClient = getRedisClient();
+      const evalSpy = jest.spyOn(redisClient, "eval").mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
       const genericLimiter = createRateLimiter({
         windowSeconds: 60,
         maxLimit: 2,
@@ -124,6 +132,7 @@ describe("Issue 54 - Dependency Failure & Fault Resilience Tests", () => {
       await genericLimiter(req, res, next);
       expect(next).toHaveBeenCalledTimes(1);
       expect(res.status).not.toHaveBeenCalled();
+      evalSpy.mockRestore();
     });
   });
 
