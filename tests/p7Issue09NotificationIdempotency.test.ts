@@ -601,6 +601,11 @@ describe("P7 Issue 09 — Notification Delivery Idempotency & Channel Replay Pre
   // TEST 8 — Duplicate concurrent workers
   // ==========================================================================
   it("TEST 8 — Duplicate concurrent workers: PostgreSQL CTE SKIP LOCKED guarantees exactly one worker claims each event", async () => {
+    // Ensure clean queue isolation by purging any unhandled PENDING records from earlier tests
+    await (prisma as any).notification_outbox.deleteMany({
+      where: { status: { in: ["PENDING", "PROCESSING"] } },
+    }).catch(() => {});
+
     // Insert 5 pending events
     const eventIds: string[] = [];
     for (let i = 0; i < 5; i++) {

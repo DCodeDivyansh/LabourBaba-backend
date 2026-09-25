@@ -76,7 +76,7 @@ describe("Issue 71 - Payment Notifications Behind Durable Outbox", () => {
   afterAll(async () => {
     _setRazorpayInstanceForTesting(null);
     await prisma.notification_outbox.deleteMany({ where: { aggregate_type: "payment", aggregate_id: paymentId } }).catch(() => {});
-    await prisma.paymentWebhookEvent.deleteMany({ where: { provider: "razorpay", event_id: "evt_outbox_test_001" } }).catch(() => {});
+    await prisma.paymentWebhookEvent.deleteMany({ where: { provider: "razorpay" } }).catch(() => {});
     await prisma.review.deleteMany({ where: { booking_id: bookingId } }).catch(() => {});
     await prisma.payment.deleteMany({ where: { id: paymentId } }).catch(() => {});
     await prisma.booking.deleteMany({ where: { id: bookingId } }).catch(() => {});
@@ -101,7 +101,7 @@ describe("Issue 71 - Payment Notifications Behind Durable Outbox", () => {
     } as any);
 
     await prisma.notification_outbox.deleteMany({ where: { aggregate_type: "payment", aggregate_id: paymentId } }).catch(() => {});
-    await prisma.paymentWebhookEvent.deleteMany({ where: { provider: "razorpay", event_id: "evt_outbox_test_001" } }).catch(() => {});
+    await prisma.paymentWebhookEvent.deleteMany({ where: { provider: "razorpay" } }).catch(() => {});
     await prisma.payment.deleteMany({ where: { id: paymentId } }).catch(() => {});
     await prisma.booking.deleteMany({ where: { id: bookingId } }).catch(() => {});
     await prisma.job_requirement.deleteMany({ where: { id: requirementId } }).catch(() => {});
@@ -152,7 +152,7 @@ describe("Issue 71 - Payment Notifications Behind Durable Outbox", () => {
   }
 
   it("creates durable outbox events atomically when payment is captured", async () => {
-    const paymentEntityId = "pay_outbox_captured_001";
+    const paymentEntityId = `pay_outbox_captured_${Date.now()}`;
     const payload = JSON.stringify({
       event: "payment.captured",
       payload: {
