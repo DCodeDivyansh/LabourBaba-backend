@@ -36,6 +36,13 @@ services:
 
     container_name: redis
 
+    # BullMQ REQUIRES noeviction to prevent silent job loss under memory pressure.
+    # See: https://docs.bullmq.io/guide/connections#notes-about-connection-options
+    command: >
+      redis-server
+      --maxmemory-policy noeviction
+      --save ""
+
     ports:
       - "6379:6379"
 

@@ -25,6 +25,7 @@ import { setSocketServer } from "./socketLifecycle";
 import { workerLocationService } from "../features/worker_location/worker_location.service";
 import { validateCoordinatePair } from "../utils/coordinateValidator";
 import { customerNotificationService } from "../features/customer_notification/customer_notification.service";
+import { ACTIVE_LOCATION_STREAMING_STATUSES } from "../features/booking/bookingStateMachine";
 import { logger } from "../utils/logger";
 
 /**
@@ -229,7 +230,7 @@ export function registerSocketHandlers(io: Server): void {
               worker_id: user.id,
               customer_id: customerId,
               status: {
-                in: ["assigned", "accepted", "in_progress", "arrived", "confirmed", "ACTIVE"],
+                in: Array.from(ACTIVE_LOCATION_STREAMING_STATUSES),
               },
             },
             select: { id: true },

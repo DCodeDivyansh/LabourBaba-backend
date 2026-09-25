@@ -12,6 +12,32 @@ export enum BookingStatus {
   CANCELLED = "CANCELLED",
 }
 
+/**
+ * Canonical statuses that represent an active, non-terminal booking relationship
+ * where the assigned worker is authorized to stream real-time location to the customer.
+ * 
+ * Strict Invariants:
+ * 1. COMPLETED and CANCELLED are terminal and must NEVER be included.
+ * 2. Includes uppercase canonical enum values, lowercase variants, and legacy aliases
+ *    to guarantee complete resilience against raw database case variations.
+ */
+export const ACTIVE_LOCATION_STREAMING_STATUSES: ReadonlySet<string> = new Set([
+  BookingStatus.CONFIRMED,
+  BookingStatus.IN_PROGRESS,
+  BookingStatus.AWAITING_CONFIRMATION,
+  "confirmed",
+  "in_progress",
+  "awaiting_confirmation",
+  "assigned",
+  "ASSIGNED",
+  "accepted",
+  "ACCEPTED",
+  "arrived",
+  "ARRIVED",
+  "ACTIVE",
+  "active",
+]);
+
 export enum BookingAction {
   CREATE = "CREATE",
   START_WORK = "START_WORK",

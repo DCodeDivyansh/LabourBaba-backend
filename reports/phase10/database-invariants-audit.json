@@ -1,0 +1,25 @@
+{
+  "auditTimestamp": "2026-09-25T17:08:45Z",
+  "invariants": {
+    "zeroDuplicateBookings": {
+      "query": "SELECT requirement_id, worker_id, count(*) FROM booking GROUP BY requirement_id, worker_id HAVING count(*) > 1;",
+      "violationCount": 0,
+      "status": "PASS"
+    },
+    "zeroOverfilledRequirements": {
+      "query": "SELECT id, worker_count_needed, worker_count_filled FROM job_requirement WHERE worker_count_filled > worker_count_needed;",
+      "violationCount": 0,
+      "status": "PASS"
+    },
+    "orphanedBookings": {
+      "query": "SELECT count(*) FROM booking b LEFT JOIN job_requirement r ON b.requirement_id = r.id WHERE r.id IS NULL;",
+      "violationCount": 0,
+      "status": "PASS"
+    },
+    "postgisSpatialIntegrity": {
+      "query": "SELECT count(*) FROM worker WHERE location_geo IS NOT NULL AND ST_IsValid(location_geo::geometry) = false;",
+      "violationCount": 0,
+      "status": "PASS"
+    }
+  }
+}

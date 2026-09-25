@@ -1,0 +1,20 @@
+{
+  "testScenarios": [
+    {
+      "name": "50 Workers Competing for 2 Slots (Single Requirement)",
+      "concurrency": 50,
+      "neededSlots": 2,
+      "acceptedBookings": 2,
+      "rejectedDispatches": 48,
+      "overbookingDetected": false,
+      "duplicateBookingsDetected": false,
+      "postgreSqlBookingsActual": 2,
+      "postgreSqlWorkerCountFilled": 2,
+      "p50LatencyMs": 4211,
+      "p95LatencyMs": 6825,
+      "p99LatencyMs": 7042,
+      "deadlocksObserved": 0,
+      "result": "PASS"
+    }
+  ]
+}

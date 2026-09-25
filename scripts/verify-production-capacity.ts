@@ -31,7 +31,7 @@ import autocannon from "autocannon";
 const PG_CONTAINER = "labourbaba-capacity-postgres";
 const REDIS_CONTAINER = "labourbaba-capacity-redis";
 const PG_PORT = 5434;
-const REDIS_PORT = 6381;
+const REDIS_PORT = 6382;
 const APP_PORT = 5001;
 
 const DB_USER = "postgres";

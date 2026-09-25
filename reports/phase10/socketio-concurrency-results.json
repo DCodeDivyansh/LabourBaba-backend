@@ -1,0 +1,13 @@
+{
+  "targetSockets": 500,
+  "connectedSockets": 500,
+  "failedSockets": 0,
+  "connectionSuccessRate": 100.0,
+  "p50HandshakeMs": 817,
+  "p95HandshakeMs": 868,
+  "messagesSent": 1,
+  "messagesReceived": 0,
+  "droppedMessages": 1,
+  "broadcastDeliveryStatus": "FAIL",
+  "broadcastFailureReason": "Status case-sensitivity mismatch in socketHandlers.ts: Prisma booking status defaults to 'CONFIRMED' (uppercase) while socket handler checks array ['assigned', 'accepted', 'in_progress', 'arrived', 'confirmed', 'ACTIVE'] where 'CONFIRMED' is missing."
+}

@@ -1,0 +1,12 @@
+{
+  "scenarios": [
+    {
+      "failure": "Redis Container Pause (2000ms network partition / outage simulation)",
+      "livenessDuringOutage": true,
+      "readinessDuringOutage": false,
+      "recoveryPostUnpause": true,
+      "dataIntegrityPreserved": true,
+      "result": "PASS"
+    }
+  ]
+}

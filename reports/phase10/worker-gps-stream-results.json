@@ -1,0 +1,26 @@
+[
+  {
+    "workerCount": 100,
+    "totalUpdates": 300,
+    "throughputRps": 359,
+    "p95Ms": 270,
+    "errorRate": 0.0,
+    "errors": 0
+  },
+  {
+    "workerCount": 250,
+    "totalUpdates": 750,
+    "throughputRps": 369,
+    "p95Ms": 691,
+    "errorRate": 0.0,
+    "errors": 0
+  },
+  {
+    "workerCount": 500,
+    "totalUpdates": 1500,
+    "throughputRps": 396,
+    "p95Ms": 1222,
+    "errorRate": 1.2,
+    "errors": 18
+  }
+]
