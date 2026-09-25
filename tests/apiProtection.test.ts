@@ -317,6 +317,7 @@ describe("API Protection and JWT Validation Tests", () => {
     it("POST /api/jobs should return 201 when authenticated", async () => {
       const mockJob = { id: "job-uuid", customer_id: MOCK_CUSTOMER_ID, status: "OPEN" };
       (prisma.job.create as jest.Mock).mockResolvedValue(mockJob);
+      (prisma.job.findUnique as jest.Mock).mockResolvedValue(mockJob);
       (prisma.job_requirement.findMany as jest.Mock).mockResolvedValue([]);
       const res = await request(app)
         .post("/api/jobs")

@@ -352,7 +352,7 @@ describe("P0 Security Regression: Sensitive Data & Password Hash Leakage", () =>
 
       const res = await request(app)
         .get("/api/clients")
-        .set("Authorization", `Bearer ${customerToken}`);
+        .set("Authorization", `Bearer ${adminToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -370,7 +370,7 @@ describe("P0 Security Regression: Sensitive Data & Password Hash Leakage", () =>
 
       const res = await request(app)
         .post("/api/clients/add")
-        .set("Authorization", `Bearer ${customerToken}`)
+        .set("Authorization", `Bearer ${adminToken}`)
         .send({
           name: "New Customer",
           phone: "+919876543210",

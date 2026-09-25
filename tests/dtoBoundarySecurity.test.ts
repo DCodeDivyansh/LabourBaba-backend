@@ -241,7 +241,7 @@ describe("HTTP DTO Boundary Security & Data Exposure Tests (Issue #4)", () => {
 
       const res = await request(app)
         .get("/api/clients")
-        .set("Authorization", `Bearer ${customerToken}`);
+        .set("Authorization", `Bearer ${adminToken}`);
 
       expect(res.status).toBe(200);
       assertNoForbiddenFields(res.body);

@@ -162,7 +162,19 @@ describe("Issue #2 Remediation — Client-Controlled customer_id Removal from Jo
     (prisma.job_requirement.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.job.create as jest.Mock).mockResolvedValue({ id: JOB_ID_A, customer_id: CUSTOMER_A_ID });
     (prisma.job.findMany as jest.Mock).mockResolvedValue([]);
-    (prisma.job.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.job.findUnique as jest.Mock).mockImplementation(async (args?: any) => {
+      const id = args?.where?.id;
+      if (id === JOB_ID_A || id === "mock-id") {
+        return {
+          id: id,
+          customer_id: CUSTOMER_A_ID,
+          status: "OPEN",
+          dispatch_status: "PENDING",
+          job_requirement: [],
+        };
+      }
+      return null;
+    });
     (prisma.job.update as jest.Mock).mockResolvedValue({});
     (prisma.job_requirement.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
     (prisma.job_dispatch.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
