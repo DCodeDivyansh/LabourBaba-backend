@@ -6,6 +6,7 @@ import {
   logout,
   listSessions,
   revokeSession,
+  revokeAllSessions,
 } from "./auth.controller";
 import { validateBody } from "../../middlewares/validationMiddleware";
 import { otpRequestRateLimiter, otpVerifyRateLimiter } from "../../middlewares/otpRateLimiter";
@@ -210,6 +211,9 @@ router.post("/logout", authenticateJWT, validateBody(LogoutReqSchema), logout);
 
 // Session management — requires authentication
 router.get("/sessions", authenticateJWT, listSessions);
+// DELETE /sessions/:sessionId — revoke one specific session
 router.delete("/sessions/:sessionId", authenticateJWT, revokeSession);
+// DELETE /sessions — revoke ALL active sessions for the caller (D-006)
+router.delete("/sessions", authenticateJWT, revokeAllSessions);
 
 export default router;

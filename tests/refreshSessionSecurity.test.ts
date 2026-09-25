@@ -540,6 +540,37 @@ describe("P2 Security Suite — Issue #10: Server-Side Refresh Sessions", () => 
       const storedB = sessionStore.find((s) => s.id === sessionB.sessionId)!;
       expect(storedB.status).toBe(SESSION_STATUS.ACTIVE); // Still active!
     });
+
+    it("DELETE /api/auth/sessions MUST revoke ALL active sessions for the calling user (D-006)", async () => {
+      const s1 = await sessionService.createSession({ userId: TEST_USER_ID, userRole: TEST_USER_ROLE, deviceId: "d1" });
+      const s2 = await sessionService.createSession({ userId: TEST_USER_ID, userRole: TEST_USER_ROLE, deviceId: "d2" });
+      const sOther = await sessionService.createSession({ userId: OTHER_USER_ID, userRole: TEST_USER_ROLE, deviceId: "d3" });
+
+      const accessToken = signAccessToken({ id: TEST_USER_ID, role: TEST_USER_ROLE });
+
+      const res = await request(app)
+        .delete("/api/auth/sessions")
+        .set("Authorization", `Bearer ${accessToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.revokedCount).toBe(2);
+
+      const stored1 = sessionStore.find((s) => s.id === s1.sessionId)!;
+      const stored2 = sessionStore.find((s) => s.id === s2.sessionId)!;
+      const storedOther = sessionStore.find((s) => s.id === sOther.sessionId)!;
+
+      expect(stored1.status).toBe(SESSION_STATUS.REVOKED);
+      expect(stored2.status).toBe(SESSION_STATUS.REVOKED);
+      expect(storedOther.status).toBe(SESSION_STATUS.ACTIVE);
+    });
+
+    it("DELETE /api/auth/sessions MUST reject unauthenticated requests with 401", async () => {
+      const res = await request(app)
+        .delete("/api/auth/sessions");
+
+      expect(res.status).toBe(401);
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -685,24 +716,49 @@ describe("P2 Security Suite — Issue #10: Server-Side Refresh Sessions", () => 
   // 11. CONCURRENT ROTATION RACE CONDITION SIMULATION
   // ─────────────────────────────────────────────────────────────────────────────
   describe("11. Concurrency Safety Gate", () => {
-    it("MUST detect mid-air race condition where atomic updateMany returns count 0, revoking the family", async () => {
+    it("MUST return CONCURRENT_REFRESH_CONFLICT (not revoke family) when updateMany returns 0 in a concurrent race", async () => {
+      // Case A: two legitimate requests racing on the SAME still-active token.
+      // The atomic UPDATE WHERE status=ACTIVE returns 0 for the loser.
+      // Expected: CONCURRENT_REFRESH_CONFLICT — family is preserved so the winner's
+      // successor remains usable. Family revocation would wrongly kick out the winner.
       const session = await sessionService.createSession({
         userId: TEST_USER_ID,
         userRole: TEST_USER_ROLE,
       });
 
-      // Simulate a race condition where DB updateMany returns 0 (another worker updated it first)
+      // Simulate the loser side of a concurrent race
       const origUpdateMany = prisma.refresh_session.updateMany;
       (prisma.refresh_session.updateMany as jest.Mock).mockImplementationOnce(async () => {
         return { count: 0 };
       });
 
       await expect(sessionService.rotateSession(session.rawToken)).rejects.toMatchObject({
-        code: "REFRESH_TOKEN_REUSE",
+        code: "CONCURRENT_REFRESH_CONFLICT",
       });
 
       // Restore
       (prisma.refresh_session.updateMany as jest.Mock).mockImplementation(origUpdateMany);
+    });
+
+    it("MUST return REFRESH_TOKEN_REUSE and revoke the family when a ROTATED token is re-presented", async () => {
+      // Case B: a token that was already successfully rotated is presented again later.
+      // This is the actual token-theft/replay scenario — the entire family must be revoked.
+      const session = await sessionService.createSession({
+        userId: TEST_USER_ID,
+        userRole: TEST_USER_ROLE,
+      });
+
+      // First rotation succeeds — session is now ROTATED
+      await sessionService.rotateSession(session.rawToken);
+
+      // Re-present the original (already-ROTATED) token → REFRESH_TOKEN_REUSE
+      await expect(sessionService.rotateSession(session.rawToken)).rejects.toMatchObject({
+        code: "REFRESH_TOKEN_REUSE",
+      });
+
+      // Verify the entire family was revoked (all sessions now REVOKED)
+      const anyActive = sessionStore.some((s) => s.status === SESSION_STATUS.ACTIVE);
+      expect(anyActive).toBe(false);
     });
   });
 });

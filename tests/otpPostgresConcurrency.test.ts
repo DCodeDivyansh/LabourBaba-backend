@@ -251,4 +251,86 @@ describe("P3 Issue 2 — Canonical OTP Lifecycle & Real PostgreSQL Concurrency",
       expect(finalRecord!.consumed_at).not.toBeNull();
     });
   });
+
+  // ─── D-004: N=50 and N=100 Concurrency (T0 Required) ────────────────────────
+
+  describe("6. Real PostgreSQL Concurrency: 50 Simultaneous Verifications", () => {
+    it("MUST guarantee exactly one successful verification when 50 requests verify concurrently", async () => {
+      await prisma.otp_challenge.updateMany({
+        where: { phone: testPhone, status: OTP_STATUS.ACTIVE },
+        data: { status: OTP_STATUS.EXPIRED },
+      });
+
+      const validCode = "556677";
+      const validHash = await bcrypt.hash(validCode, 10);
+      const challenge = await prisma.otp_challenge.create({
+        data: {
+          phone: testPhone,
+          purpose: "login",
+          otp_hash: validHash,
+          status: OTP_STATUS.ACTIVE,
+          expires_at: new Date(Date.now() + 600000),
+          attempt_count: 0,
+        },
+      });
+
+      const CONCURRENCY = 50;
+      const results = await Promise.allSettled(
+        Array.from({ length: CONCURRENCY }, () => authService.verifyOtp(testPhone, validCode, "login"))
+      );
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      expect(fulfilled.length).toBe(1);
+      expect(rejected.length).toBe(CONCURRENCY - 1);
+      for (const rej of rejected) {
+        expect(["OTP_INVALID", "OTP_ALREADY_USED"]).toContain(rej.reason?.code);
+      }
+
+      const finalRecord = await prisma.otp_challenge.findUnique({ where: { id: challenge.id } });
+      expect(finalRecord!.status).toBe(OTP_STATUS.CONSUMED);
+      expect(finalRecord!.consumed_at).not.toBeNull();
+    });
+  });
+
+  describe("7. Real PostgreSQL Concurrency: 100 Simultaneous Verifications", () => {
+    it("MUST guarantee exactly one successful verification when 100 requests verify concurrently", async () => {
+      await prisma.otp_challenge.updateMany({
+        where: { phone: testPhone, status: OTP_STATUS.ACTIVE },
+        data: { status: OTP_STATUS.EXPIRED },
+      });
+
+      const validCode = "112233";
+      const validHash = await bcrypt.hash(validCode, 10);
+      const challenge = await prisma.otp_challenge.create({
+        data: {
+          phone: testPhone,
+          purpose: "login",
+          otp_hash: validHash,
+          status: OTP_STATUS.ACTIVE,
+          expires_at: new Date(Date.now() + 600000),
+          attempt_count: 0,
+        },
+      });
+
+      const CONCURRENCY = 100;
+      const results = await Promise.allSettled(
+        Array.from({ length: CONCURRENCY }, () => authService.verifyOtp(testPhone, validCode, "login"))
+      );
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      expect(fulfilled.length).toBe(1);
+      expect(rejected.length).toBe(CONCURRENCY - 1);
+      for (const rej of rejected) {
+        expect(["OTP_INVALID", "OTP_ALREADY_USED"]).toContain(rej.reason?.code);
+      }
+
+      const finalRecord = await prisma.otp_challenge.findUnique({ where: { id: challenge.id } });
+      expect(finalRecord!.status).toBe(OTP_STATUS.CONSUMED);
+      expect(finalRecord!.consumed_at).not.toBeNull();
+    });
+  });
 });

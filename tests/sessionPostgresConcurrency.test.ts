@@ -242,6 +242,112 @@ describe("P3 Issue 1 — Adversarial & Concurrency Verification (Real PostgreSQL
     });
   });
 
+  // ─── D-004: N=50 and N=100 Refresh Session Concurrency (T0 Required) ───────
+
+  describe("3b. Real PostgreSQL Concurrency: 50 Simultaneous Refresh Requests", () => {
+    it("MUST guarantee exactly one successor session is created at N=50", async () => {
+      const initial = await sessionService.createSession({
+        userId: workerId,
+        userRole: UserRole.WORKER,
+      });
+
+      const CONCURRENCY = 50;
+      const promises: Promise<any>[] = [];
+
+      for (let i = 0; i < CONCURRENCY; i++) {
+        promises.push(sessionService.rotateSession(initial.rawToken));
+      }
+
+      const results = await Promise.allSettled(promises);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      // Invariant 1: Exactly 1 request successfully rotates the active session
+      expect(fulfilled.length).toBe(1);
+
+      // Invariant 2: The remaining 49 requests fail safely
+      expect(rejected.length).toBe(CONCURRENCY - 1);
+
+      for (const rej of rejected) {
+        expect(["REFRESH_TOKEN_REUSE", "CONCURRENT_REFRESH_CONFLICT", "INVALID_REFRESH_TOKEN"]).toContain(rej.reason?.code);
+      }
+
+      // Invariant 3: Check database records in the session family
+      const originalRecord = await prisma.refresh_session.findUnique({
+        where: { id: initial.sessionId },
+      });
+      expect(originalRecord).not.toBeNull();
+
+      const allSessionsInFamily = await prisma.refresh_session.findMany({
+        where: { family_id: originalRecord!.family_id },
+      });
+
+      expect(allSessionsInFamily.length).toBe(2);
+      expect(originalRecord!.status).toBe(SESSION_STATUS.ROTATED);
+
+      // Invariant 4: The winner's valid successor MUST remain ACTIVE and usable
+      const winningSuccessor = allSessionsInFamily.find((s) => s.id === fulfilled[0].value.newSessionId);
+      expect(winningSuccessor).toBeDefined();
+      expect(winningSuccessor!.status).toBe(SESSION_STATUS.ACTIVE);
+
+      const subsequentRotation = await sessionService.rotateSession(fulfilled[0].value.newRawToken);
+      expect(subsequentRotation.newSessionId).toBeDefined();
+    });
+  });
+
+  describe("3c. Real PostgreSQL Concurrency: 100 Simultaneous Refresh Requests", () => {
+    it("MUST guarantee exactly one successor session is created at N=100", async () => {
+      const initial = await sessionService.createSession({
+        userId: customerId,
+        userRole: UserRole.CUSTOMER,
+      });
+
+      const CONCURRENCY = 100;
+      const promises: Promise<any>[] = [];
+
+      for (let i = 0; i < CONCURRENCY; i++) {
+        promises.push(sessionService.rotateSession(initial.rawToken));
+      }
+
+      const results = await Promise.allSettled(promises);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled") as PromiseFulfilledResult<any>[];
+      const rejected = results.filter((r) => r.status === "rejected") as PromiseRejectedResult[];
+
+      // Invariant 1: Exactly 1 request successfully rotates the active session
+      expect(fulfilled.length).toBe(1);
+
+      // Invariant 2: The remaining 99 requests fail safely
+      expect(rejected.length).toBe(CONCURRENCY - 1);
+
+      for (const rej of rejected) {
+        expect(["REFRESH_TOKEN_REUSE", "CONCURRENT_REFRESH_CONFLICT", "INVALID_REFRESH_TOKEN"]).toContain(rej.reason?.code);
+      }
+
+      // Invariant 3: Check database records in the session family
+      const originalRecord = await prisma.refresh_session.findUnique({
+        where: { id: initial.sessionId },
+      });
+      expect(originalRecord).not.toBeNull();
+
+      const allSessionsInFamily = await prisma.refresh_session.findMany({
+        where: { family_id: originalRecord!.family_id },
+      });
+
+      expect(allSessionsInFamily.length).toBe(2);
+      expect(originalRecord!.status).toBe(SESSION_STATUS.ROTATED);
+
+      // Invariant 4: The winner's valid successor MUST remain ACTIVE and usable
+      const winningSuccessor = allSessionsInFamily.find((s) => s.id === fulfilled[0].value.newSessionId);
+      expect(winningSuccessor).toBeDefined();
+      expect(winningSuccessor!.status).toBe(SESSION_STATUS.ACTIVE);
+
+      const subsequentRotation = await sessionService.rotateSession(fulfilled[0].value.newRawToken);
+      expect(subsequentRotation.newSessionId).toBeDefined();
+    });
+  });
+
   describe("4. Reuse Detection & Successor Invalidation", () => {
     it("MUST reject current successor token after old-token reuse is detected", async () => {
       // 1. Login -> T1

@@ -127,6 +127,7 @@ export function getRedisConnectionOptions(): RedisOptions {
 export const redisConnectionOptions = getRedisConnectionOptions();
 
 import { logger } from '../utils/logger';
+import { metricsService } from '../metrics/metrics.service';
 
 let sharedRedisClient: IORedisClient | null = null;
 
@@ -140,7 +141,6 @@ export function getRedisClient(): IORedisClient {
 
     sharedRedisClient.on('error', (err) => {
       try {
-        const { metricsService } = require('../metrics/metrics.service');
         metricsService.setRedisHealth(false);
         metricsService.recordRedisError('client');
       } catch {}
@@ -151,14 +151,12 @@ export function getRedisClient(): IORedisClient {
 
     sharedRedisClient.on('ready', () => {
       try {
-        const { metricsService } = require('../metrics/metrics.service');
         metricsService.setRedisHealth(true);
       } catch {}
     });
 
     sharedRedisClient.on('close', () => {
       try {
-        const { metricsService } = require('../metrics/metrics.service');
         metricsService.setRedisHealth(false);
       } catch {}
     });
@@ -235,5 +233,29 @@ export async function closeRedisConnections(): Promise<void> {
     } finally {
       sharedRedisClient = null;
     }
+  }
+}
+
+/**
+ * TEST-ONLY: resets the shared Redis singleton so the next call to
+ * getRedisClient() creates a fresh IORedis connection.
+ *
+ * This prevents a dead socket from one Jest test suite bleeding into the
+ * next suite and causing fail-closed 503 responses on all auth endpoints.
+ *
+ * MUST NOT be called in production code.
+ */
+export function resetRedisClientForTesting(): void {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('[REDIS] resetRedisClientForTesting() must only be called in test environments.');
+  }
+  if (sharedRedisClient) {
+    try {
+      // Best-effort disconnect — ignore errors, the socket may already be closed
+      sharedRedisClient.disconnect();
+    } catch {
+      // intentionally swallowed
+    }
+    sharedRedisClient = null;
   }
 }

@@ -4,6 +4,7 @@ import { sessionService } from "./session.service";
 import { SendOtpReq, AuthVerifyOtpReq, RefreshTokenReq } from "../../type/api_req.type";
 import { AuthenticatedRequest } from "../../middlewares/authMiddleware";
 import { logger } from "../../utils/logger";
+import { REVOKE_REASON } from "./session.types";
 
 export const sendOtp = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -249,5 +250,37 @@ export const revokeSession = async (req: AuthenticatedRequest, res: Response): P
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: "Failed to revoke session" });
+  }
+};
+/**
+ * DELETE /api/auth/sessions
+ * Revokes ALL active sessions for the authenticated user.
+ *
+ * Security guarantees:
+ *   - User identity derived from authenticated principal (JWT) — never from body/query.
+ *   - Transactional: a single updateMany revokes all ACTIVE/ROTATED sessions atomically.
+ *   - Idempotent: calling when no active sessions exist returns 200 with revokedCount: 0.
+ *   - Produces safe, non-leaking error responses.
+ */
+export const revokeAllSessions = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, message: "Authentication required" });
+      return;
+    }
+
+    const revokedCount = await sessionService.revokeAllUserSessions(userId, REVOKE_REASON.LOGOUT);
+
+    logger.info(`[SESSION] User ${userId} revoked all sessions (count: ${revokedCount})`);
+
+    res.status(200).json({
+      success: true,
+      data: { revokedCount },
+      message: revokedCount > 0 ? `Revoked ${revokedCount} session(s) successfully` : "No active sessions to revoke",
+    });
+  } catch (error: any) {
+    logger.error("[authController] revokeAllSessions error:", { error: error?.message });
+    res.status(500).json({ success: false, message: "Failed to revoke sessions" });
   }
 };
