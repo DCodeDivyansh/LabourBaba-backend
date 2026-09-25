@@ -152,7 +152,13 @@ describe("Issue #17 — Harden Booking OTP Verification", () => {
     let current = { ...initialBooking };
 
     const txMock = {
-      $queryRaw: jest.fn().mockResolvedValue([current]),
+      $queryRaw: jest.fn().mockImplementation((strings: any) => {
+        const sql = Array.isArray(strings) ? strings.join(" ") : String(strings);
+        if (sql.includes('"job"')) {
+          return Promise.resolve([{ id: jobId, status: JobStatus.BOOKED, customer_id: customerId }]);
+        }
+        return Promise.resolve([current]);
+      }),
       booking: {
         findFirst: jest.fn().mockImplementation(() => Promise.resolve(current)),
         findUnique: jest.fn().mockImplementation(() => Promise.resolve(current)),
