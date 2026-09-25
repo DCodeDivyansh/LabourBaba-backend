@@ -1,0 +1,918 @@
+Discovered 183 CHECK constraints and 50 unique/pk constraint columns.
+[
+  {
+    "table_name": "_prisma_migrations",
+    "constraint_name": "18223_25742_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "_prisma_migrations",
+    "constraint_name": "18223_25742_2_not_null",
+    "check_clause": "checksum IS NOT NULL"
+  },
+  {
+    "table_name": "_prisma_migrations",
+    "constraint_name": "18223_25742_4_not_null",
+    "check_clause": "migration_name IS NOT NULL"
+  },
+  {
+    "table_name": "_prisma_migrations",
+    "constraint_name": "18223_25742_7_not_null",
+    "check_clause": "started_at IS NOT NULL"
+  },
+  {
+    "table_name": "_prisma_migrations",
+    "constraint_name": "18223_25742_8_not_null",
+    "check_clause": "applied_steps_count IS NOT NULL"
+  },
+  {
+    "table_name": "audit_log",
+    "constraint_name": "18223_25878_12_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "audit_log",
+    "constraint_name": "18223_25878_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "audit_log",
+    "constraint_name": "18223_25878_2_not_null",
+    "check_clause": "actor_id IS NOT NULL"
+  },
+  {
+    "table_name": "audit_log",
+    "constraint_name": "18223_25878_3_not_null",
+    "check_clause": "actor_role IS NOT NULL"
+  },
+  {
+    "table_name": "audit_log",
+    "constraint_name": "18223_25878_4_not_null",
+    "check_clause": "action IS NOT NULL"
+  },
+  {
+    "table_name": "audit_log",
+    "constraint_name": "18223_25878_5_not_null",
+    "check_clause": "target_type IS NOT NULL"
+  },
+  {
+    "table_name": "audit_log",
+    "constraint_name": "18223_25878_6_not_null",
+    "check_clause": "target_id IS NOT NULL"
+  },
+  {
+    "table_name": "booking",
+    "constraint_name": "18223_19364_10_not_null",
+    "check_clause": "updated_at IS NOT NULL"
+  },
+  {
+    "table_name": "booking",
+    "constraint_name": "18223_19364_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "booking",
+    "constraint_name": "18223_19364_2_not_null",
+    "check_clause": "job_id IS NOT NULL"
+  },
+  {
+    "table_name": "booking",
+    "constraint_name": "18223_19364_3_not_null",
+    "check_clause": "requirement_id IS NOT NULL"
+  },
+  {
+    "table_name": "booking",
+    "constraint_name": "18223_19364_4_not_null",
+    "check_clause": "worker_id IS NOT NULL"
+  },
+  {
+    "table_name": "booking",
+    "constraint_name": "18223_19364_5_not_null",
+    "check_clause": "customer_id IS NOT NULL"
+  },
+  {
+    "table_name": "booking",
+    "constraint_name": "18223_19364_6_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "booking",
+    "constraint_name": "18223_19364_9_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "booking",
+    "constraint_name": "chk_booking_cancellation_audit",
+    "check_clause": "(((status)::text <> 'CANCELLED'::text) OR ((cancelled_at IS NOT NULL) AND (cancelled_by IS NOT NULL) AND (cancellation_reason IS NOT NULL)))"
+  },
+  {
+    "table_name": "booking",
+    "constraint_name": "chk_booking_status",
+    "check_clause": "((status)::text = ANY ((ARRAY['CONFIRMED'::character varying, 'IN_PROGRESS'::character varying, 'AWAITING_CONFIRMATION'::character varying, 'COMPLETED'::character varying, 'CANCELLED'::character varying])::text[]))"
+  },
+  {
+    "table_name": "booking_transition",
+    "constraint_name": "18223_25584_10_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "booking_transition",
+    "constraint_name": "18223_25584_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "booking_transition",
+    "constraint_name": "18223_25584_2_not_null",
+    "check_clause": "booking_id IS NOT NULL"
+  },
+  {
+    "table_name": "booking_transition",
+    "constraint_name": "18223_25584_3_not_null",
+    "check_clause": "from_status IS NOT NULL"
+  },
+  {
+    "table_name": "booking_transition",
+    "constraint_name": "18223_25584_4_not_null",
+    "check_clause": "to_status IS NOT NULL"
+  },
+  {
+    "table_name": "booking_transition",
+    "constraint_name": "18223_25584_5_not_null",
+    "check_clause": "action IS NOT NULL"
+  },
+  {
+    "table_name": "booking_transition",
+    "constraint_name": "18223_25584_6_not_null",
+    "check_clause": "actor_type IS NOT NULL"
+  },
+  {
+    "table_name": "conversation",
+    "constraint_name": "18223_19431_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "conversation",
+    "constraint_name": "18223_19431_2_not_null",
+    "check_clause": "booking_id IS NOT NULL"
+  },
+  {
+    "table_name": "conversation",
+    "constraint_name": "18223_19431_3_not_null",
+    "check_clause": "worker_id IS NOT NULL"
+  },
+  {
+    "table_name": "conversation",
+    "constraint_name": "18223_19431_4_not_null",
+    "check_clause": "customer_id IS NOT NULL"
+  },
+  {
+    "table_name": "customer",
+    "constraint_name": "18223_19270_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "customer",
+    "constraint_name": "18223_19270_2_not_null",
+    "check_clause": "phone IS NOT NULL"
+  },
+  {
+    "table_name": "customer",
+    "constraint_name": "18223_19270_3_not_null",
+    "check_clause": "name IS NOT NULL"
+  },
+  {
+    "table_name": "customer",
+    "constraint_name": "18223_19270_4_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "customer",
+    "constraint_name": "18223_19270_6_not_null",
+    "check_clause": "password IS NOT NULL"
+  },
+  {
+    "table_name": "customer_device",
+    "constraint_name": "18223_26033_10_not_null",
+    "check_clause": "updated_at IS NOT NULL"
+  },
+  {
+    "table_name": "customer_device",
+    "constraint_name": "18223_26033_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "customer_device",
+    "constraint_name": "18223_26033_2_not_null",
+    "check_clause": "customer_id IS NOT NULL"
+  },
+  {
+    "table_name": "customer_device",
+    "constraint_name": "18223_26033_3_not_null",
+    "check_clause": "device_id IS NOT NULL"
+  },
+  {
+    "table_name": "customer_device",
+    "constraint_name": "18223_26033_4_not_null",
+    "check_clause": "fcm_token IS NOT NULL"
+  },
+  {
+    "table_name": "customer_device",
+    "constraint_name": "18223_26033_5_not_null",
+    "check_clause": "platform IS NOT NULL"
+  },
+  {
+    "table_name": "customer_device",
+    "constraint_name": "18223_26033_7_not_null",
+    "check_clause": "last_seen_at IS NOT NULL"
+  },
+  {
+    "table_name": "customer_device",
+    "constraint_name": "18223_26033_9_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "dispatch_wave",
+    "constraint_name": "18223_19335_10_not_null",
+    "check_clause": "updated_at IS NOT NULL"
+  },
+  {
+    "table_name": "dispatch_wave",
+    "constraint_name": "18223_19335_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "dispatch_wave",
+    "constraint_name": "18223_19335_2_not_null",
+    "check_clause": "requirement_id IS NOT NULL"
+  },
+  {
+    "table_name": "dispatch_wave",
+    "constraint_name": "18223_19335_3_not_null",
+    "check_clause": "wave_number IS NOT NULL"
+  },
+  {
+    "table_name": "dispatch_wave",
+    "constraint_name": "18223_19335_4_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "dispatch_wave",
+    "constraint_name": "18223_19335_9_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "dispatch_wave",
+    "constraint_name": "chk_dispatch_wave_status",
+    "check_clause": "((status)::text = ANY ((ARRAY['active'::character varying, 'completed'::character varying, 'cancelled'::character varying, 'timeout'::character varying, 'exhausted'::character varying, 'expired'::character varying, 'resolved'::character varying, 'filled'::character varying, 'pending'::character varying, 'dispatching'::character varying])::text[]))"
+  },
+  {
+    "table_name": "job",
+    "constraint_name": "18223_19307_11_not_null",
+    "check_clause": "updated_at IS NOT NULL"
+  },
+  {
+    "table_name": "job",
+    "constraint_name": "18223_19307_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "job",
+    "constraint_name": "18223_19307_2_not_null",
+    "check_clause": "customer_id IS NOT NULL"
+  },
+  {
+    "table_name": "job",
+    "constraint_name": "18223_19307_7_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "job",
+    "constraint_name": "18223_19307_8_not_null",
+    "check_clause": "dispatch_status IS NOT NULL"
+  },
+  {
+    "table_name": "job",
+    "constraint_name": "18223_19307_9_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "job",
+    "constraint_name": "chk_job_dispatch_status",
+    "check_clause": "((status)::text = ANY ((ARRAY['pending'::character varying, 'accepted'::character varying, 'declined'::character varying, 'timeout'::character varying, 'cancelled'::character varying, 'expired'::character varying])::text[]))"
+  },
+  {
+    "table_name": "job",
+    "constraint_name": "chk_job_dispatch_status",
+    "check_clause": "((dispatch_status)::text = ANY ((ARRAY['IDLE'::character varying, 'DISPATCHING'::character varying, 'PARTIALLY_FILLED'::character varying, 'FILLED'::character varying, 'EXHAUSTED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying])::text[]))"
+  },
+  {
+    "table_name": "job",
+    "constraint_name": "chk_job_status",
+    "check_clause": "((status)::text = ANY ((ARRAY['OPEN'::character varying, 'DISPATCHING'::character varying, 'BOOKED'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying, 'CANCELLED'::character varying])::text[]))"
+  },
+  {
+    "table_name": "job_dispatch",
+    "constraint_name": "18223_19348_10_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "job_dispatch",
+    "constraint_name": "18223_19348_11_not_null",
+    "check_clause": "updated_at IS NOT NULL"
+  },
+  {
+    "table_name": "job_dispatch",
+    "constraint_name": "18223_19348_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "job_dispatch",
+    "constraint_name": "18223_19348_2_not_null",
+    "check_clause": "requirement_id IS NOT NULL"
+  },
+  {
+    "table_name": "job_dispatch",
+    "constraint_name": "18223_19348_3_not_null",
+    "check_clause": "worker_id IS NOT NULL"
+  },
+  {
+    "table_name": "job_dispatch",
+    "constraint_name": "18223_19348_6_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "job_dispatch",
+    "constraint_name": "chk_job_dispatch_status",
+    "check_clause": "((status)::text = ANY ((ARRAY['pending'::character varying, 'accepted'::character varying, 'declined'::character varying, 'timeout'::character varying, 'cancelled'::character varying, 'expired'::character varying])::text[]))"
+  },
+  {
+    "table_name": "job_dispatch",
+    "constraint_name": "chk_job_dispatch_status",
+    "check_clause": "((dispatch_status)::text = ANY ((ARRAY['IDLE'::character varying, 'DISPATCHING'::character varying, 'PARTIALLY_FILLED'::character varying, 'FILLED'::character varying, 'EXHAUSTED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying])::text[]))"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "18223_19321_10_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "18223_19321_11_not_null",
+    "check_clause": "updated_at IS NOT NULL"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "18223_19321_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "18223_19321_2_not_null",
+    "check_clause": "job_id IS NOT NULL"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "18223_19321_4_not_null",
+    "check_clause": "worker_count_needed IS NOT NULL"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "18223_19321_5_not_null",
+    "check_clause": "worker_count_filled IS NOT NULL"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "18223_19321_7_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "chk_job_requirement_capacity_bounds",
+    "check_clause": "((worker_count_filled >= 0) AND (worker_count_filled <= worker_count_needed))"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "chk_job_requirement_status",
+    "check_clause": "((status)::text = ANY ((ARRAY['OPEN'::character varying, 'DISPATCHING'::character varying, 'PARTIALLY_FILLED'::character varying, 'FILLED'::character varying, 'NO_WORKERS_AVAILABLE'::character varying, 'CANCELLED'::character varying])::text[]))"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "chk_job_requirement_worker_count_capacity",
+    "check_clause": "((worker_count_filled >= 0) AND (worker_count_filled <= worker_count_needed))"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "chk_job_requirement_worker_count_filled",
+    "check_clause": "(worker_count_filled >= 0)"
+  },
+  {
+    "table_name": "job_requirement",
+    "constraint_name": "chk_job_requirement_worker_count_needed",
+    "check_clause": "(worker_count_needed > 0)"
+  },
+  {
+    "table_name": "job_requirement_skill",
+    "constraint_name": "18223_25646_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "job_requirement_skill",
+    "constraint_name": "18223_25646_2_not_null",
+    "check_clause": "requirement_id IS NOT NULL"
+  },
+  {
+    "table_name": "job_requirement_skill",
+    "constraint_name": "18223_25646_3_not_null",
+    "check_clause": "skill_id IS NOT NULL"
+  },
+  {
+    "table_name": "job_requirement_skill",
+    "constraint_name": "18223_25646_4_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "job_transition",
+    "constraint_name": "18223_25808_10_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "job_transition",
+    "constraint_name": "18223_25808_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "job_transition",
+    "constraint_name": "18223_25808_2_not_null",
+    "check_clause": "job_id IS NOT NULL"
+  },
+  {
+    "table_name": "job_transition",
+    "constraint_name": "18223_25808_3_not_null",
+    "check_clause": "from_status IS NOT NULL"
+  },
+  {
+    "table_name": "job_transition",
+    "constraint_name": "18223_25808_4_not_null",
+    "check_clause": "to_status IS NOT NULL"
+  },
+  {
+    "table_name": "job_transition",
+    "constraint_name": "18223_25808_5_not_null",
+    "check_clause": "action IS NOT NULL"
+  },
+  {
+    "table_name": "job_transition",
+    "constraint_name": "18223_25808_6_not_null",
+    "check_clause": "actor_type IS NOT NULL"
+  },
+  {
+    "table_name": "message",
+    "constraint_name": "18223_19454_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "message",
+    "constraint_name": "18223_19454_2_not_null",
+    "check_clause": "conversation_id IS NOT NULL"
+  },
+  {
+    "table_name": "message",
+    "constraint_name": "18223_19454_3_not_null",
+    "check_clause": "sender_id IS NOT NULL"
+  },
+  {
+    "table_name": "notification",
+    "constraint_name": "18223_19520_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "notification",
+    "constraint_name": "18223_19520_2_not_null",
+    "check_clause": "worker_id IS NOT NULL"
+  },
+  {
+    "table_name": "notification",
+    "constraint_name": "18223_19520_3_not_null",
+    "check_clause": "job_id IS NOT NULL"
+  },
+  {
+    "table_name": "notification_delivery",
+    "constraint_name": "18223_26173_10_not_null",
+    "check_clause": "updated_at IS NOT NULL"
+  },
+  {
+    "table_name": "notification_delivery",
+    "constraint_name": "18223_26173_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "notification_delivery",
+    "constraint_name": "18223_26173_2_not_null",
+    "check_clause": "event_id IS NOT NULL"
+  },
+  {
+    "table_name": "notification_delivery",
+    "constraint_name": "18223_26173_3_not_null",
+    "check_clause": "recipient_id IS NOT NULL"
+  },
+  {
+    "table_name": "notification_delivery",
+    "constraint_name": "18223_26173_4_not_null",
+    "check_clause": "channel IS NOT NULL"
+  },
+  {
+    "table_name": "notification_delivery",
+    "constraint_name": "18223_26173_5_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "notification_delivery",
+    "constraint_name": "18223_26173_6_not_null",
+    "check_clause": "attempt_count IS NOT NULL"
+  },
+  {
+    "table_name": "notification_delivery",
+    "constraint_name": "18223_26173_9_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_10_not_null",
+    "check_clause": "max_attempts IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_11_not_null",
+    "check_clause": "available_at IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_17_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_18_not_null",
+    "check_clause": "updated_at IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_21_not_null",
+    "check_clause": "aggregate_version IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_22_not_null",
+    "check_clause": "socket_status IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_25_not_null",
+    "check_clause": "fcm_status IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_2_not_null",
+    "check_clause": "event_type IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_3_not_null",
+    "check_clause": "aggregate_type IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_4_not_null",
+    "check_clause": "aggregate_id IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_5_not_null",
+    "check_clause": "recipient_type IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_6_not_null",
+    "check_clause": "recipient_id IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_7_not_null",
+    "check_clause": "payload IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_8_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "notification_outbox",
+    "constraint_name": "18223_25854_9_not_null",
+    "check_clause": "attempts IS NOT NULL"
+  },
+  {
+    "table_name": "otp_challenge",
+    "constraint_name": "18223_25751_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "otp_challenge",
+    "constraint_name": "18223_25751_2_not_null",
+    "check_clause": "phone IS NOT NULL"
+  },
+  {
+    "table_name": "otp_challenge",
+    "constraint_name": "18223_25751_3_not_null",
+    "check_clause": "purpose IS NOT NULL"
+  },
+  {
+    "table_name": "otp_challenge",
+    "constraint_name": "18223_25751_4_not_null",
+    "check_clause": "otp_hash IS NOT NULL"
+  },
+  {
+    "table_name": "otp_challenge",
+    "constraint_name": "18223_25751_5_not_null",
+    "check_clause": "expires_at IS NOT NULL"
+  },
+  {
+    "table_name": "otp_challenge",
+    "constraint_name": "18223_25751_6_not_null",
+    "check_clause": "attempt_count IS NOT NULL"
+  },
+  {
+    "table_name": "otp_challenge",
+    "constraint_name": "18223_25751_7_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "otp_challenge",
+    "constraint_name": "18223_25751_9_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "otp_challenge",
+    "constraint_name": "chk_otp_challenge_status",
+    "check_clause": "((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'CONSUMED'::character varying, 'EXPIRED'::character varying, 'LOCKED'::character varying])::text[]))"
+  },
+  {
+    "table_name": "payment",
+    "constraint_name": "18223_19393_14_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "payment",
+    "constraint_name": "18223_19393_15_not_null",
+    "check_clause": "updated_at IS NOT NULL"
+  },
+  {
+    "table_name": "payment",
+    "constraint_name": "18223_19393_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "payment",
+    "constraint_name": "18223_19393_2_not_null",
+    "check_clause": "booking_id IS NOT NULL"
+  },
+  {
+    "table_name": "payment",
+    "constraint_name": "18223_19393_7_not_null",
+    "check_clause": "currency IS NOT NULL"
+  },
+  {
+    "table_name": "payment_webhook_event",
+    "constraint_name": "18223_25768_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "payment_webhook_event",
+    "constraint_name": "18223_25768_2_not_null",
+    "check_clause": "provider IS NOT NULL"
+  },
+  {
+    "table_name": "payment_webhook_event",
+    "constraint_name": "18223_25768_3_not_null",
+    "check_clause": "providerEventId IS NOT NULL"
+  },
+  {
+    "table_name": "payment_webhook_event",
+    "constraint_name": "18223_25768_4_not_null",
+    "check_clause": "eventType IS NOT NULL"
+  },
+  {
+    "table_name": "payment_webhook_event",
+    "constraint_name": "18223_25768_5_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "payment_webhook_event",
+    "constraint_name": "18223_25768_7_not_null",
+    "check_clause": "receivedAt IS NOT NULL"
+  },
+  {
+    "table_name": "refresh_session",
+    "constraint_name": "18223_25785_10_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "refresh_session",
+    "constraint_name": "18223_25785_11_not_null",
+    "check_clause": "expires_at IS NOT NULL"
+  },
+  {
+    "table_name": "refresh_session",
+    "constraint_name": "18223_25785_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "refresh_session",
+    "constraint_name": "18223_25785_2_not_null",
+    "check_clause": "user_id IS NOT NULL"
+  },
+  {
+    "table_name": "refresh_session",
+    "constraint_name": "18223_25785_3_not_null",
+    "check_clause": "user_role IS NOT NULL"
+  },
+  {
+    "table_name": "refresh_session",
+    "constraint_name": "18223_25785_4_not_null",
+    "check_clause": "token_hash IS NOT NULL"
+  },
+  {
+    "table_name": "refresh_session",
+    "constraint_name": "18223_25785_5_not_null",
+    "check_clause": "family_id IS NOT NULL"
+  },
+  {
+    "table_name": "refresh_session",
+    "constraint_name": "18223_25785_9_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "refresh_session",
+    "constraint_name": "chk_refresh_session_status",
+    "check_clause": "((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'ROTATED'::character varying, 'REVOKED'::character varying, 'EXPIRED'::character varying])::text[]))"
+  },
+  {
+    "table_name": "review",
+    "constraint_name": "18223_19408_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "review",
+    "constraint_name": "18223_19408_2_not_null",
+    "check_clause": "booking_id IS NOT NULL"
+  },
+  {
+    "table_name": "review",
+    "constraint_name": "18223_19408_3_not_null",
+    "check_clause": "worker_id IS NOT NULL"
+  },
+  {
+    "table_name": "review",
+    "constraint_name": "18223_19408_4_not_null",
+    "check_clause": "customer_id IS NOT NULL"
+  },
+  {
+    "table_name": "skill_category",
+    "constraint_name": "18223_19279_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "skill_category",
+    "constraint_name": "18223_19279_2_not_null",
+    "check_clause": "name IS NOT NULL"
+  },
+  {
+    "table_name": "skill_category",
+    "constraint_name": "18223_19279_4_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  },
+  {
+    "table_name": "skill_category",
+    "constraint_name": "18223_19279_5_not_null",
+    "check_clause": "updated_at IS NOT NULL"
+  },
+  {
+    "table_name": "worker",
+    "constraint_name": "18223_19287_14_not_null",
+    "check_clause": "password IS NOT NULL"
+  },
+  {
+    "table_name": "worker",
+    "constraint_name": "18223_19287_15_not_null",
+    "check_clause": "name IS NOT NULL"
+  },
+  {
+    "table_name": "worker",
+    "constraint_name": "18223_19287_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "worker",
+    "constraint_name": "18223_19287_2_not_null",
+    "check_clause": "skill_category_id IS NOT NULL"
+  },
+  {
+    "table_name": "worker",
+    "constraint_name": "18223_19287_3_not_null",
+    "check_clause": "phone IS NOT NULL"
+  },
+  {
+    "table_name": "worker",
+    "constraint_name": "18223_19287_4_not_null",
+    "check_clause": "skill_type IS NOT NULL"
+  },
+  {
+    "table_name": "worker",
+    "constraint_name": "18223_19287_8_not_null",
+    "check_clause": "verification_status IS NOT NULL"
+  },
+  {
+    "table_name": "worker",
+    "constraint_name": "chk_worker_verification_status",
+    "check_clause": "((verification_status)::text = ANY ((ARRAY['pending'::character varying, 'verified'::character varying, 'rejected'::character varying, 'suspended'::character varying])::text[]))"
+  },
+  {
+    "table_name": "worker_analytics",
+    "constraint_name": "18223_19506_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_analytics",
+    "constraint_name": "18223_19506_2_not_null",
+    "check_clause": "worker_id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_device",
+    "constraint_name": "18223_19482_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_device",
+    "constraint_name": "18223_19482_2_not_null",
+    "check_clause": "worker_id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_device",
+    "constraint_name": "18223_19482_3_not_null",
+    "check_clause": "device_id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_document",
+    "constraint_name": "18223_19493_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_document",
+    "constraint_name": "18223_19493_2_not_null",
+    "check_clause": "worker_id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_document",
+    "constraint_name": "18223_19493_5_not_null",
+    "check_clause": "status IS NOT NULL"
+  },
+  {
+    "table_name": "worker_document",
+    "constraint_name": "chk_worker_document_status",
+    "check_clause": "((status)::text = ANY ((ARRAY['PENDING'::character varying, 'VERIFIED'::character varying, 'REJECTED'::character varying])::text[]))"
+  },
+  {
+    "table_name": "worker_location",
+    "constraint_name": "18223_19468_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_location",
+    "constraint_name": "18223_19468_2_not_null",
+    "check_clause": "worker_id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_skill",
+    "constraint_name": "18223_25619_1_not_null",
+    "check_clause": "id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_skill",
+    "constraint_name": "18223_25619_2_not_null",
+    "check_clause": "worker_id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_skill",
+    "constraint_name": "18223_25619_3_not_null",
+    "check_clause": "skill_id IS NOT NULL"
+  },
+  {
+    "table_name": "worker_skill",
+    "constraint_name": "18223_25619_4_not_null",
+    "check_clause": "created_at IS NOT NULL"
+  }
+]

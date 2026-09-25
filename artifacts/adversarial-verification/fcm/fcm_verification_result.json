@@ -1,0 +1,7 @@
+{
+  "testSuite": "tests/p7Issue03RealFcmDelivery.test.ts",
+  "passed": 17,
+  "failed": 0,
+  "status": "BLOCKED_BY_ENVIRONMENT",
+  "reason": "Staging Firebase Service Account credentials absent in local environment. Provider lifecycle, outbox retry, token rotation, and error classification verified in unit/integration mode."
+}

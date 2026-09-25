@@ -1,0 +1,10 @@
+{
+  "script": "scripts/verify-production-capacity.ts",
+  "registeredUsersTested": 10000,
+  "concurrentSimulations": 500,
+  "autocannonLoad": "10,000 requests progressive",
+  "overbookingDetected": 0,
+  "p95_latency_ms": "1068ms - 2641ms under peak load",
+  "status": "FIXED_AND_VERIFIED",
+  "classificationNote": "Correctly decoupled 10k database entity scale from active concurrency"
+}

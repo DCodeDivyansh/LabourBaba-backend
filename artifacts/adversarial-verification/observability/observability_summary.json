@@ -1,0 +1,14 @@
+{
+  "configFile": "src/config/prometheus.ts",
+  "alertFile": "alerts.yml",
+  "alertsCount": 10,
+  "metricsValidated": [
+    "http_requests_total",
+    "http_request_duration_seconds",
+    "db_query_duration_seconds",
+    "redis_command_duration_seconds",
+    "bullmq_jobs_total",
+    "bullmq_job_duration_seconds",
+    "notification_deliveries_total"
+  ]
+}

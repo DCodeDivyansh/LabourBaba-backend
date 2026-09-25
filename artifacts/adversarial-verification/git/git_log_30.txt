@@ -1,0 +1,30 @@
+00b8e7d (HEAD -> main, origin/main, origin/HEAD) feat: implement outbox worker and database schema for notification delivery channel idempotency (Issues P7 09)
+cc94602 feat: add BullMQ background workers, canonical Redis configuration, and comprehensive test suites (Issue P7 08)
+54bd964 feat: add background workers, production capacity testing suite, and chat controller (Issue P7 07)
+96b0dee feat: add database backup, restore, and safety guard scripts with disaster recovery tests (Issue P7 06)
+5034ba9 feat: implement Supabase cloud storage provider with storage driver, service, controller, and metrics (Issue P7 04)
+5a479d0 fix(notifications): remediate P7 Issue 03 - harden FCM credential resolution, error classification, token privacy, outbox delivery semantics, and add authoritative real FCM test suite
+332f603 fix(security): remediate P7 Issue 02 - upgrade socket.io-parser to 4.2.7 and enforce release gates
+9f1e378 fix(security): remediate P7 Issue 01 - purge database dump from history, harden ignore policies and CI gates
+c763230 test: add adversarial concurrency drills and testing scripts
+893ba86 chore: add test execution results and security audit reports
+21d5c81 feat: implement application lifecycle manager, Redis configuration, and dependency failure tests (redis fix)
+8e8e0be feat: implement Socket.IO Redis adapter, application lifecycle manager, and server bootstrap with tests (P6 11)
+829a86f feat: add production Docker container boot verification scripts, tests, and CI workflow (P6 10)
+fc87869 feat: implement authorization matrix tests, error handling middleware, API schemas, and worker document constraints (P6 09)
+c7066a3 feat: implement graceful shutdown and active work draining for outbox worker (P6 08)
+63eea4c feat: add PostgreSQL and BullMQ dual-write reconciliation, workers, and failure injection test suite (P6 07)
+57421c3 feat: implement core database schema, dispatch and location tracking services, and capacity tests (P6 06)
+b914ff6 feat: implement customer notification and device lifecycle management with outbox worker and FCM integration (P6 05)
+bb0bdba feat: add database configuration, background workers, observability metrics, and dispatch services (P6 04)
+4d150db feat: add dispatch feature, database connection pool configuration, and concurrency tests (P6 03)
+ec17600 merge: reconcile main with origin/main and preserve P6 security remediation
+daaf767 (backup-before-origin-merge) chore: update security scan report timestamp
+d682a25 chore: update security audit report json
+f54d06d docs(security): document operational status and testing in SECURITY.md
+219a6b8 test(security): update backup path security tests for purged history
+18fe83a fix(security): remediate backup exposure, harden path containment and security scanning (P6 Issue 2)
+1043cce feat: add customer authentication routes and comprehensive API protection test suites (P6 01)
+79a048c feat: add job state machine, structured logging, socket handlers, and comprehensive error handling tests (P5 26-30)
+bca9561 feat: implement P5 backend features including lifecycle manager, background workers, rate limiter, and FCM integration (P5 21-25)
+0f2a59b feat: implement booking OTP security, job state machine, and security test suites (P5 16-20)

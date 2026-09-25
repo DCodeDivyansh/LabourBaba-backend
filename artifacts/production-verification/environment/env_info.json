@@ -1,0 +1,36 @@
+{
+  "os": "Windows_NT 10.0.26200 (x64)",
+  "cpus": [
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U",
+    "12th Gen Intel(R) Core(TM) i5-1235U"
+  ],
+  "cpuCount": 12,
+  "totalMemoryGB": 15.68,
+  "freeMemoryGB": 3.62,
+  "nodeVersion": "v22.16.0",
+  "npmVersion": "11.16.0",
+  "tscVersion": "Version 6.0.3",
+  "prismaVersion": "prisma               : 7.8.0\n@prisma/client       : 7.8.0\nOperating System     : win32\nArchitecture         : x64\nNode.js              : v22.16.0\nTypeScript           : 6.0.3\nQuery Compiler       : enabled\nPSL                  : @prisma/prisma-schema-wasm 7.8.0-6.3c6e192761c0362d496ed980de936e2f3cebcd3a\nSchema Engine        : schema-engine-cli 3c6e192761c0362d496ed980de936e2f3cebcd3a (at node_modules\\@prisma\\engines\\schema-engine-windows.exe)\nDefault Engines Hash : 3c6e192761c0362d496ed980de936e2f3cebcd3a\nStudio               : 0.27.3",
+  "dockerVersion": "Docker version 29.1.3, build 29.1.3-0ubuntu3~24.04.2",
+  "dockerComposeVersion": "N/A",
+  "gitCommit": "00b8e7d3dc5030a2003a7b178165bea74f8370c9",
+  "postgresVersion": "PostgreSQL 17.6 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+  "postgisVersion": "POSTGIS=\"3.3.7 a0c7967\" [EXTENSION] PGSQL=\"170\" GEOS=\"3.14.1-CAPI-1.20.5\" PROJ=\"9.7.1\" LIBXML=\"2.15.1\" LIBJSON=\"0.18\" LIBPROTOBUF=\"1.5.2\" WAGYU=\"0.5.0 (Internal)\"",
+  "redisConfiguredError": "Stream isn't writeable and enableOfflineQueue options is false",
+  "redisDockerLocal": {
+    "version": "7.4.11",
+    "port": 6381,
+    "ping": "PONG"
+  },
+  "timestamp": "2026-09-24T20:57:48.246Z"
+}

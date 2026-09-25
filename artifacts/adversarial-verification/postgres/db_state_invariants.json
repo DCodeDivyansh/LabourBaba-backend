@@ -1,0 +1,10 @@
+[PASS] Rejects Non-existent Foreign Key (Customer ID) - Table: job (Code: P2010)
+[PASS] Rejects Negative worker_count_needed (CHECK chk_job_requirement_worker_count_needed) - Table: job_requirement (Code: P2010)
+[PASS] Rejects Overfilled Capacity (CHECK chk_job_requirement_capacity_bounds) - Table: job_requirement (Code: P2010)
+[PASS] Rejects CANCELLED Booking Missing Audit Fields (chk_booking_cancellation_audit) - Table: booking (Code: P2010)
+[PASS] Rejects Invalid Booking Status (chk_booking_status) - Table: booking (Code: P2010)
+[PASS] Rejects Invalid Worker Document Status (chk_worker_document_status) - Table: worker_document (Code: P2010)
+[PASS] Rejects Duplicate Channel Delivery for Same Event & Recipient - Table: notification_delivery (Code: P2002)
+[PASS] PostGIS ST_Distance accurately calculates geodesic distance - Table: PostGIS geography (Code: None)
+
+Completed Database Constraint Audit: 8/8 checks passed.

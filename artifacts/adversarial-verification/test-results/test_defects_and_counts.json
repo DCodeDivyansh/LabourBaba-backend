@@ -1,0 +1,23 @@
+{
+  "totalTestFiles": 144,
+  "reportedPreviousSuites": "130 vs 131",
+  "resolution": "Previous audit ran a subset of 130/131 suites. The repository has 144 test files in tests/.",
+  "testDefectsReproduced": [
+    {
+      "location": "tests/dtoBoundarySecurity.test.ts:246",
+      "defect": "TEST_DEFECT: Customer token sent to admin-only GET /api/clients; expects 200 instead of 403."
+    },
+    {
+      "location": "tests/p5Issues26_30Comprehensive.test.ts:266",
+      "defect": "TEST_DEFECT: Hardcoded expect(alertRules).toHaveLength(9) when alerts.yml actually defines 10 alerts."
+    },
+    {
+      "location": "scripts/verify-production-capacity.ts:55",
+      "defect": "TEST_DEFECT: Fake test secret RAZORPAY_KEY_SECRET = 'capacity_test_...' triggers security scanner regex."
+    },
+    {
+      "location": "src/config/redis.ts:115",
+      "defect": "CONFIGURATION_DEFECT: retryStrategy aborts when NODE_ENV === 'test' without ENABLE_REDIS_TEST_RETRY=true."
+    }
+  ]
+}

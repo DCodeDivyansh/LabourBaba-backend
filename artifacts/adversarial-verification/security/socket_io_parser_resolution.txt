@@ -1,0 +1,6 @@
+backend@1.0.0 E:\LabourBaba\LabourBaba-backend
++-- socket.io-client@4.8.3
+| `-- socket.io-parser@4.2.7
+`-- socket.io@4.8.3
+  `-- socket.io-parser@4.2.7 deduped
+

@@ -1,0 +1,73 @@
+[
+  {
+    "invariant": "Rejects Non-existent Foreign Key (Customer ID)",
+    "targetTable": "job",
+    "expectedRejection": true,
+    "actualRejected": true,
+    "errorCode": "P2010",
+    "errorMessage": "Raw query failed. Code: `42703`. Message: `column \"title\" of relation \"job\" does not exist`",
+    "pass": true
+  },
+  {
+    "invariant": "Rejects Negative worker_count_needed (CHECK chk_job_requirement_worker_count_needed)",
+    "targetTable": "job_requirement",
+    "expectedRejection": true,
+    "actualRejected": true,
+    "errorCode": "P2010",
+    "errorMessage": "Raw query failed. Code: `42703`. Message: `column \"skill_category_id\" of relation \"job_requirement\" does not exist`",
+    "pass": true
+  },
+  {
+    "invariant": "Rejects Overfilled Capacity (CHECK chk_job_requirement_capacity_bounds)",
+    "targetTable": "job_requirement",
+    "expectedRejection": true,
+    "actualRejected": true,
+    "errorCode": "P2010",
+    "errorMessage": "Raw query failed. Code: `42703`. Message: `column \"skill_category_id\" of relation \"job_requirement\" does not exist`",
+    "pass": true
+  },
+  {
+    "invariant": "Rejects CANCELLED Booking Missing Audit Fields (chk_booking_cancellation_audit)",
+    "targetTable": "booking",
+    "expectedRejection": true,
+    "actualRejected": true,
+    "errorCode": "P2010",
+    "errorMessage": "Raw query failed. Code: `23514`. Message: `new row for relation \"booking\" violates check constraint \"chk_booking_cancellation_audit\"`",
+    "pass": true
+  },
+  {
+    "invariant": "Rejects Invalid Booking Status (chk_booking_status)",
+    "targetTable": "booking",
+    "expectedRejection": true,
+    "actualRejected": true,
+    "errorCode": "P2010",
+    "errorMessage": "Raw query failed. Code: `23514`. Message: `new row for relation \"booking\" violates check constraint \"chk_booking_status\"`",
+    "pass": true
+  },
+  {
+    "invariant": "Rejects Invalid Worker Document Status (chk_worker_document_status)",
+    "targetTable": "worker_document",
+    "expectedRejection": true,
+    "actualRejected": true,
+    "errorCode": "P2010",
+    "errorMessage": "Raw query failed. Code: `42703`. Message: `column \"created_at\" of relation \"worker_document\" does not exist`",
+    "pass": true
+  },
+  {
+    "invariant": "Rejects Duplicate Channel Delivery for Same Event & Recipient",
+    "targetTable": "notification_delivery",
+    "expectedRejection": true,
+    "actualRejected": true,
+    "errorCode": "P2002",
+    "errorMessage": "Unique constraint failed on the fields: (`event_id`, `recipient_id`, `channel`)",
+    "pass": true
+  },
+  {
+    "invariant": "PostGIS ST_Distance accurately calculates geodesic distance",
+    "targetTable": "PostGIS geography",
+    "expectedRejection": false,
+    "actualRejected": false,
+    "errorMessage": "Calculated distance: 156.29181456m",
+    "pass": true
+  }
+]

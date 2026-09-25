@@ -1,0 +1,72 @@
+[
+  {
+    "gate": "Production build",
+    "result": "PASS",
+    "evidence": "TypeScript compiled cleanly to dist/; dist/server.js and dist/workers verified."
+  },
+  {
+    "gate": "Production config",
+    "result": "FAIL",
+    "evidence": "assertRedisConfig() did not fail fast in production mode."
+  },
+  {
+    "gate": "PostgreSQL",
+    "result": "FAIL",
+    "evidence": "PostgreSQL test error: \nInvalid `prisma.skill_category.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\scripts\\critical-path-release-gate.ts:89:41\n\n  86 // B. Setup Skill Category\n  87 let cat = await prisma.skill_category.findFirst({ where: { name: \"CriticalPathSkill\" } });\n  88 if (!cat) {\n→ 89   cat = await prisma.skill_category.create({\n         data: {\n           name: \"CriticalPathSkill\",\n           description: \"Skill for critical path tests\",\n           ~~~~~~~~~~~\n       ?   id?: String,\n       ?   is_active?: Boolean | Null,\n       ?   created_at?: DateTime,\n       ?   updated_at?: DateTime,\n       ?   worker?: WorkerCreateNestedManyWithoutSkill_categoryInput,\n       ?   worker_skill?: worker_skillCreateNestedManyWithoutSkill_categoryInput,\n       ?   job_requirement?: job_requirementCreateNestedManyWithoutSkill_categoryInput,\n       ?   job_requirement_skill?: job_requirement_skillCreateNestedManyWithoutSkill_categoryInput\n         }\n       })\n\nUnknown argument `description`. Available options are marked with ?."
+  },
+  {
+    "gate": "Redis",
+    "result": "FAIL",
+    "evidence": "Redis test error: Stream isn't writeable and enableOfflineQueue options is false"
+  },
+  {
+    "gate": "Authentication",
+    "result": "PASS",
+    "evidence": "JWT creation, signing, role separation, and expired token rejection verified."
+  },
+  {
+    "gate": "Authorization",
+    "result": "PASS",
+    "evidence": "Role-based separation (CUSTOMER vs WORKER) and token structure verified."
+  },
+  {
+    "gate": "Booking/dispatch",
+    "result": "FAIL",
+    "evidence": "Booking dispatch test failed: No booking found to test state machine"
+  },
+  {
+    "gate": "Concurrency",
+    "result": "FAIL",
+    "evidence": "Concurrency test failed: \nInvalid `prisma.worker.upsert()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\scripts\\critical-path-release-gate.ts:282:27\n\n  279 // Seed 25 workers\n  280 for (let i = 0; i < CONCURRENCY_WORKERS.length; i++) {\n  281   const wId = CONCURRENCY_WORKERS[i];\n→ 282   await prisma.worker.upsert(\nInvalid input value: invalid input syntax for type uuid: \"\""
+  },
+  {
+    "gate": "BullMQ workers",
+    "result": "PASS",
+    "evidence": "Real BullMQ queue enqueue -> worker consumption cycle verified on live Redis."
+  },
+  {
+    "gate": "Notifications",
+    "result": "FAIL",
+    "evidence": "Notification test error: \nInvalid `prisma.notification_outbox.create()` invocation in\nE:\\LabourBaba\\LabourBaba-backend\\scripts\\critical-path-release-gate.ts:407:59\n\n  404 \n  405 // 9. Notification Critical Path & Durable Outbox\n  406 try {\n→ 407   const outboxRecord = await prisma.notification_outbox.create({\n          data: {\n            id: \"00000000-0000-4009-f000-000000000001\",\n            aggregate_type: \"BOOKING\",\n            aggregate_id: \"00000000-0000-4009-c000-000000000001\",\n            event_type: \"BOOKING_CONFIRMED\",\n            payload: {\n              customerId: \"00000000-0000-4009-a000-000000000001\",\n              status: \"CONFIRMED\"\n            },\n            status: \"PENDING\",\n        +   recipient_type: String\n          }\n        })\n\nArgument `recipient_type` is missing."
+  },
+  {
+    "gate": "FCM real delivery",
+    "result": "BLOCKED",
+    "evidence": "Staging Firebase credentials absent in environment; end-to-end device delivery blocked."
+  },
+  {
+    "gate": "Storage",
+    "result": "FAIL",
+    "evidence": "Storage verification error: [STORAGE_ERROR] Supabase upload failed: mime type text/plain is not supported"
+  },
+  {
+    "gate": "Restart/recovery",
+    "result": "FAIL",
+    "evidence": "Production Docker boot or restart test failed."
+  },
+  {
+    "gate": "End-to-end smoke test",
+    "result": "FAIL",
+    "evidence": "Final booking status not COMPLETED: undefined"
+  }
+]

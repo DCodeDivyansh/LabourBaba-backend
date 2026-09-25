@@ -1,0 +1,14 @@
+{
+  "status": "FIXED_AND_VERIFIED",
+  "image": "labourbaba-backend:production",
+  "checks": [
+    "Container builds successfully from Dockerfile",
+    "Non-root user UID 1001 (nodejs)",
+    "Database connectivity established",
+    "Redis connectivity established",
+    "Health endpoints (/health/live, /health/ready) return 200",
+    "Negative readiness returns 503 when Redis paused",
+    "BullMQ job consumption verified",
+    "SIGTERM handled with graceful drain and exit 0"
+  ]
+}

@@ -1,0 +1,6 @@
+  DivyanshYadav
+  backup-before-origin-merge
+  dev
+* main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main

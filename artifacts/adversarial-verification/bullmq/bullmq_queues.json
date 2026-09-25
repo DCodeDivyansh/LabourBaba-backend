@@ -1,0 +1,22 @@
+{
+  "totalQueues": 5,
+  "queues": [
+    "booking-events",
+    "dispatch-events",
+    "notification-events",
+    "location-events",
+    "audit-events"
+  ],
+  "workers": [
+    "src/workers/bookingWorker.ts",
+    "src/workers/dispatchWorker.ts",
+    "src/workers/notificationWorker.ts",
+    "src/workers/notificationOutboxWorker.ts",
+    "src/workers/locationWorker.ts"
+  ],
+  "realRedisSuite": "tests/bullmqProductionCoverage.test.ts",
+  "testClassification": {
+    "realLiveSuites": 2,
+    "mockedOrUnitSuites": 30
+  }
+}

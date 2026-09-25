@@ -1,0 +1,11 @@
+{
+  "testSuite": "tests/p7Issue09NotificationDuplicateReplay.test.ts",
+  "passed": 13,
+  "failed": 0,
+  "status": "FIXED_AND_VERIFIED",
+  "features": [
+    "notification_delivery table compound unique (notification_id, channel, delivery_id)",
+    "Channel idempotency markers: [OUTBOX_SOCKET_SKIPPED] and [OUTBOX_FCM_SKIPPED]",
+    "Removed dual-emission race from controllers"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "testSuite": "scripts/verify-disaster-recovery.ts",
+  "passedChecks": 22,
+  "failedChecks": 0,
+  "rto_seconds": 9.21,
+  "rpo_seconds": 0,
+  "tablesRestored": 28,
+  "constraintsRestored": 230,
+  "indexesRestored": 107,
+  "postgisValidated": true,
+  "isolation": "Isolated disposable Docker container (port 5433)"
+}
