@@ -67,10 +67,18 @@ jest.mock('../src/shared/fcm', () => ({
   sendFCMToWorker: jest.fn(),
 }));
 
+const mockIo = {
+  to: jest.fn().mockReturnValue({ emit: jest.fn() }),
+};
+
+jest.mock('../src/socket/socketLifecycle', () => ({
+  getSocketServer: jest.fn(() => mockIo),
+  setSocketServer: jest.fn(),
+  disconnectUserSockets: jest.fn(),
+}));
+
 jest.mock('../src/server', () => ({
-  io: {
-    to: jest.fn().mockReturnValue({ emit: jest.fn() }),
-  },
+  io: mockIo,
 }));
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
@@ -83,6 +91,7 @@ import {
   getWaveRadiusMeters,
 } from '../src/features/dispatch/dispatchCandidate.service';
 import { sendFCMToWorker } from '../src/shared/fcm';
+import { getSocketServer } from '../src/socket/socketLifecycle';
 import { io } from '../src/server';
 
 
@@ -160,8 +169,8 @@ describe('Issue #22 — Persist Dispatch Before Notifications', () => {
   // resetMocks: true in jest.config resets all mock implementations between tests.
   // Each test or setupHappyPathMocks() must re-configure the mocks it needs.
   beforeEach(() => {
-    // resetMocks:true already clears call history and resets implementations.
-    // We don't need clearAllMocks here — it could conflict.
+    (getSocketServer as jest.Mock).mockReturnValue(io);
+    (io.to as jest.Mock).mockReturnValue({ emit: jest.fn() });
   });
 
   // ── Scenario E (happy path) ─────────────────────────────────────────────────

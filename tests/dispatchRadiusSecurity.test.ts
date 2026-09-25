@@ -84,7 +84,13 @@ describe("P0 Finding #7 Security Regression Suite: Dispatch Radius Filtering", (
 
     // Implement realistic PostGIS candidate query simulation
     (prisma.$queryRaw as jest.Mock).mockImplementation(async (strings: TemplateStringsArray, ...values: any[]) => {
-      const sql = strings.join("?");
+      const sql = Array.isArray(strings) ? strings.join("?") : String(strings);
+
+      // Handle legitimate job state machine row-level locking queries (SELECT ... FOR UPDATE)
+      if (sql.includes("FOR UPDATE")) {
+        return [{ id: values[0] || "job-1", status: "OPEN", customer_id: "cust-1", version: 1 }];
+      }
+
       lastCapturedQuery = { sql, values };
 
       // Verify essential PostGIS predicates are structurally present in the raw SQL query
@@ -289,8 +295,20 @@ describe("P0 Finding #7 Security Regression Suite: Dispatch Radius Filtering", (
         data: { status: "no_workers_available" },
       });
 
-      // Verify no spatial query was executed
-      expect(prisma.$queryRaw).not.toHaveBeenCalled();
+      // Verify no spatial query was executed (distinguishing legitimate row-level locking from spatial queries)
+      const rawCalls = (prisma.$queryRaw as jest.Mock).mock.calls;
+      const spatialCalls = rawCalls.filter(([strings]: [TemplateStringsArray]) => {
+        const sql = Array.isArray(strings) ? strings.join("?") : String(strings);
+        return sql.includes("ST_DWithin") || sql.includes("ST_Distance") || sql.includes("location_geo");
+      });
+      expect(spatialCalls.length).toBe(0);
+
+      // Verify that any raw query executed was solely for state-machine row-level locking
+      for (const [strings] of rawCalls) {
+        const sql = Array.isArray(strings) ? strings.join("?") : String(strings);
+        expect(sql).toContain("FOR UPDATE");
+      }
+
       // Verify no dispatches were created
       expect(prisma.job_dispatch.createMany).not.toHaveBeenCalled();
     });

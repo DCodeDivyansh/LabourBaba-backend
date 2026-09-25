@@ -9,6 +9,7 @@ import { processDispatchJob, DispatchJobData } from "../src/workers/dispatchWork
 import { processNotificationJob } from "../src/workers/notificationWorker";
 import { notificationQueue } from "../src/config/bullmq";
 import { sendFCMNotification, sendFCMToWorker } from "../src/shared/fcm";
+import { setSocketServer } from "../src/socket/socketLifecycle";
 import { io } from "../src/server";
 
 // Mock dependencies
@@ -114,6 +115,7 @@ describe("P0 Finding #8 Security Regression Suite: BullMQ Dispatch Geographic Fi
     jest.clearAllMocks();
     lastCapturedQuery = null;
     mockWorkers = [];
+    setSocketServer(io as any);
     (io.to as jest.Mock).mockReturnValue({ emit: jest.fn() });
 
     // Realistic PostGIS candidate simulation enforcing all database predicates

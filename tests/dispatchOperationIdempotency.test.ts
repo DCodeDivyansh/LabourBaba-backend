@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import prisma from '../src/config/prisma';
 import {
   generateDispatchOperationId,
@@ -7,6 +8,15 @@ import {
 import { processDispatchJob, DispatchJobData } from '../src/workers/dispatchWorker';
 import { dispatchQueue, timeoutQueue, notificationQueue } from '../src/config/bullmq';
 import { getEligibleDispatchCandidates } from '../src/features/dispatch/dispatchCandidate.service';
+
+let fixtureSeq = 0;
+function generateTestPhone(): string {
+  fixtureSeq++;
+  const pidPart = String(process.pid % 90 + 10);
+  const seqPart = String(fixtureSeq % 90 + 10);
+  const randPart = String(crypto.randomInt(1000, 9999));
+  return `+9174${pidPart}${seqPart}${randPart}`;
+}
 
 // Mock BullMQ queues to prevent external Redis connection timeouts during tests
 jest.mock('../src/config/bullmq', () => ({
@@ -123,10 +133,10 @@ describe('Issue #23 — Dispatch Operation Idempotency Suite', () => {
     let testWorkerIds: string[] = [];
 
     beforeAll(async () => {
-      // 1. Create test customer in live PostgreSQL
+      // 1. Create test customer in live PostgreSQL with guaranteed unique phone
       const customer = await prisma.customer.create({
         data: {
-          phone: '+919999900023',
+          phone: generateTestPhone(),
           name: 'Idempotency Test Customer',
           password: 'hashedpassword',
         },
@@ -168,12 +178,11 @@ describe('Issue #23 — Dispatch Operation Idempotency Suite', () => {
       }
       testSkillCategoryId = category.id;
 
-      // 5. Create 3 test workers with unique phone numbers per test run
-      const runSuffix = Date.now().toString().slice(-4);
+      // 5. Create 3 test workers with unique, collision-proof phone numbers per test run
       for (let i = 1; i <= 3; i++) {
         const worker = await prisma.worker.create({
           data: {
-            phone: `+9188888${runSuffix}${i}`,
+            phone: generateTestPhone(),
             name: `Idempotency Worker ${i}`,
             password: 'hashedpassword',
             skill_type: 'IdempotencyPlumber',
@@ -204,7 +213,7 @@ describe('Issue #23 — Dispatch Operation Idempotency Suite', () => {
           await prisma.worker.deleteMany({ where: { id: wid } });
         }
         if (testSkillCategoryId) {
-          await prisma.skill_category.deleteMany({ where: { id: testSkillCategoryId } });
+          await prisma.skill_category.deleteMany({ where: { id: testSkillCategoryId } }).catch(() => {});
         }
       } catch (cleanupErr) {
         console.warn('Cleanup error in dispatchOperationIdempotency.test.ts:', cleanupErr);
@@ -289,7 +298,7 @@ describe('Issue #23 — Dispatch Operation Idempotency Suite', () => {
       expect(secondResult.status).toBe('already_processed');
       expect(secondResult.waveId).toBe(firstResult.waveId);
       expect(secondResult.workersDispatchedCount).toBe(firstResult.workersDispatchedCount);
-      expect(secondResult.workerIds).toEqual(firstResult.workerIds);
+      expect(secondResult.workerIds?.slice().sort()).toEqual(firstResult.workerIds?.slice().sort());
 
       // Verify DB wave count remains exactly 1 for wave 2
       const waveCount = await prisma.dispatch_wave.count({
@@ -394,48 +403,52 @@ describe('Issue #23 — Dispatch Operation Idempotency Suite', () => {
     });
 
     it('MUST return skipped_terminal if requirement is already in FILLED state', async () => {
-      // Create filled requirement fixture
+      // Create filled requirement fixture with dynamic phone
       const customer = await prisma.customer.create({
         data: {
-          phone: '+919999900099',
+          phone: generateTestPhone(),
           name: 'Terminal Test Customer',
           password: 'hashedpassword',
         },
       });
 
-      const job = await prisma.job.create({
-        data: {
-          customer_id: customer.id,
-          status: 'BOOKED',
-          location: 'Delhi',
-          latitude: 28.6139,
-          longitude: 77.209,
-        },
-      });
+      let job: any;
+      let req: any;
+      try {
+        job = await prisma.job.create({
+          data: {
+            customer_id: customer.id,
+            status: 'BOOKED',
+            location: 'Delhi',
+            latitude: 28.6139,
+            longitude: 77.209,
+          },
+        });
 
-      const req = await prisma.job_requirement.create({
-        data: {
-          job_id: job.id,
-          skill_type: 'Painter',
-          worker_count_needed: 1,
-          worker_count_filled: 1,
-          status: 'FILLED',
-        },
-      });
+        req = await prisma.job_requirement.create({
+          data: {
+            job_id: job.id,
+            skill_type: 'Painter',
+            worker_count_needed: 1,
+            worker_count_filled: 1,
+            status: 'FILLED',
+          },
+        });
 
-      const result = await processDispatchJob({
-        requirementId: req.id,
-        jobId: job.id,
-        waveNumber: 1,
-      });
+        const result = await processDispatchJob({
+          requirementId: req.id,
+          jobId: job.id,
+          waveNumber: 1,
+        });
 
-      expect(result.status).toBe('skipped_terminal');
-      expect(result.waveId).toBeNull();
-
-      // Clean up
-      await prisma.job_requirement.delete({ where: { id: req.id } });
-      await prisma.job.delete({ where: { id: job.id } });
-      await prisma.customer.delete({ where: { id: customer.id } });
+        expect(result.status).toBe('skipped_terminal');
+        expect(result.waveId).toBeNull();
+      } finally {
+        // Deterministic cleanup
+        if (req?.id) await prisma.job_requirement.delete({ where: { id: req.id } }).catch(() => {});
+        if (job?.id) await prisma.job.delete({ where: { id: job.id } }).catch(() => {});
+        await prisma.customer.delete({ where: { id: customer.id } }).catch(() => {});
+      }
     });
   });
 });
