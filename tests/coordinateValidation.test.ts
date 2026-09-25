@@ -33,6 +33,14 @@ jest.mock('../src/config/prisma', () => ({
     },
     job: {
       create: jest.fn(),
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    job_transition: {
+      create: jest.fn().mockResolvedValue({ id: 'jt-1234' }),
+      findMany: jest.fn().mockResolvedValue([]),
     },
     job_requirement: {
       create: jest.fn(),
@@ -78,13 +86,22 @@ describe('Issue #29: Hardened Coordinate Validation Suite', () => {
       updated_at: new Date(),
     });
 
-    (prisma.job.create as jest.Mock).mockResolvedValue({
+    const mockJobRecord = {
       id: 'job-1234',
       customer_id: CUSTOMER_ID,
       latitude: 12.9716,
       longitude: 77.5946,
       status: 'OPEN',
-    });
+      dispatch_status: 'IDLE',
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
+
+    (prisma.job.create as jest.Mock).mockResolvedValue(mockJobRecord);
+    (prisma.job.findUnique as jest.Mock).mockResolvedValue(mockJobRecord);
+    (prisma.job.findFirst as jest.Mock).mockResolvedValue(mockJobRecord);
+    (prisma.job.update as jest.Mock).mockResolvedValue({ ...mockJobRecord, status: 'DISPATCHING' });
+    (prisma.job.updateMany as jest.Mock).mockResolvedValue({ count: 1 });
   });
 
   // ─────────────────────────────────────────────────────────────────────────────

@@ -275,25 +275,45 @@ export const jobStateService = {
   ): Promise<TransitionResult> {
     const { jobId, action, actor, reason, metadata, expectedCurrentStatus } = params;
 
-    // 1. Fetch current job state
-    let job: any = tx.job?.findUnique
-      ? await tx.job.findUnique({
+    // 1. Acquire row lock and fetch latest committed job state
+    let lockedJob: any = null;
+
+    try {
+      if (typeof (tx as any).$queryRaw === "function") {
+        const rows = await (tx as any).$queryRaw`
+          SELECT id, status, customer_id
+          FROM "job"
+          WHERE id = ${jobId}::uuid
+          FOR UPDATE
+        `;
+        if (Array.isArray(rows) && rows.length > 0) {
+          lockedJob = rows[0];
+        }
+      }
+    } catch {
+      // In-memory or mock transaction runner fallback
+      lockedJob = null;
+    }
+
+    if (!lockedJob) {
+      if (typeof (tx.job as any)?.findUnique === "function") {
+        lockedJob = await (tx.job as any).findUnique({
           where: { id: jobId },
           include: {
             job_requirement: true,
           },
-        })
-      : null;
-
-    if (!job && tx.job?.findFirst) {
-      job = await tx.job.findFirst({ where: { id: jobId } });
+        });
+      }
+      if (!lockedJob && typeof (tx.job as any)?.findFirst === "function") {
+        lockedJob = await (tx.job as any).findFirst({ where: { id: jobId } });
+      }
     }
 
-    if (!job) {
+    if (!lockedJob) {
       throw new JobNotFoundError(`Job '${jobId}' not found`);
     }
 
-    const currentStatus = (job.status as JobStatus) || JobStatus.OPEN;
+    const currentStatus = (lockedJob.status as JobStatus) || JobStatus.OPEN;
 
     // 2. Concurrency CAS check if expectedCurrentStatus is supplied
     if (expectedCurrentStatus && currentStatus !== expectedCurrentStatus) {
@@ -303,7 +323,7 @@ export const jobStateService = {
     }
 
     // 3. Evaluate transition matrix
-    const check = this.canTransition(currentStatus, action, actor, job.customer_id);
+    const check = this.canTransition(currentStatus, action, actor, lockedJob.customer_id);
     if (!check.allowed) {
       if (check.reason?.includes("Forbidden") || check.reason?.includes("not own")) {
         throw new JobAuthorizationError(check.reason);
@@ -327,11 +347,35 @@ export const jobStateService = {
       updateData.completed_at = new Date();
     }
 
-    // 5. Update job row atomically
-    const updatedJob = await tx.job.update({
-      where: { id: jobId },
-      data: updateData,
-    });
+    // 5. Update job row atomically with compare-and-set status guard
+    let updatedJob: any = null;
+    if (typeof (tx.job as any)?.updateMany === "function") {
+      const updateResult = await (tx.job as any).updateMany({
+        where: {
+          id: jobId,
+          status: currentStatus,
+        },
+        data: updateData,
+      });
+
+      if (updateResult.count === 0) {
+        throw new JobStateConflictError(
+          `Job '${jobId}' was concurrently modified; status is no longer '${currentStatus}'`
+        );
+      }
+
+      if (typeof (tx.job as any)?.findUnique === "function") {
+        updatedJob = await (tx.job as any).findUnique({ where: { id: jobId } });
+      }
+      if (!updatedJob) {
+        updatedJob = { ...lockedJob, ...updateData };
+      }
+    } else {
+      updatedJob = await tx.job.update({
+        where: { id: jobId },
+        data: updateData,
+      });
+    }
 
     // 6. Record durable transition history within the exact same transaction
     let transitionRecord: any = null;
