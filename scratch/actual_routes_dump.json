@@ -1,0 +1,1009 @@
+[
+  {
+    "method": "GET",
+    "fullPath": "/metrics",
+    "handler": "metricsService",
+    "middlewares": []
+  },
+  {
+    "method": "GET",
+    "fullPath": "/health/live",
+    "middlewares": [
+      "<anonymous>"
+    ],
+    "file": "../src/features/health/healthRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/health/ready",
+    "middlewares": [
+      "<anonymous>"
+    ],
+    "file": "../src/features/health/healthRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/health",
+    "middlewares": [
+      "<anonymous>"
+    ],
+    "file": "../src/features/health/healthRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/clients",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getClient"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/clients/add",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "postClient"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/clients/signup",
+    "middlewares": [
+      "<anonymous>",
+      "<anonymous>",
+      "signupCustomer"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/clients/login",
+    "middlewares": [
+      "<anonymous>",
+      "<anonymous>",
+      "loginCustomer"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/clients/me",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getCurrentCustomer"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/clients/me/devices",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "registerCustomerDevice"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/clients/me/devices",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "listCustomerDevices"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "DELETE",
+    "fullPath": "/api/clients/me/devices/:deviceId",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "revokeCustomerDevice"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/clients/notifications",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "listCustomerNotifications"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/clients/notifications/unread",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getUnreadCustomerNotifications"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/clients/notifications/:id/acknowledge",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "acknowledgeCustomerNotification"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/clients/notifications/:id/ack",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "acknowledgeCustomerNotification"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/clients/notifications/ack-all",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "acknowledgeAllCustomerNotifications"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/customers",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getClient"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/customers/add",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "postClient"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/customers/signup",
+    "middlewares": [
+      "<anonymous>",
+      "<anonymous>",
+      "signupCustomer"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/customers/login",
+    "middlewares": [
+      "<anonymous>",
+      "<anonymous>",
+      "loginCustomer"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/customers/me",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getCurrentCustomer"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/customers/me/devices",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "registerCustomerDevice"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/customers/me/devices",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "listCustomerDevices"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "DELETE",
+    "fullPath": "/api/customers/me/devices/:deviceId",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "revokeCustomerDevice"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/customers/notifications",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "listCustomerNotifications"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/customers/notifications/unread",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getUnreadCustomerNotifications"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/customers/notifications/:id/acknowledge",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "acknowledgeCustomerNotification"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/customers/notifications/:id/ack",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "acknowledgeCustomerNotification"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/customers/notifications/ack-all",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "acknowledgeAllCustomerNotifications"
+    ],
+    "file": "../src/features/auth/customerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/workers/registerWorker",
+    "middlewares": [
+      "<anonymous>",
+      "<anonymous>",
+      "registerWorker"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/workers/login",
+    "middlewares": [
+      "<anonymous>",
+      "<anonymous>",
+      "loginWorker"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/workers/me",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getMe"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "PATCH",
+    "fullPath": "/api/workers/me",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "updateMe"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "PATCH",
+    "fullPath": "/api/workers/me/location",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "updateLocation"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "PATCH",
+    "fullPath": "/api/workers/me/online",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "updateOnline"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/workers/me/documents",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "uploadDocuments"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/workers/me/documents/upload-url",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "requestUploadUrl"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/workers/me/documents",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getDocuments"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/workers/me/documents/:documentId/access",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "getDocumentAccess"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/workers/me/analytics",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getAnalytics"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/workers/me/bookings",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getBookings"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/workers/me/earnings",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getEarnings"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "PATCH",
+    "fullPath": "/api/workers/me/device-token",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "updateDeviceToken"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/workers/me/devices",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "registerDevice"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/workers/me/devices",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getDevices"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "DELETE",
+    "fullPath": "/api/workers/me/devices/:deviceId",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "revokeDevice"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/workers/me/devices/revoke",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "revokeDevice"
+    ],
+    "file": "../src/features/worker/workerRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/skill",
+    "middlewares": [
+      "getSkills"
+    ],
+    "file": "../src/features/skill/skillRouter"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/skill/add",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "addSkills"
+    ],
+    "file": "../src/features/skill/skillRouter"
+  },
+  {
+    "method": "PATCH",
+    "fullPath": "/api/skill/:skillId/status",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "toggleSkillStatus"
+    ],
+    "file": "../src/features/skill/skillRouter"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/worker_location/add",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "<anonymous>",
+      "addLocation"
+    ],
+    "file": "../src/features/worker_location/worker_location.routes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/jobs",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "createJob"
+    ],
+    "file": "../src/features/jobs/jobRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/jobs",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getMyJobs"
+    ],
+    "file": "../src/features/jobs/jobRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/jobs/:jobId",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getJobDetail"
+    ],
+    "file": "../src/features/jobs/jobRoutes"
+  },
+  {
+    "method": "PATCH",
+    "fullPath": "/api/jobs/:jobId/cancel",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "cancelJob"
+    ],
+    "file": "../src/features/jobs/jobRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/jobs/:jobId/requirements",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getJobRequirements"
+    ],
+    "file": "../src/features/jobs/jobRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/jobs/:jobId/requirements/:requirementId",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getRequirementDetail"
+    ],
+    "file": "../src/features/jobs/jobRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/jobs/:jobId/requirements",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "<anonymous>",
+      "createJobRequirement"
+    ],
+    "file": "../src/features/jobs/jobRoutes"
+  },
+  {
+    "method": "PATCH",
+    "fullPath": "/api/jobs/:jobId/requirements/:requirementId/demand",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "<anonymous>",
+      "updateRequirementDemand"
+    ],
+    "file": "../src/features/jobs/jobRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/jobs/:jobId/bookings",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getJobBookings"
+    ],
+    "file": "../src/features/jobs/jobRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/auth/send-otp",
+    "middlewares": [
+      "otpRequestRateLimiter",
+      "<anonymous>",
+      "sendOtp"
+    ],
+    "file": "../src/features/auth/auth.routes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/auth/verify-otp",
+    "middlewares": [
+      "otpVerifyRateLimiter",
+      "<anonymous>",
+      "verifyOtp"
+    ],
+    "file": "../src/features/auth/auth.routes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/auth/refresh",
+    "middlewares": [
+      "<anonymous>",
+      "<anonymous>",
+      "refreshToken"
+    ],
+    "file": "../src/features/auth/auth.routes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/auth/logout",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "logout"
+    ],
+    "file": "../src/features/auth/auth.routes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/auth/sessions",
+    "middlewares": [
+      "authenticateJWT",
+      "listSessions"
+    ],
+    "file": "../src/features/auth/auth.routes"
+  },
+  {
+    "method": "DELETE",
+    "fullPath": "/api/auth/sessions/:sessionId",
+    "middlewares": [
+      "authenticateJWT",
+      "revokeSession"
+    ],
+    "file": "../src/features/auth/auth.routes"
+  },
+  {
+    "method": "DELETE",
+    "fullPath": "/api/auth/sessions",
+    "middlewares": [
+      "authenticateJWT",
+      "revokeAllSessions"
+    ],
+    "file": "../src/features/auth/auth.routes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/bookings/:bookingId",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getBooking"
+    ],
+    "file": "../src/features/booking/bookingRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/bookings/:bookingId/otp/verify",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "verifyOtp"
+    ],
+    "file": "../src/features/booking/bookingRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/bookings/:bookingId/complete",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "completeBooking"
+    ],
+    "file": "../src/features/booking/bookingRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/bookings/:bookingId/confirm-complete",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "confirmComplete"
+    ],
+    "file": "../src/features/booking/bookingRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/bookings/:bookingId/cancel",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "cancelBooking"
+    ],
+    "file": "../src/features/booking/bookingRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/bookings/:bookingId/location",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getWorkerLocation"
+    ],
+    "file": "../src/features/booking/bookingRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/bookings/:bookingId/payment",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "getPaymentStatusHandler"
+    ],
+    "file": "../src/features/booking/bookingRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/payments/webhook",
+    "middlewares": [
+      "handleWebhookHandler"
+    ],
+    "file": "../src/features/payment/paymentRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/payments/:bookingId/create-order",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "<anonymous>",
+      "<anonymous>",
+      "createOrderHandler"
+    ],
+    "file": "../src/features/payment/paymentRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/payments/:bookingId",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "getPaymentStatusHandler"
+    ],
+    "file": "../src/features/payment/paymentRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/payments/:bookingId/refund",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "<anonymous>",
+      "refundPaymentHandler"
+    ],
+    "file": "../src/features/payment/paymentRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/reviews/:bookingId",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "createReview"
+    ],
+    "file": "../src/features/review/reviewRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/reviews/worker/:workerId",
+    "middlewares": [
+      "authenticateJWT",
+      "getWorkerReviews"
+    ],
+    "file": "../src/features/review/reviewRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/reviews/:bookingId",
+    "middlewares": [
+      "authenticateJWT",
+      "getBookingReview"
+    ],
+    "file": "../src/features/review/reviewRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/chat/:bookingId/messages",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getMessages"
+    ],
+    "file": "../src/features/chat/chatRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/chat/:bookingId/messages",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "<anonymous>",
+      "sendMessage"
+    ],
+    "file": "../src/features/chat/chatRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/admin/workers",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getWorkers"
+    ],
+    "file": "../src/features/admin/adminRoutes"
+  },
+  {
+    "method": "PATCH",
+    "fullPath": "/api/admin/workers/:id/verify",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "verifyWorker"
+    ],
+    "file": "../src/features/admin/adminRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/admin/workers/:id/documents",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "getWorkerDocuments"
+    ],
+    "file": "../src/features/admin/adminRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/admin/workers/:id/documents/:documentId/access",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "getWorkerDocumentAccess"
+    ],
+    "file": "../src/features/admin/adminRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/admin/jobs",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getAllJobs"
+    ],
+    "file": "../src/features/admin/adminRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/admin/flagged",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getFlaggedWorkers"
+    ],
+    "file": "../src/features/admin/adminRoutes"
+  },
+  {
+    "method": "POST",
+    "fullPath": "/api/admin/workers/:id/suspend",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "<anonymous>",
+      "suspendWorker"
+    ],
+    "file": "../src/features/admin/adminRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/admin/audit-logs",
+    "middlewares": [
+      "authenticateJWT",
+      "<anonymous>",
+      "getAuditLogs"
+    ],
+    "file": "../src/features/admin/adminRoutes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/storage/download/:key",
+    "middlewares": [
+      "downloadObject"
+    ],
+    "file": "../src/providers/storage/storage.routes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/api/storage/download/*key",
+    "middlewares": [
+      "downloadObject"
+    ],
+    "file": "../src/providers/storage/storage.routes"
+  },
+  {
+    "method": "PUT",
+    "fullPath": "/api/storage/upload/:key",
+    "middlewares": [
+      "rawParser",
+      "uploadObject"
+    ],
+    "file": "../src/providers/storage/storage.routes"
+  },
+  {
+    "method": "PUT",
+    "fullPath": "/api/storage/upload/*key",
+    "middlewares": [
+      "rawParser",
+      "uploadObject"
+    ],
+    "file": "../src/providers/storage/storage.routes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/download/:key",
+    "middlewares": [
+      "downloadObject"
+    ],
+    "file": "../src/providers/storage/storage.routes"
+  },
+  {
+    "method": "GET",
+    "fullPath": "/download/*key",
+    "middlewares": [
+      "downloadObject"
+    ],
+    "file": "../src/providers/storage/storage.routes"
+  },
+  {
+    "method": "PUT",
+    "fullPath": "/upload/:key",
+    "middlewares": [
+      "rawParser",
+      "uploadObject"
+    ],
+    "file": "../src/providers/storage/storage.routes"
+  },
+  {
+    "method": "PUT",
+    "fullPath": "/upload/*key",
+    "middlewares": [
+      "rawParser",
+      "uploadObject"
+    ],
+    "file": "../src/providers/storage/storage.routes"
+  }
+]

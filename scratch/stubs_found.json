@@ -1,0 +1,866 @@
+[
+  {
+    "pattern": "mock",
+    "file": "src\\config\\authConfig.ts",
+    "line": 29,
+    "content": "smsProvider: \"mock\" | \"twilio\" | \"http\";"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\authConfig.ts",
+    "line": 72,
+    "content": "throw new Error(`[SECURITY ERROR] Required environment variable '${varName}' is missing.`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\authConfig.ts",
+    "line": 78,
+    "content": "throw new Error(`[SECURITY ERROR] Environment variable '${varName}' cannot be empty or whitespace-only.`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\authConfig.ts",
+    "line": 82,
+    "content": "throw new Error(`[SECURITY ERROR] Environment variable '${varName}' contains a known insecure fallback value.`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\authConfig.ts",
+    "line": 86,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\authConfig.ts",
+    "line": 116,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\config\\authConfig.ts",
+    "line": 154,
+    "content": "smsProvider: (process.env.SMS_PROVIDER as \"mock\" | \"twilio\" | \"http\") || (nodeEnv === \"production\" ? \"twilio\" : \"mock\"),"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\config\\authConfig.ts",
+    "line": 172,
+    "content": "* In production mode, mock SMS providers are strictly forbidden to prevent silent bypasses."
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\config\\authConfig.ts",
+    "line": 178,
+    "content": "if (authConfig.smsProvider === \"mock\") {"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\authConfig.ts",
+    "line": 179,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\config\\authConfig.ts",
+    "line": 180,
+    "content": "\"[SECURITY ERROR] In production, SMS_PROVIDER cannot be 'mock'. A real SMS provider must be configured.\""
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\authConfig.ts",
+    "line": 186,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\authConfig.ts",
+    "line": 194,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\dispatchWaveConfig.ts",
+    "line": 15,
+    "content": "if (!/^\\d+$/.test(value)) throw new Error(`${name} must be a positive integer`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\dispatchWaveConfig.ts",
+    "line": 17,
+    "content": "if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${name} must be a positive integer`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\dispatchWaveConfig.ts",
+    "line": 25,
+    "content": "throw new Error('DISPATCH_WAVE_RADII_METERS must be comma-separated positive integer metres');"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\dispatchWaveConfig.ts",
+    "line": 34,
+    "content": "throw new Error('DISPATCH_MAX_WAVES cannot exceed configured DISPATCH_WAVE_RADII_METERS entries');"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\locationFreshnessConfig.ts",
+    "line": 24,
+    "content": "throw new Error(`${name} must be a positive integer in seconds (received: \"${value}\")`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\locationFreshnessConfig.ts",
+    "line": 28,
+    "content": "throw new Error(`${name} must be a positive integer > 0 (received: \"${value}\")`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\locationFreshnessConfig.ts",
+    "line": 31,
+    "content": "throw new Error(`${name} cannot be less than 10 seconds (received: ${parsed})`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\locationFreshnessConfig.ts",
+    "line": 34,
+    "content": "throw new Error(`${name} cannot exceed 86400 seconds (24 hours) for operational freshness (received: ${parsed})`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\outboxConfig.ts",
+    "line": 42,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\paymentConfig.ts",
+    "line": 44,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\paymentConfig.ts",
+    "line": 52,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\paymentConfig.ts",
+    "line": 58,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "placeholder",
+    "file": "src\\config\\paymentConfig.ts",
+    "line": 59,
+    "content": "`[SECURITY ERROR] Payment environment variable '${varName}' contains a known insecure placeholder value.`,"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\paymentConfig.ts",
+    "line": 64,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\redis.ts",
+    "line": 85,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\redis.ts",
+    "line": 92,
+    "content": "throw new Error('[REDIS_CONFIG_ERROR] REDIS_HOST or REDIS_URL is required.');"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\redis.ts",
+    "line": 96,
+    "content": "throw new Error(`[REDIS_CONFIG_ERROR] Invalid REDIS_PORT: ${config.port}`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\redis.ts",
+    "line": 250,
+    "content": "throw new Error('[REDIS] resetRedisClientForTesting() must only be called in test environments.');"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\storageConfig.ts",
+    "line": 33,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\storageConfig.ts",
+    "line": 41,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\storageConfig.ts",
+    "line": 50,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "placeholder",
+    "file": "src\\config\\storageConfig.ts",
+    "line": 51,
+    "content": "`[SECURITY ERROR] Storage environment variable '${varName}' contains a known insecure placeholder value.`,"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\storageConfig.ts",
+    "line": 59,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\config\\storageConfig.ts",
+    "line": 78,
+    "content": "if (!provider || provider === \"local\" || provider === \"mock\") {"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\storageConfig.ts",
+    "line": 79,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\storageConfig.ts",
+    "line": 86,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\storageConfig.ts",
+    "line": 92,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\config\\storageConfig.ts",
+    "line": 99,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\admin\\adminServices.ts",
+    "line": 33,
+    "content": "if (docs.length === 0) throw new Error(\"No pending documents for this worker\");"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\booking\\bookingServices.ts",
+    "line": 66,
+    "content": "// Mock fallback with explicit ABAC policy evaluation"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\booking\\bookingStateMachine.ts",
+    "line": 359,
+    "content": "// In-memory or mock transaction runner fallback"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\chat\\chatServices.ts",
+    "line": 73,
+    "content": "// 2. Mock / fallback resolution with explicit policy assertion"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\chat\\chatServices.ts",
+    "line": 122,
+    "content": "// 2. Mock / fallback resolution with explicit policy assertion"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\dispatch\\dispatchCandidate.service.ts",
+    "line": 186,
+    "content": "// In unit test where Prisma is mocked without skill_category, do not filter out query"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\dispatch\\dispatchReconciliationService.ts",
+    "line": 116,
+    "content": "// Non-fatal if mocked or running against test double without $queryRaw"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\dispatch\\dispatchServices.ts",
+    "line": 629,
+    "content": "if (!dispatch) throw new Error(\"Dispatch not found\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\dispatch\\dispatchServices.ts",
+    "line": 642,
+    "content": "if (!req) throw new Error(\"Requirement not found\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\dispatch\\simpleDispatch.ts",
+    "line": 11,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\dispatch\\simpleDispatch.ts",
+    "line": 118,
+    "content": "// If job was already in DISPATCHING or BOOKED (e.g. on recovery or mock), safely ignore"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\dispatch\\wavePlanner.ts",
+    "line": 25,
+    "content": "if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative safe integer`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\dispatch\\wavePlanner.ts",
+    "line": 38,
+    "content": "if (input.waveNumber === 0) throw new Error('waveNumber must start at 1');"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\jobs\\job.services.ts",
+    "line": 210,
+    "content": "if (!job) throw new Error(\"Job not found\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\jobs\\job.services.ts",
+    "line": 297,
+    "content": "if (!job) throw new Error(\"Job not found\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\jobs\\job.services.ts",
+    "line": 333,
+    "content": "if (!job) throw new Error(\"Job not found\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\jobs\\jobReqServices.ts",
+    "line": 18,
+    "content": "if (!job) throw new Error(\"Job not found\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\jobs\\jobReqServices.ts",
+    "line": 77,
+    "content": "if (!req) throw new Error(\"Requirement not found\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\jobs\\jobReqServices.ts",
+    "line": 97,
+    "content": "if (!req) throw new Error(\"Requirement not found\");"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\jobs\\jobStateMachine.ts",
+    "line": 294,
+    "content": "// In-memory or mock transaction runner fallback"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\skill\\skill.service.ts",
+    "line": 99,
+    "content": "// Ignore in minimal mock test environments"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\features\\worker\\workerServices.ts",
+    "line": 107,
+    "content": "if (!worker) throw new Error(\"Worker not found\");"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\worker_location\\worker_location.service.ts",
+    "line": 40,
+    "content": "const isMockedTest ="
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\worker_location\\worker_location.service.ts",
+    "line": 41,
+    "content": "typeof (prisma.worker.findUnique as any)?._isMockFunction === \"boolean\" &&"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\worker_location\\worker_location.service.ts",
+    "line": 42,
+    "content": "(prisma.worker.findUnique as any)._isMockFunction;"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\features\\worker_location\\worker_location.service.ts",
+    "line": 44,
+    "content": "if (isMockedTest) {"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\lifecycle\\lifecycleManager.ts",
+    "line": 77,
+    "content": "throw new Error(`[LIFECYCLE] Redis ping failed with response: ${pong}`);"
+  },
+  {
+    "pattern": "fake",
+    "file": "src\\metrics\\metrics.service.ts",
+    "line": 522,
+    "content": "// Must NEVER initialize to Date.now() to avoid fake operational confidence (P4 Issue 27)."
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\middlewares\\authMiddleware.ts",
+    "line": 67,
+    "content": "// undefined occurs only in Jest test suites that mock prisma without specifying worker mocks."
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\razorpay\\razorpayProvider.ts",
+    "line": 48,
+    "content": "* In test environments the instance may be replaced with a mock."
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\razorpay\\razorpayProvider.ts",
+    "line": 68,
+    "content": "* Allows test suites to inject a mock Razorpay instance."
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\sms\\mockSmsProvider.ts",
+    "line": 12,
+    "content": "export class MockSmsProvider implements SmsProvider {"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\sms\\mockSmsProvider.ts",
+    "line": 13,
+    "content": "public readonly name = \"MockSmsProvider\";"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\sms\\mockSmsProvider.ts",
+    "line": 20,
+    "content": "throw new Error(\"Simulated SMS gateway failure\");"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\sms\\mockSmsProvider.ts",
+    "line": 32,
+    "content": "logger.info(`[SMS_MOCK] Dispatched OTP for purpose '${purpose}' to ${maskPhone(phone)}`, { purpose, phone: maskPhone(phone) });"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\sms\\mockSmsProvider.ts",
+    "line": 55,
+    "content": "export const defaultMockSmsProvider = new MockSmsProvider();"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\sms\\smsProviderFactory.ts",
+    "line": 2,
+    "content": "import { MockSmsProvider, defaultMockSmsProvider } from \"./mockSmsProvider\";"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\sms\\smsProviderFactory.ts",
+    "line": 21,
+    "content": "if (authConfig.smsProvider === \"mock\") {"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\sms\\smsProviderFactory.ts",
+    "line": 23,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\sms\\smsProviderFactory.ts",
+    "line": 24,
+    "content": "\"[FATAL] MockSmsProvider cannot be used in production environment. A real provider must be configured.\""
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\sms\\smsProviderFactory.ts",
+    "line": 27,
+    "content": "activeProvider = defaultMockSmsProvider;"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\sms\\smsProviderFactory.ts",
+    "line": 32,
+    "content": "activeProvider = defaultMockSmsProvider;"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\sms\\twilioSmsProvider.ts",
+    "line": 13,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\sms\\twilioSmsProvider.ts",
+    "line": 40,
+    "content": "throw new Error(`SMS delivery gateway error (HTTP ${response.status}): ${errorText}`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\localStorageDriver.ts",
+    "line": 11,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\localStorageDriver.ts",
+    "line": 38,
+    "content": "throw new Error(\"Invalid storage object key\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\localStorageDriver.ts",
+    "line": 50,
+    "content": "throw new Error(\"Directory traversal attempt detected in storage key\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\storage.service.ts",
+    "line": 32,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\storage.service.ts",
+    "line": 110,
+    "content": "throw new Error(\"Directory traversal attempt detected in storage key\");"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\providers\\storage\\supabaseStorageDriver.ts",
+    "line": 11,
+    "content": "* 1. Zero fallback to local/mock/in-memory storage in all environments."
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\supabaseStorageDriver.ts",
+    "line": 35,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\supabaseStorageDriver.ts",
+    "line": 125,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\supabaseStorageDriver.ts",
+    "line": 141,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\supabaseStorageDriver.ts",
+    "line": 163,
+    "content": "throw new Error(`[STORAGE_ERROR] Supabase upload failed: ${this.redactError(error.message)}`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\supabaseStorageDriver.ts",
+    "line": 176,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\supabaseStorageDriver.ts",
+    "line": 203,
+    "content": "throw new Error(`[STORAGE_ERROR] Supabase download failed: ${this.redactError(error.message)}`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\supabaseStorageDriver.ts",
+    "line": 222,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\supabaseStorageDriver.ts",
+    "line": 240,
+    "content": "throw new Error(`[STORAGE_ERROR] Supabase delete failed: ${this.redactError(error.message)}`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\providers\\storage\\supabaseStorageDriver.ts",
+    "line": 266,
+    "content": "throw new Error(`[STORAGE_ERROR] Supabase existence check failed: ${this.redactError(error.message)}`);"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\services\\outboxService.ts",
+    "line": 205,
+    "content": "// Isolated fallback strictly for unit test mock environments where $queryRaw is not mocked on Prisma"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 66,
+    "content": "let mockFcmProvider: IFCMProvider | null = null;"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 69,
+    "content": "* Registers an explicit mock FCM provider for test environments only."
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 72,
+    "content": "export function setMockFcmProvider(provider: IFCMProvider | null): void {"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 74,
+    "content": "throw new Error(\"[SECURITY_VIOLATION] Mock FCM provider cannot be registered in production environment.\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\shared\\fcm.ts",
+    "line": 74,
+    "content": "throw new Error(\"[SECURITY_VIOLATION] Mock FCM provider cannot be registered in production environment.\");"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 76,
+    "content": "mockFcmProvider = provider;"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 80,
+    "content": "* Resets Firebase Admin SDK and test mocks cleanly."
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 85,
+    "content": "mockFcmProvider = null;"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\shared\\fcm.ts",
+    "line": 119,
+    "content": "throw new Error(`[FCM_CONFIG_ERROR] Failed to parse local service account JSON file: ${err.message}`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\shared\\fcm.ts",
+    "line": 144,
+    "content": "throw new Error(`[FCM_CONFIG_ERROR] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON env variable: ${err.message}`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\shared\\fcm.ts",
+    "line": 200,
+    "content": "throw new Error(`[FCM_INIT_ERROR] Failed to initialize Firebase Admin SDK: ${error.message}`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\shared\\fcm.ts",
+    "line": 211,
+    "content": "throw new Error(`[FCM_INIT_ERROR] Failed to initialize Firebase Admin SDK via ADC: ${error.message}`);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\shared\\fcm.ts",
+    "line": 245,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\shared\\fcm.ts",
+    "line": 253,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "stub",
+    "file": "src\\shared\\fcm.ts",
+    "line": 254,
+    "content": "\"[FCM_CONFIG_ERROR] Production Firebase Admin SDK initialization failed. Cannot operate in uninitialized or stub mode in production.\""
+  },
+  {
+    "pattern": "fake",
+    "file": "src\\shared\\fcm.ts",
+    "line": 396,
+    "content": "* 1. Zero Fake Success: Never returns success: true or fake message IDs when Firebase is uninitialized."
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 397,
+    "content": "* 2. Explicit Mocking: In tests, mock delivery must use an explicit mock provider."
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 408,
+    "content": "// 1. Explicit Test Mock Provider check (strictly disallowed in production)"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 410,
+    "content": "if (mockFcmProvider) {"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 411,
+    "content": "mockFcmProvider = null;"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 412,
+    "content": "throw new Error(\"[SECURITY_VIOLATION] Mock FCM provider cannot be active in production environment.\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\shared\\fcm.ts",
+    "line": 412,
+    "content": "throw new Error(\"[SECURITY_VIOLATION] Mock FCM provider cannot be active in production environment.\");"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 414,
+    "content": "} else if (mockFcmProvider) {"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\shared\\fcm.ts",
+    "line": 415,
+    "content": "return mockFcmProvider.sendToTokens(tokens, payload, onInvalidToken);"
+  },
+  {
+    "pattern": "fake",
+    "file": "src\\shared\\fcm.ts",
+    "line": 459,
+    "content": "// Uninitialized FCM — NEVER return fake success or fake message IDs!"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\socket\\socketHandlers.ts",
+    "line": 321,
+    "content": "// 2. Mock / fallback check with explicit policy evaluation"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\socket\\socketRedisAdapter.ts",
+    "line": 139,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\authUtils.ts",
+    "line": 199,
+    "content": "throw new Error(\"Invalid phone structure\");"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\databaseSafety.ts",
+    "line": 93,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\databaseSafety.ts",
+    "line": 107,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\databaseSafety.ts",
+    "line": 114,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\databaseSafety.ts",
+    "line": 126,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\databaseSafety.ts",
+    "line": 138,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\databaseSafety.ts",
+    "line": 147,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\databaseSafety.ts",
+    "line": 159,
+    "content": "throw new Error("
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\failureInjection.ts",
+    "line": 26,
+    "content": "throw new Error('[SECURITY] Failure injection is strictly prohibited in production environment.');"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\failureInjection.ts",
+    "line": 67,
+    "content": "throw new Error(msg);"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\locationUtils.ts",
+    "line": 17,
+    "content": "throw new Error(result.error || 'Invalid geographic coordinates');"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\locationUtils.ts",
+    "line": 33,
+    "content": "throw new Error(result.error || 'Invalid geographic coordinates');"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\locationUtils.ts",
+    "line": 52,
+    "content": "throw new Error('Invalid geography format: string expected');"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\locationUtils.ts",
+    "line": 56,
+    "content": "throw new Error('Invalid geography format: expected POINT(lon lat)');"
+  },
+  {
+    "pattern": "throw new Error",
+    "file": "src\\utils\\locationUtils.ts",
+    "line": 63,
+    "content": "throw new Error(`Invalid geography coordinates in point: ${result.error}`);"
+  },
+  {
+    "pattern": "mock",
+    "file": "src\\workers\\dispatchWorker.ts",
+    "line": 307,
+    "content": "// Handle bare jest.fn() mock that returns undefined without executing callback"
+  }
+]
